@@ -880,7 +880,7 @@ namespace Files.App.ViewModels.UserControls
 		private async Task ReorderItemsAsync()
 		{
 			var dialog = new ReorderSidebarItemsDialogViewModel();
-			var dialogService = Ioc.Default.GetRequiredService<IDialogService>();
+			var dialogService = Ioc.Default.GetRequiredService<IAppDialogService>();
 			var result = await dialogService.ShowDialogAsync(dialog);
 		}
 

@@ -47,7 +47,7 @@ namespace Files.App.ViewModels
 		// Files and folders list for manipulating
 		private ConcurrentCollection<ListedItem> filesAndFolders;
 		private readonly IWindowsJumpListService jumpListService = Ioc.Default.GetRequiredService<IWindowsJumpListService>();
-		private readonly IDialogService dialogService = Ioc.Default.GetRequiredService<IDialogService>();
+		private readonly IAppDialogService dialogService = Ioc.Default.GetRequiredService<IAppDialogService>();
 		private IUserSettingsService UserSettingsService { get; } = Ioc.Default.GetRequiredService<IUserSettingsService>();
 		private readonly INetworkService NetworkService = Ioc.Default.GetRequiredService<INetworkService>();
 		private readonly IFileTagsSettingsService fileTagsSettingsService = Ioc.Default.GetRequiredService<IFileTagsSettingsService>();

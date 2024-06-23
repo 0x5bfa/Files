@@ -22,7 +22,7 @@ namespace Files.App.ViewModels.UserControls
 
 		private IUserSettingsService UserSettingsService { get; } = Ioc.Default.GetRequiredService<IUserSettingsService>();
 
-		private readonly IDialogService _dialogService = Ioc.Default.GetRequiredService<IDialogService>();
+		private readonly IAppDialogService _dialogService = Ioc.Default.GetRequiredService<IAppDialogService>();
 
 		private readonly DrivesViewModel drivesViewModel = Ioc.Default.GetRequiredService<DrivesViewModel>();
 

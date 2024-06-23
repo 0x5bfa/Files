@@ -401,7 +401,7 @@ namespace Files.App.Helpers
 			}
 
 			var viewModel = new CreateShortcutDialogViewModel(currentPath);
-			var dialogService = Ioc.Default.GetRequiredService<IDialogService>();
+			var dialogService = Ioc.Default.GetRequiredService<IAppDialogService>();
 			var result = await dialogService.ShowDialogAsync(viewModel);
 
 			if (result != DialogResult.Primary || viewModel.ShortcutCreatedSuccessfully)
@@ -451,7 +451,7 @@ namespace Files.App.Helpers
 			var isFtp = FtpHelpers.IsFtpPath(path);
 
 			var credentialDialogViewModel = new CredentialDialogViewModel() { CanBeAnonymous = isFtp, PasswordOnly = !isFtp };
-			IDialogService dialogService = Ioc.Default.GetRequiredService<IDialogService>();
+			IAppDialogService dialogService = Ioc.Default.GetRequiredService<IAppDialogService>();
 			var dialogResult = await MainWindow.Instance.DispatcherQueue.EnqueueOrInvokeAsync(() =>
 				dialogService.ShowDialogAsync(credentialDialogViewModel));
 
