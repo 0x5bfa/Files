@@ -41,25 +41,28 @@ You can also use the preview version alongside the stable release to get early a
 
 Instructions for building the source code can be found on our [documentation site](https://files.community/docs/contributing/building-from-source).
 
-
 ## Contributing to Files
 
 Before starting contribution, please make sure to read [our contributing guidelines](https://github.com/files-community/Files/blob/main/.github/CONTRIBUTING.md).
 
-### Discussion, Feedback, bug reports, feature requests & PRs
-
-When you encounter an issue or you want a new feature, let us know with an [issue](https://github.com/files-community/Files/issues) that communicates your intent to create a [pull request](https://github.com/files-community/Files/pulls).
-
-Looking for a place to start?
-Check out the [Files task board](https://github.com/orgs/files-community/projects/3/views/2), where you can sort tasks by size and priority.
-
+**Discuss & talk with the team**
+</br>
 We discuss the future of Files on our Discord server in order not to flood GitHub issues and PRs with replies.
 You can also get notified of app updates real time and can see developement progress there as well.
 
 ; 150x50 badge of Discord
 
-### Localization
+**Report bugs & reauest features**
+</br>
+When you encounter an issue or you want a new feature, let us know with an [issue](https://github.com/files-community/Files/issues) that communicates your intent to create a [pull request](https://github.com/files-community/Files/pulls).
 
+**Create PRs**
+</br>
+Looking for a place to start?
+Check out the [Files task board](https://github.com/orgs/files-community/projects/3/views/2), where you can sort tasks by size and priority.
+
+**Improve localization**
+</br>
 Localization of Files is maintained in Crowdin. We invite you to there if you'd like contribute to localization and give you proofreader role after verification if you'd like you to proofread existing localizations.
 
 ; 150x50 badge of Crowdin
