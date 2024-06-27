@@ -46,17 +46,15 @@ Instructions for building the source code can be found on our [documentation sit
 
 Before starting contribution, please make sure to read [our contributing guidelines](https://github.com/files-community/Files/blob/main/.github/CONTRIBUTING.md).
 
-### Feedback, bug reports & feature requests
+### Discussion, Feedback, bug reports, feature requests & PRs
 
 When you encounter an issue or you want a new feature, let us know with an [issue](https://github.com/files-community/Files/issues) that communicates your intent to create a [pull request](https://github.com/files-community/Files/pulls).
 
 Looking for a place to start?
 Check out the [Files task board](https://github.com/orgs/files-community/projects/3/views/2), where you can sort tasks by size and priority.
 
-### Discussion
-
-Our dicussion is made in our Discord server in order not to flood GitHub issues and PRs with replies.
-You can get notified of app updates real time amd also can see developement progress there.
+We discuss the future of Files on our Discord server in order not to flood GitHub issues and PRs with replies.
+You can also get notified of app updates real time and can see developement progress there as well.
 
 ; 150x50 badge of Discord
 
