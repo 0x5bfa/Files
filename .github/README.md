@@ -20,7 +20,7 @@ Files is a modern file manager that helps users organize their files and folders
 
 Files is a community-driven project that depends on your support to grow and improve. Please consider purchasing Files through the Microsoft Store or supporting us on GitHub if you use the classic installer.
 
-You can also use the preview version alongside the stable release to get early access to new features and improvements.
+You can also use [the preview version](https://files.community/download) alongside the stable release to get early access to new features and improvements.
 
 <p align="left">
   <!-- Store Badge -->
@@ -38,7 +38,7 @@ You can also use the preview version alongside the stable release to get early a
     </picture></a>
   &ensp;
   <!-- Preview Installer Badge -->
-  <a style="text-decoration:none" href="https://cdn.files.community/files/download/Files.Stable.exe">
+  <a style="text-decoration:none" href="https://files.community/download">
     <picture>
       <source media="(prefers-color-scheme: light)" srcset="../assets/PreviewInstallerBadge-dark.png" width="220" />
       <img src="../assets/PreviewInstallerBadge-light.png" width="220" />
