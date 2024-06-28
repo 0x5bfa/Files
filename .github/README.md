@@ -1,5 +1,6 @@
 <p align="center">
-  <img alt="Files hero image" src="../assets/ReadmeHero.png" />
+  <a style="text-decoration:none" href="https://files.community/">
+    <img src="../assets/ReadmeHero.png" alt="Files Hero Image" /></a>
 </p>
 
 <p align="center">
@@ -35,6 +36,13 @@ You can also use the preview version alongside the stable release to get early a
       <source media="(prefers-color-scheme: light)" srcset="../assets/ClassicInstallerBadge-dark.png" width="220" />
       <img src="../assets/ClassicInstallerBadge-light.png" width="220" />
     </picture></a>
+  &ensp;
+  <!-- Preview Installer Badge -->
+  <a style="text-decoration:none" href="https://cdn.files.community/files/download/Files.Stable.exe">
+    <picture>
+      <source media="(prefers-color-scheme: light)" srcset="../assets/PreviewInstallerBadge-dark.png" width="220" />
+      <img src="../assets/PreviewInstallerBadge-light.png" width="220" />
+    </picture></a>
 </p>
 
 ## Building from source
@@ -47,10 +55,8 @@ Before starting contribution, please make sure to read [our contributing guideli
 
 **Discuss & talk with the team**
 </br>
-We discuss the future of Files on our Discord server in order not to flood GitHub issues and PRs with replies.
+We discuss the future of Files on [our Discord server](https://discord.gg/files) in order not to flood GitHub issues and PRs with replies.
 You can also get notified of app updates real time and can see developement progress there as well.
-
-; 150x50 badge of Discord
 
 **Report bugs & reauest features**
 </br>
@@ -63,9 +69,7 @@ Check out the [Files task board](https://github.com/orgs/files-community/project
 
 **Improve localization**
 </br>
-Localization of Files is maintained in Crowdin. We invite you to there if you'd like contribute to localization and give you proofreader role after verification if you'd like you to proofread existing localizations.
-
-; 150x50 badge of Crowdin
+Localization of Files is maintained in Crowdin. We [invite you](https://crowdin.com/project/files-app) to there if you'd like contribute to localization and give you proofreader role after verification if you'd like you to proofread existing localizations.
 
 ## Screenshots
 
