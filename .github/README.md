@@ -55,12 +55,12 @@ Before starting contribution, please make sure to read [our contributing guideli
 
 **Discuss & talk with the team**
 </br>
-We discuss the future of Files on [our Discord server](https://discord.gg/files) in order not to flood GitHub issues and PRs with replies.
+We discuss the future of Files on [our Discord server](https://discord.gg/files) in order not to flood GitHub issues and PRs with replies and to have casual talk with folks.
 You can also get notified of app updates real time and can see developement progress there as well.
 
-**Report bugs & reauest features**
+**Report bugs & request features**
 </br>
-When you encounter an issue or you want a new feature, let us know with an [issue](https://github.com/files-community/Files/issues) that communicates your intent to create a [pull request](https://github.com/files-community/Files/pulls).
+When you encounter an issue or you want a new feature, let us know by filing an [issue](https://github.com/files-community/Files/issues) that communicates your intent to create a [pull request](https://github.com/files-community/Files/pulls).
 
 **Create PRs**
 </br>
@@ -69,7 +69,7 @@ Check out the [Files task board](https://github.com/orgs/files-community/project
 
 **Improve localization**
 </br>
-Localization of Files is maintained in Crowdin. We [invite you](https://crowdin.com/project/files-app) to there if you'd like contribute to localization and give you proofreader role after verification if you'd like you to proofread existing localizations.
+Localization of Files is managed in Crowdin. We [invite you](https://crowdin.com/project/files-app) to there if you'd like to contribute to localization and give you proofreader role after verification if you'd like to proofread the existing localizations.
 
 ## Screenshots
 
