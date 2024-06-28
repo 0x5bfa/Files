@@ -70,6 +70,7 @@ Check out the [Files task board](https://github.com/orgs/files-community/project
 **Improve localization**
 </br>
 Localization of Files is managed in Crowdin. We [invite you](https://crowdin.com/project/files-app) to there if you'd like to contribute to localization and give you proofreader role after verification if you'd like to proofread the existing localizations.
+Instructions for localizing the app can be found on our documentation site.
 
 ## Screenshots
 
