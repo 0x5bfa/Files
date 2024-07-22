@@ -170,7 +170,6 @@
 			Grid.Row="2"
 			HorizontalContentAlignment="Stretch"
 			DisplayMode="{x:Bind SidebarAdaptiveViewModel.SidebarDisplayMode, Mode=TwoWay}"
-			Loaded="SidebarControl_Loaded"
 			MenuItemsSource="{x:Bind SidebarAdaptiveViewModel.SidebarItems, Mode=OneWay}"
 			OpenPaneLength="{x:Bind UserSettingsService.AppearanceSettingsService.SidebarWidth, Mode=TwoWay}"
 			SelectedItem="{x:Bind SidebarAdaptiveViewModel.SidebarSelectedItem, Mode=TwoWay}"
@@ -228,8 +227,8 @@
 						Grid.Row="1"
 						Grid.Column="1"
 						x:Load="{x:Bind ViewModel.ShouldPreviewPaneBeActive, Mode=OneWay}"
-						ManipulationCompleted="PaneSplitter_ManipulationCompleted"
-						ManipulationStarted="PaneSplitter_ManipulationStarted"
+						ManipulationCompleted="InfoPaneSizer_ManipulationCompleted"
+						ManipulationStarted="InfoPaneSizer_ManipulationStarted"
 						Opacity="0"
 						ResizeBehavior="BasedOnAlignment"
 						Style="{StaticResource DefaultGridSplitterStyle}" />
