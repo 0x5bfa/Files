@@ -12,7 +12,6 @@
 	xmlns:tabbar="using:Files.App.UserControls.TabBar"
 	xmlns:toolkit="using:CommunityToolkit.WinUI.UI.Controls"
 	xmlns:uc="using:Files.App.UserControls"
-	xmlns:viewmodels="using:Files.App.ViewModels"
 	xmlns:wctconverters="using:CommunityToolkit.WinUI.UI.Converters"
 	AllowDrop="True"
 	Background="{ThemeResource App.Theme.BackgroundBrush}"
@@ -129,7 +128,7 @@
 
 		<!--  Tab Bar  -->
 		<tabbar:TabBar
-			x:Name="TabControl"
+			x:Name="TabBar"
 			Grid.Row="0"
 			HorizontalContentAlignment="Stretch"
 			x:Load="False"
@@ -138,7 +137,7 @@
 
 		<!--  Address Bar  -->
 		<uc:AddressToolbar
-			x:Name="NavToolbar"
+			x:Name="AddressToolbar"
 			Grid.Row="1"
 			HorizontalAlignment="Stretch"
 			HorizontalContentAlignment="Stretch"
@@ -152,7 +151,7 @@
 
 		<!--  Sidebar Pane Toggle  -->
 		<Button
-			x:Name="TogglePaneButton"
+			x:Name="ToggleSidebarPaneButton"
 			Grid.Row="0"
 			Margin="2,2,0,0"
 			HorizontalAlignment="Left"
@@ -166,7 +165,7 @@
 
 		<!--  Sidebar + Inner Content  -->
 		<sidebar:SidebarView
-			x:Name="SidebarControl"
+			x:Name="SidebarView"
 			Grid.Row="2"
 			HorizontalContentAlignment="Stretch"
 			DisplayMode="{x:Bind SidebarAdaptiveViewModel.SidebarDisplayMode, Mode=TwoWay}"
