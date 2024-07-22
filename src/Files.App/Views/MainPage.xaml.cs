@@ -79,27 +79,27 @@ namespace Files.App.Views
 
 			switch (e.Key)
 			{
-				case VirtualKey.Menu:
-				case VirtualKey.Control:
-				case VirtualKey.Shift:
-				case VirtualKey.LeftWindows:
-				case VirtualKey.RightWindows:
+				case VirtualKey.Menu or VirtualKey.Control or VirtualKey.Shift or VirtualKey.LeftWindows or VirtualKey.RightWindows:
 					break;
 				default:
 					var currentModifiers = HotKeyHelpers.GetCurrentKeyModifiers();
 					HotKey hotKey = new((Keys)e.Key, currentModifiers);
 
-					// A textbox takes precedence over certain hotkeys.
+					// TextBox takes precedence over any hotkeys.
 					if (e.OriginalSource is DependencyObject source && source.FindAscendantOrSelf<TextBox>() is not null)
 						break;
 
-					// Execute command for hotkey
+					// Execute command for the hotkey
 					var command = Commands[hotKey];
 					if (command.Code is not CommandCodes.None && _keyReleased)
 					{
 						_keyReleased = false;
-						e.Handled = command.IsExecutable;
-						await command.ExecuteAsync();
+	
+						if (command.IsExecutable)
+						{
+							e.Handled = true;
+							await command.ExecuteAsync();
+						}
 					}
 					break;
 			}
@@ -111,11 +111,7 @@ namespace Files.App.Views
 
 			switch (e.Key)
 			{
-				case VirtualKey.Menu:
-				case VirtualKey.Control:
-				case VirtualKey.Shift:
-				case VirtualKey.LeftWindows:
-				case VirtualKey.RightWindows:
+				case VirtualKey.Menu or VirtualKey.Control or VirtualKey.Shift or VirtualKey.LeftWindows or VirtualKey.RightWindows:
 					break;
 				default:
 					_keyReleased = true;
@@ -148,21 +144,20 @@ namespace Files.App.Views
 				promptForReviewDialog.XamlRoot = MainWindow.Instance.Content.XamlRoot;
 
 			var result = await promptForReviewDialog.TryShowAsync();
+			if (result is not ContentDialogResult.Primary)
+				return;
 
-			if (result == ContentDialogResult.Primary)
+			try
 			{
-				try
-				{
-					var storeContext = StoreContext.GetDefault();
-					InitializeWithWindow.Initialize(storeContext, MainWindow.Instance.WindowHandle);
-					var storeRateAndReviewResult = await storeContext.RequestRateAndReviewAppAsync();
+				var storeContext = StoreContext.GetDefault();
+				InitializeWithWindow.Initialize(storeContext, MainWindow.Instance.WindowHandle);
+				var storeRateAndReviewResult = await storeContext.RequestRateAndReviewAppAsync();
 
-					App.Logger.LogInformation($"STORE: review request status: {storeRateAndReviewResult.Status}");
+				App.Logger.LogInformation($"STORE: review request status: {storeRateAndReviewResult.Status}");
 
-					UserSettingsService.ApplicationSettingsService.ClickedToReviewApp = true;
-				}
-				catch (Exception) { }
+				UserSettingsService.ApplicationSettingsService.ClickedToReviewApp = true;
 			}
+			catch (Exception) { }
 		}
 
 		private async Task AppRunningAsAdminPromptAsync()
@@ -177,8 +172,7 @@ namespace Files.App.Views
 			};
 
 			var result = await runningAsAdminPrompt.TryShowAsync();
-
-			if (result == ContentDialogResult.Secondary)
+			if (result is ContentDialogResult.Secondary)
 				UserSettingsService.ApplicationSettingsService.ShowRunningAsAdminPrompt = false;
 		}
 
@@ -437,11 +431,7 @@ namespace Files.App.Views
 		{
 			switch (e.Key)
 			{
-				case VirtualKey.Menu:
-				case VirtualKey.Control:
-				case VirtualKey.Shift:
-				case VirtualKey.LeftWindows:
-				case VirtualKey.RightWindows:
+				case VirtualKey.Menu or VirtualKey.Control or VirtualKey.Shift or VirtualKey.LeftWindows or VirtualKey.RightWindows:
 					break;
 				default:
 					var currentModifiers = HotKeyHelpers.GetCurrentKeyModifiers();
