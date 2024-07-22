@@ -30,11 +30,7 @@
 				<ResourceDictionary Source="ms-appx:///Styles/DefaultGridSplitterStyle.xaml" />
 			</ResourceDictionary.MergedDictionaries>
 
-			<x:Boolean x:Key="True">True</x:Boolean>
-			<x:Boolean x:Key="False">False</x:Boolean>
-
 			<wctconverters:BoolNegationConverter x:Key="BoolNegationConverter" />
-
 
 			<MenuFlyout x:Key="SidebarContextMenu">
 				<ToggleMenuFlyoutItem IsChecked="{x:Bind SidebarAdaptiveViewModel.ShowPinnedFoldersSection, Mode=TwoWay}" Text="{helpers:ResourceString Name=Pinned}" />
@@ -43,11 +39,9 @@
 				<ToggleMenuFlyoutItem IsChecked="{x:Bind SidebarAdaptiveViewModel.ShowCloudDrivesSection, Mode=TwoWay}" Text="{helpers:ResourceString Name=SidebarCloudDrives}" />
 				<ToggleMenuFlyoutItem IsChecked="{x:Bind SidebarAdaptiveViewModel.ShowNetworkSection, Mode=TwoWay}" Text="{helpers:ResourceString Name=Network}" />
 				<ToggleMenuFlyoutItem IsChecked="{x:Bind SidebarAdaptiveViewModel.ShowWslSection, Mode=TwoWay}" Text="{helpers:ResourceString Name=WSL}" />
-				<ToggleMenuFlyoutItem
-					x:Name="SidebarContextMenuFileTagsSection"
-					IsChecked="{x:Bind SidebarAdaptiveViewModel.ShowFileTagsSection, Mode=TwoWay}"
-					Text="{helpers:ResourceString Name=FileTags}" />
+				<ToggleMenuFlyoutItem IsChecked="{x:Bind SidebarAdaptiveViewModel.ShowFileTagsSection, Mode=TwoWay}" Text="{helpers:ResourceString Name=FileTags}" />
 			</MenuFlyout>
+
 		</ResourceDictionary>
 	</Page.Resources>
 
@@ -120,64 +114,60 @@
 	<Grid>
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<!--  Background Image  -->
+		<!--  App Background Image  -->
 		<Image
-			Grid.RowSpan="2"
+			Grid.RowSpan="3"
 			HorizontalAlignment="{x:Bind ViewModel.AppThemeBackgroundImageHorizontalAlignment, Mode=OneWay}"
 			VerticalAlignment="{x:Bind ViewModel.AppThemeBackgroundImageVerticalAlignment, Mode=OneWay}"
 			Opacity="{x:Bind ViewModel.AppThemeBackgroundImageOpacity, Mode=OneWay}"
 			Source="{x:Bind ViewModel.AppThemeBackgroundImageSource, Mode=OneWay}"
 			Stretch="{x:Bind ViewModel.AppThemeBackgroundImageFit, Mode=OneWay}" />
 
-		<!--  Header Area  -->
-		<Grid>
-			<Grid.RowDefinitions>
-				<RowDefinition Height="Auto" />
-				<RowDefinition Height="Auto" />
-			</Grid.RowDefinitions>
+		<!--  Tab Bar  -->
+		<tabbar:TabBar
+			x:Name="TabControl"
+			Grid.Row="0"
+			HorizontalContentAlignment="Stretch"
+			x:Load="False"
+			Loaded="HorizontalMultitaskingControl_Loaded"
+			TabIndex="0" />
 
-			<!--  Tab Control  -->
-			<tabbar:TabBar
-				x:Name="TabControl"
-				HorizontalContentAlignment="Stretch"
-				x:Load="False"
-				Loaded="HorizontalMultitaskingControl_Loaded"
-				TabIndex="0" />
-
-			<!--  Address Bar  -->
-			<uc:AddressToolbar
-				x:Name="NavToolbar"
-				Grid.Row="1"
-				HorizontalAlignment="Stretch"
-				HorizontalContentAlignment="Stretch"
-				x:Load="False"
-				Loaded="NavToolbar_Loaded"
-				OngoingTasksViewModel="{x:Bind OngoingTasksViewModel}"
-				ShowOngoingTasks="True"
-				ShowSearchBox="True"
-				ShowSettingsButton="{x:Bind WindowContext.IsCompactOverlay, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}"
-				TabIndex="1" />
-
-			<Button
-				x:Name="TogglePaneButton"
-				Margin="2,2,0,0"
-				HorizontalAlignment="Left"
-				VerticalAlignment="Top"
-				Background="Transparent"
-				BorderThickness="0"
-				Click="TogglePaneButton_Click"
-				Style="{StaticResource PaneToggleButtonStyle}"
-				Visibility="Collapsed" />
-		</Grid>
-
-		<!--  Content Area  -->
-		<sidebar:SidebarView
-			x:Name="SidebarControl"
+		<!--  Address Bar  -->
+		<uc:AddressToolbar
+			x:Name="NavToolbar"
 			Grid.Row="1"
 			HorizontalAlignment="Stretch"
+			HorizontalContentAlignment="Stretch"
+			x:Load="False"
+			Loaded="NavToolbar_Loaded"
+			OngoingTasksViewModel="{x:Bind OngoingTasksViewModel}"
+			ShowOngoingTasks="True"
+			ShowSearchBox="True"
+			ShowSettingsButton="{x:Bind WindowContext.IsCompactOverlay, Mode=OneWay, Converter={StaticResource BoolNegationConverter}}"
+			TabIndex="1" />
+
+		<!--  Sidebar Pane Toggle  -->
+		<Button
+			x:Name="TogglePaneButton"
+			Grid.Row="0"
+			Margin="2,2,0,0"
+			HorizontalAlignment="Left"
+			VerticalAlignment="Top"
+			Background="Transparent"
+			BorderThickness="0"
+			Click="TogglePaneButton_Click"
+			Style="{StaticResource PaneToggleButtonStyle}"
+			Visibility="Collapsed" />
+		</Grid>
+
+		<!--  Sidebar + Inner Content  -->
+		<sidebar:SidebarView
+			x:Name="SidebarControl"
+			Grid.Row="2"
 			HorizontalContentAlignment="Stretch"
 			DisplayMode="{x:Bind SidebarAdaptiveViewModel.SidebarDisplayMode, Mode=TwoWay}"
 			Loaded="SidebarControl_Loaded"
@@ -211,7 +201,7 @@
 						<ColumnDefinition x:Name="PaneColumn" Width="Auto" />
 					</Grid.ColumnDefinitions>
 
-					<!--  File Navigation Toolbar  -->
+					<!--  Toolbar  -->
 					<uc:InnerNavigationToolbar
 						x:Name="InnerNavigationToolbar"
 						Grid.Row="0"
@@ -224,7 +214,7 @@
 						TabIndex="2"
 						Visibility="{x:Bind ViewModel.ShowToolbar, Mode=OneWay}" />
 
-					<!--  Page Content  -->
+					<!--  Root Content  -->
 					<ContentPresenter
 						x:Name="PageContent"
 						Grid.Row="1"
@@ -232,7 +222,7 @@
 						HorizontalContentAlignment="Stretch"
 						Content="{x:Bind ViewModel.SelectedTabItem.ContentFrame, Mode=OneWay}" />
 
-					<!--  Preview Pane Splitter  -->
+					<!--  Info Pane Sizer  -->
 					<toolkit:GridSplitter
 						x:Name="PaneSplitter"
 						Grid.Row="1"
