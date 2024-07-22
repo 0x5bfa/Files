@@ -86,7 +86,8 @@ namespace Files.App.Views
 					HotKey hotKey = new((Keys)e.Key, currentModifiers);
 
 					// TextBox takes precedence over any hotkeys.
-					if (e.OriginalSource is DependencyObject source && source.FindAscendantOrSelf<TextBox>() is not null)
+					if (e.OriginalSource is DependencyObject source &&
+						source.FindAscendantOrSelf<TextBox>() is not null)
 						break;
 
 					// Execute command for the hotkey
@@ -153,8 +154,6 @@ namespace Files.App.Views
 				InitializeWithWindow.Initialize(storeContext, MainWindow.Instance.WindowHandle);
 				var storeRateAndReviewResult = await storeContext.RequestRateAndReviewAppAsync();
 
-				App.Logger.LogInformation($"STORE: review request status: {storeRateAndReviewResult.Status}");
-
 				UserSettingsService.ApplicationSettingsService.ClickedToReviewApp = true;
 			}
 			catch (Exception) { }
@@ -178,8 +177,19 @@ namespace Files.App.Views
 
 		private int SetTitleBarDragRegion(InputNonClientPointerSource source, SizeInt32 size, double scaleFactor, Func<UIElement, RectInt32?, RectInt32> getScaledRect)
 		{
-			var height = (int)TabControl.ActualHeight;
-			source.SetRegionRects(NonClientRegionKind.Passthrough, [getScaledRect(this, new RectInt32(0, 0, (int)(TabControl.ActualWidth + TabControl.Margin.Left - TabControl.DragArea.ActualWidth), height))]);
+			var height = (int)TabBar.ActualHeight;
+
+			source.SetRegionRects(
+				NonClientRegionKind.Passthrough,
+				[getScaledRect(
+					this,
+					new RectInt32(
+						0,
+						0,
+						(int)(TabBar.ActualWidth + TabBar.Margin.Left - TabBar.DragArea.ActualWidth),
+						height))
+				]);
+
 			return height;
 		}
 
@@ -194,11 +204,11 @@ namespace Files.App.Views
 
 		private void UpdateNavToolbarProperties()
 		{
-			if (NavToolbar is not null)
-				NavToolbar.ViewModel = SidebarAdaptiveViewModel.PaneHolder?.ActivePaneOrColumn.ToolbarViewModel;
+			if (AddressToolbar is not null)
+				AddressToolbar.ViewModel = SidebarAdaptiveViewModel.PaneHolder?.ActivePaneOrColumn.ToolbarViewModel;
 
-			if (InnerNavigationToolbar is not null)
-				InnerNavigationToolbar.ViewModel = SidebarAdaptiveViewModel.PaneHolder?.ActivePaneOrColumn.ToolbarViewModel;
+			if (Toolbar is not null)
+				Toolbar.ViewModel = SidebarAdaptiveViewModel.PaneHolder?.ActivePaneOrColumn.ToolbarViewModel;
 		}
 
 		private void UpdatePositioning()
@@ -299,12 +309,12 @@ namespace Files.App.Views
 
 		private void HorizontalMultitaskingControl_Loaded(object sender, RoutedEventArgs e)
 		{
-			TabControl.DragArea.SizeChanged += (_, _) => MainWindow.Instance.RaiseSetTitleBarDragRegion(SetTitleBarDragRegion);
+			TabBar.DragArea.SizeChanged += (_, _) => MainWindow.Instance.RaiseSetTitleBarDragRegion(SetTitleBarDragRegion);
 
 			if (ViewModel.MultitaskingControl is not TabBar)
 			{
-				ViewModel.MultitaskingControl = TabControl;
-				ViewModel.MultitaskingControls.Add(TabControl);
+				ViewModel.MultitaskingControl = TabBar;
+				ViewModel.MultitaskingControls.Add(TabBar);
 				ViewModel.MultitaskingControl.CurrentInstanceChanged += MultitaskingControl_CurrentInstanceChanged;
 			}
 		}
@@ -366,11 +376,11 @@ namespace Files.App.Views
 		{
 			MainWindow.Instance.AppWindow.Changed += (_, _) => MainWindow.Instance.RaiseSetTitleBarDragRegion(SetTitleBarDragRegion);
 
-			// Defers the status bar loading until after the page has loaded to improve startup perf
+			// Load the deferred primary controls to boost startup
+			FindName(nameof(TabBar));
+			FindName(nameof(AddressToolbar));
+			FindName(nameof(Toolbar));
 			FindName(nameof(StatusBar));
-			FindName(nameof(InnerNavigationToolbar));
-			FindName(nameof(TabControl));
-			FindName(nameof(NavToolbar));
 
 			// Notify user that drag and drop is disabled
 			if (AppLifecycleHelper.AppEnvironment is not AppEnvironment.Dev &&
@@ -379,7 +389,7 @@ namespace Files.App.Views
 				DispatcherQueue.TryEnqueue(async () => await AppRunningAsAdminPromptAsync());
 
 			// Prompt user to review app in the Store
-			if (Package.Current.Id.Name == "49306atecsolution.FilesUWP" &&
+			if (AppLifecycleHelper.AppEnvironment is not AppEnvironment.Store &&
 				UserSettingsService.ApplicationSettingsService.ClickedToReviewApp is false &&
 				SystemInformation.Instance.TotalLaunchCount is 15 or 30 or 60)
 				DispatcherQueue.TryEnqueue(async () => await PromptForReviewAsync());
@@ -407,17 +417,12 @@ namespace Files.App.Views
 			{
 				case PreviewPanePositions.Right when ContentColumn.ActualWidth == ContentColumn.MinWidth:
 					UserSettingsService.InfoPaneSettingsService.VerticalSizePx += e.NewSize.Width - e.PreviousSize.Width;
-					UpdatePositioning();
 					break;
 				case PreviewPanePositions.Bottom when ContentRow.ActualHeight == ContentRow.MinHeight:
 					UserSettingsService.InfoPaneSettingsService.HorizontalSizePx += e.NewSize.Height - e.PreviousSize.Height;
-					UpdatePositioning();
 					break;
 			}
-		}
 
-		private void RootGrid_SizeChanged(object sender, SizeChangedEventArgs e)
-		{
 			LoadPaneChanged();
 		}
 
@@ -472,8 +477,9 @@ namespace Files.App.Views
 
 		private void TogglePaneButton_Click(object sender, RoutedEventArgs e)
 		{
-			if (SidebarControl.DisplayMode == SidebarDisplayMode.Minimal)
-				SidebarControl.IsPaneOpen = !SidebarControl.IsPaneOpen;
+			// TODO: Use TwoWay binding
+			if (SidebarView.DisplayMode == SidebarDisplayMode.Minimal)
+				SidebarView.IsPaneOpen = !SidebarControl.IsPaneOpen;
 		}
 	}
 }
