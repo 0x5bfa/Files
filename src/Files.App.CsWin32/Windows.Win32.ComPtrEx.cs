@@ -15,6 +15,8 @@ namespace Windows.Win32
 	{
 		private T* _ptr;
 
+		private List<RuntimeTypeHandle> _cachedSupportedInterfaces = [];
+
 		public bool IsNull
 			=> _ptr == default;
 
@@ -42,14 +44,29 @@ namespace Windows.Win32
 			return (Guid*)Unsafe.AsPointer(ref Unsafe.AsRef(in _ptr->Guid));
 		}
 
-		public bool IsInterfaceImplemented(RuntimeTypeHandle interfaceType, bool throwIfNotImplemented)
+		public unsafe bool IsInterfaceImplemented(RuntimeTypeHandle interfaceType, bool throwIfNotImplemented)
         {
-			return false;
+			if (_cachedSupportedInterfaces.Contains(interfaceType))
+				return true;
+
+			void** ppv = default;
+			Type type = Type.GetTypeFromHandle(interfaceType);
+			fixed(Guid* riid = &type.GUID)
+				((IUnknown*)_ptr)->QueryInterface(riid, ppv);
+
+			return ppv is not null
+				? _cachedSupportedInterfaces.Add(interfaceType) != -1 // must be always true
+				: throwIfNotImplemented
+					? throw new NotImplementedException($"Failed to QI with the given type {type}")
+					: false;
         }
 
 		public RuntimeTypeHandle GetInterfaceImplementation(RuntimeTypeHandle interfaceType)
         {
-            return RuntimeTypeHandle.FromIntPtr(0);
+			if (!_cachedSupportedInterfaces.Contains(interfaceType))
+				return default;
+
+			return interfaceType;
         }
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
