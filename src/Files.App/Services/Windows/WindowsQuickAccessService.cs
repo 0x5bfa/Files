@@ -8,100 +8,119 @@ namespace Files.App.Services
 {
 	internal sealed class QuickAccessService : IQuickAccessService
 	{
-		// Quick access shell folder (::{679f85cb-0220-4080-b29b-5540cc05aab6}) contains recent files
-		// which are unnecessary for getting pinned folders, so we use frequent places shell folder instead.
-		private readonly static string guid = "::{3936e9e4-d92c-4eee-a85a-bc16d5ea0819}";
+		private FileSystemWatcher _watcher;
 
-		public async Task<IEnumerable<ShellFileItem>> GetPinnedFoldersAsync()
+		private readonly List<INavigationControlItem> _PinnedFolders = [];
+		/// <inheritdoc/>
+		public IReadOnlyList<INavigationControlItem> PinnedFolders
 		{
-			var result = (await Win32Helper.GetShellFolderAsync(guid, false, true, 0, int.MaxValue, "System.Home.IsPinned")).Enumerate
-				.Where(link => link.IsFolder);
-			return result;
-		}
-
-		public Task PinToSidebarAsync(string folderPath) => PinToSidebarAsync(new[] { folderPath });
-
-		public Task PinToSidebarAsync(string[] folderPaths) => PinToSidebarAsync(folderPaths, true);
-
-		private async Task PinToSidebarAsync(string[] folderPaths, bool doUpdateQuickAccessWidget)
-		{
-			foreach (string folderPath in folderPaths)
-				await ContextMenu.InvokeVerb("pintohome", [folderPath]);
-
-			await App.QuickAccessManager.Model.LoadAsync();
-			if (doUpdateQuickAccessWidget)
-				App.QuickAccessManager.UpdateQuickAccessWidget?.Invoke(this, new ModifyQuickAccessEventArgs(folderPaths, true));
-		}
-
-		public Task UnpinFromSidebarAsync(string folderPath) => UnpinFromSidebarAsync(new[] { folderPath }); 
-
-		public Task UnpinFromSidebarAsync(string[] folderPaths) => UnpinFromSidebarAsync(folderPaths, true);
-
-		private async Task UnpinFromSidebarAsync(string[] folderPaths, bool doUpdateQuickAccessWidget)
-		{
-			Type? shellAppType = Type.GetTypeFromProgID("Shell.Application");
-			object? shell = Activator.CreateInstance(shellAppType);
-			dynamic? f2 = shellAppType.InvokeMember("NameSpace", System.Reflection.BindingFlags.InvokeMethod, null, shell, [$"shell:{guid}"]);
-
-			if (folderPaths.Length == 0)
-				folderPaths = (await GetPinnedFoldersAsync())
-					.Where(link => (bool?)link.Properties["System.Home.IsPinned"] ?? false)
-					.Select(link => link.FilePath).ToArray();
-
-			foreach (dynamic? fi in f2.Items())
+			get
 			{
-				if (ShellStorageFolder.IsShellPath((string)fi.Path))
-				{
-					var folder = await ShellStorageFolder.FromPathAsync((string)fi.Path);
-					var path = folder?.Path;
-
-					if (path is not null && 
-						(folderPaths.Contains(path) || (path.StartsWith(@"\\SHELL\") && folderPaths.Any(x => x.StartsWith(@"\\SHELL\"))))) // Fix for the Linux header
-					{
-						await SafetyExtensions.IgnoreExceptions(async () =>
-						{
-							await fi.InvokeVerb("unpinfromhome");
-						});
-						continue;
-					}
-				}
-
-				if (folderPaths.Contains((string)fi.Path))
-				{
-					await SafetyExtensions.IgnoreExceptions(async () =>
-					{
-						await fi.InvokeVerb("unpinfromhome");
-					});
-				}
+				lock (_PinnedFolders)
+					return _PinnedFolders.ToList().AsReadOnly();
 			}
-
-			await App.QuickAccessManager.Model.LoadAsync();
-			if (doUpdateQuickAccessWidget)
-				App.QuickAccessManager.UpdateQuickAccessWidget?.Invoke(this, new ModifyQuickAccessEventArgs(folderPaths, false));
 		}
 
-		public bool IsItemPinned(string folderPath)
+		/// <inheritdoc/>
+		public event EventHandler<NotifyCollectionChangedEventArgs>? PinnedFoldersChanged;
+
+  		/// <inheritdoc/>
+		public async Task InitializeAsync()
 		{
-			return App.QuickAccessManager.Model.PinnedFolders.Contains(folderPath);
-		}
-
-		public async Task SaveAsync(string[] items)
-		{
-			if (Equals(items, App.QuickAccessManager.Model.PinnedFolders.ToArray()))
-				return;
-
-			App.QuickAccessManager.PinnedItemsWatcher.EnableRaisingEvents = false;
-
-			// Unpin every item that is below this index and then pin them all in order
-			await UnpinFromSidebarAsync([], false);
-
-			await PinToSidebarAsync(items, false);
-			App.QuickAccessManager.PinnedItemsWatcher.EnableRaisingEvents = true;
-
-			App.QuickAccessManager.UpdateQuickAccessWidget?.Invoke(this, new ModifyQuickAccessEventArgs(items, true)
+			_watcher = new()
 			{
-				Reorder = true
+				Path = SystemIO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Recent), "AutomaticDestinations"),
+				Filter = "f01b4d95cf55d32a.automaticDestinations-ms",
+				NotifyFilter = SystemIO.NotifyFilters.DirectoryName | SystemIO.NotifyFilters.FileName | SystemIO.NotifyFilters.LastWrite,
+			};
+
+			_watcher.Changed += Watcher_Changed;
+			_watcher.Deleted += Watcher_Changed;
+			_watcher.EnableRaisingEvents = true;
+		}
+
+		/// <inheritdoc/>
+		public async Task<bool> UpdatePinnedFoldersAsync()
+		{
+			return await Task.Run(() =>
+			{
+				return UpdatePinnedFolders();
 			});
+		}
+
+		public async Task<bool> PinFolder(string folder)
+		{
+			// TODO: Invoke "pintohome" verb
+
+			return true;
+		}
+
+		public async Task<bool> UnpinFolder(INavigationControlItem folder)
+		{
+			// TODO: Invoke "unpinfromhome" verb
+
+			return true;
+		}
+
+		private unsafe bool UpdatePinnedFolders()
+		{
+			try
+			{
+				HRESULT hr = default;
+
+				// Get IShellItem of the shell folder
+				var shellItemIid = typeof(IShellItem).GUID;
+				using ComPtr<IShellItem> pFolderShellItem = default;
+				fixed (char* pszFolderShellPath = "Shell:::{3936e9e4-d92c-4eee-a85a-bc16d5ea0819}")
+					hr = PInvoke.SHCreateItemFromParsingName(pszFolderShellPath, null, &shellItemIid, (void**)pFolderShellItem.GetAddressOf());
+
+				// Get IEnumShellItems of the quick access shell folder
+				var enumItemsBHID = PInvoke.BHID_EnumItems;
+				Guid enumShellItemIid = typeof(IEnumShellItems).GUID;
+				using ComPtr<IEnumShellItems> pEnumShellItems = default;
+				hr = pFolderShellItem.Get()->BindToHandler(null, &enumItemsBHID, &enumShellItemIid, (void**)pEnumShellItems.GetAddressOf());
+
+				// Enumerate recent items and populate the list
+				int index = 0;
+				List<INavigationControlItem> pinnedItems = [];
+				ComPtr<IShellItem> pShellItem = default; // Do not dispose in this method to use later to prepare for its deletion
+				while (pEnumShellItems.Get()->Next(1, pShellItem.GetAddressOf()) == HRESULT.S_OK)
+				{
+					// Get top 20 items
+					if (index is 20)
+						break;
+
+					// TODO: Add code here
+
+					index++;
+				}
+
+				if (pinnedItems.Count is 0)
+					return false;
+
+				var snapshot = PinnedFolders;
+
+				lock (_RecentFolders)
+				{
+					_PinnedFolders.Clear();
+					_PinnedFolders.AddRange(pinnedItems);
+				}
+
+				var eventArgs = GetChangedActionEventArgs(snapshot, pinnedItems);
+
+ 				PinnedFoldersChanged?.Invoke(this, eventArgs);
+
+				return true;
+			}
+			catch
+			{
+				return false;
+			}
+		}
+
+		private void Watcher_Changed(object sender, SystemIO.FileSystemEventArgs e)
+		{
+			_ = UpdatePinnedFoldersAsync();
 		}
 	}
 }
