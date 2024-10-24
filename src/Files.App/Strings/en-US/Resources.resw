@@ -2700,7 +2700,7 @@
     <value>Focus other pane</value>
   </data>
   <data name="FocusOtherPaneDescription" xml:space="preserve">
-    <value>Switch focus to the non active pane</value>
+    <value>Switch focus to the non-active pane</value>
   </data>
   <data name="ToggleSidebar" xml:space="preserve">
     <value>Toggle the sidebar</value>
