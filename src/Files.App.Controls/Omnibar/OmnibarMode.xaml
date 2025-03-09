@@ -14,7 +14,7 @@
 		<Setter Property="IsTabStop" Value="True" />
 		<Setter Property="Height" Value="{StaticResource OmnibarModeDefaultHeight}" />
 		<Setter Property="UseSystemFocusVisuals" Value="True" />
-		<Setter Property="HorizontalAlignment" Value="Left" />
+		<Setter Property="HorizontalAlignment" Value="Stretch" />
 		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
 		<Setter Property="CornerRadius" Value="{StaticResource OmnibarDefaultCornerRadius}" />
 		<Setter Property="VerticalAlignment" Value="Stretch" />
