@@ -37,7 +37,7 @@ namespace Files.App.Controls
 		protected override void OnApplyTemplate()
 		{
 			_modesHostGrid = GetTemplateChild(ModesHostGrid) as Grid
-				?? throw new MissingFieldException($"Could not find {ModesHostGrid} in {nameof(Omnibar)}'s style.");
+				?? throw new MissingFieldException($"Could not find {ModesHostGrid} in the given {nameof(Omnibar)}'s style.");
 
 			if (Modes is null)
 				return;
@@ -65,6 +65,7 @@ namespace Files.App.Controls
 				_modesHostGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
 				Grid.SetColumn(mode, _modesHostGrid.Children.Count);
 				_modesHostGrid.Children.Add(mode);
+				mode.Host = _modesHostGrid;
 			}
 
 			GotFocus += Omnibar_GotFocus;

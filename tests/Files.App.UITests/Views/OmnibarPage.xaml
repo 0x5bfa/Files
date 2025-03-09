@@ -64,7 +64,10 @@
 			Padding="24"
 			Style="{StaticResource GridExampleControlStyle}">
 			<controls:Omnibar HorizontalAlignment="Stretch" VerticalAlignment="Center">
-				<controls:OmnibarMode HideContentOnInactive="True" Text="A">
+				<controls:OmnibarMode
+					HideContentOnInactive="True"
+					IsDefault="True"
+					Text="A">
 					<controls:OmnibarMode.IconOnActive>
 						<controls:ThemedIcon
 							Width="16"

@@ -22,14 +22,14 @@
 		<Setter Property="Template">
 			<Setter.Value>
 				<ControlTemplate TargetType="local:OmnibarMode">
-					<Grid x:Name="RootGrid" Height="{TemplateBinding Height}">
+					<Grid x:Name="PART_RootGrid" Height="{TemplateBinding Height}">
 						<Grid.ColumnDefinitions>
 							<ColumnDefinition Width="Auto" />
 							<ColumnDefinition Width="*" />
 						</Grid.ColumnDefinitions>
 
 						<Border
-							x:Name="ModeClickBorder"
+							x:Name="PART_ModeClickBorder"
 							Width="{StaticResource OmnibarModeDefaultClickAreaWidth}"
 							Height="{TemplateBinding Height}"
 							Background="Transparent"
@@ -41,18 +41,48 @@
 							<ContentPresenter HorizontalAlignment="Center" Content="{TemplateBinding IconOnInactive}" />
 						</Border>
 
+						<TextBox
+							x:Name="PART_InputTextBox"
+							Grid.Column="1"
+							HorizontalAlignment="Stretch"
+							HorizontalContentAlignment="Stretch"
+							Visibility="Collapsed">
+							<TextBox.Resources>
+								<SolidColorBrush x:Key="TextControlBackground" Color="Transparent" />
+								<SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent" />
+								<SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent" />
+								<SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent" />
+
+								<SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent" />
+								<SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent" />
+								<SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent" />
+								<SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent" />
+
+								<Thickness x:Key="TextControlThemePadding">0,5,0,6</Thickness>
+							</TextBox.Resources>
+						</TextBox>
+
 						<VisualStateManager.VisualStateGroups>
 
 							<VisualStateGroup x:Name="CommonStates">
-								<VisualState x:Name="Normal" />
+								<VisualState x:Name="PointerNormal" />
 								<VisualState x:Name="PointerOver">
 									<VisualState.Setters>
-										<Setter Target="ModeClickBorder.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
+										<Setter Target="PART_ModeClickBorder.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
 									</VisualState.Setters>
 								</VisualState>
-								<VisualState x:Name="Pressed">
+								<VisualState x:Name="PointerPressed">
 									<VisualState.Setters>
-										<Setter Target="ModeClickBorder.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+										<Setter Target="PART_ModeClickBorder.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
+									</VisualState.Setters>
+								</VisualState>
+							</VisualStateGroup>
+
+							<VisualStateGroup x:Name="InputVisibilityStates">
+								<VisualState x:Name="Hidden" />
+								<VisualState x:Name="Visible">
+									<VisualState.Setters>
+										<Setter Target="PART_InputTextBox.Visibility" Value="Visible" />
 									</VisualState.Setters>
 								</VisualState>
 							</VisualStateGroup>

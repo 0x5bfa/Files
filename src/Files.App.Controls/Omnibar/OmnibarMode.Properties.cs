@@ -27,9 +27,17 @@ namespace Files.App.Controls
 		public partial FrameworkElement? IconOnInactive { get; set; }
 
 		[GeneratedDependencyProperty]
-		private partial FrameworkElement? Icon { get; set; }
+		public partial DataTemplate? SuggestionItemTemplate { get; set; }
 
 		[GeneratedDependencyProperty]
-		public partial DataTemplate? SuggestionItemTemplate { get; set; }
+		public partial bool IsDefault { get; set; }
+
+		[GeneratedDependencyProperty]
+		internal partial Grid? Host { get; set; }
+
+		partial void OnHostChanged(Grid? newValue)
+		{
+			UpdateVisualStates();
+		}
 	}
 }
