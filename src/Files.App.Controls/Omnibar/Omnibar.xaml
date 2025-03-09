@@ -4,19 +4,23 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:local="using:Files.App.Controls">
 
-	<ResourceDictionary.ThemeDictionaries>
+	<!--<ResourceDictionary.ThemeDictionaries>
 		<ResourceDictionary x:Key="Default">
-			<SolidColorBrush x:Key="SystemControlSplitterPressed" Color="{ThemeResource SystemBaseHighColor}" />
+			<SolidColorBrush x:Key="OmnibarModeDivisiderBrush" Color="{ThemeResource DividerStrokeColorDefaultBrush}" />
 		</ResourceDictionary>
 		<ResourceDictionary x:Key="HighContrast">
-			<SolidColorBrush x:Key="SystemControlSplitterPressed" Color="{ThemeResource SystemColorHighlightColor}" />
+			<SolidColorBrush x:Key="OmnibarModeDivisiderBrush" Color="{ThemeResource DividerStrokeColorDefaultBrush}" />
 		</ResourceDictionary>
-	</ResourceDictionary.ThemeDictionaries>
+	</ResourceDictionary.ThemeDictionaries>-->
 
-	<x:Double x:Key="OmnibarDefaultHeight">40</x:Double>
-	<CornerRadius x:Key="OmnibarDefaultCornerRadius">20</CornerRadius>
+	<x:Double x:Key="OmnibarDefaultHeight">36</x:Double>
+	<CornerRadius x:Key="OmnibarDefaultCornerRadius">18</CornerRadius>
 	<Thickness x:Key="OmnibarFocusedBorderThickness">2</Thickness>
 	<Thickness x:Key="OmnibarUnfocusedBorderThickness">1</Thickness>
+	<Thickness x:Key="OmnibarUnfocusedRootPadding">1</Thickness>
+
+	<x:Double x:Key="OmnibarModeDividerDefaultHeight">24</x:Double>
+	<SolidColorBrush x:Key="OmnibarModeDivisiderBrush" Color="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
 	<Style BasedOn="{StaticResource DefaultOmnibarStyle}" TargetType="local:Omnibar" />
 
@@ -25,7 +29,10 @@
 		<Setter Property="Height" Value="{StaticResource OmnibarDefaultHeight}" />
 		<Setter Property="UseSystemFocusVisuals" Value="True" />
 		<Setter Property="HorizontalAlignment" Value="Stretch" />
-		<Setter Property="Background" Value="Transparent" />
+		<Setter Property="Background" Value="{ThemeResource ControlFillColorDefaultBrush}" />
+		<Setter Property="Padding" Value="{ThemeResource OmnibarUnfocusedRootPadding}" />
+		<Setter Property="BorderBrush" Value="{ThemeResource CircleElevationBorderBrush}" />
+		<Setter Property="BorderThickness" Value="{StaticResource OmnibarUnfocusedBorderThickness}" />
 		<Setter Property="HorizontalContentAlignment" Value="Stretch" />
 		<Setter Property="CornerRadius" Value="{StaticResource OmnibarDefaultCornerRadius}" />
 		<Setter Property="VerticalAlignment" Value="Center" />
@@ -35,28 +42,22 @@
 				<ControlTemplate TargetType="local:Omnibar">
 					<Grid
 						x:Name="PART_RootGrid"
+						Padding="{TemplateBinding Padding}"
 						Background="{TemplateBinding Background}"
+						BorderBrush="{TemplateBinding BorderBrush}"
+						BorderThickness="{TemplateBinding BorderThickness}"
 						CornerRadius="{TemplateBinding CornerRadius}">
-						<ItemsRepeater x:Name="ModesItemsRepeater">
-							<ItemsRepeater.Layout>
-								<StackLayout Orientation="Horizontal" Spacing="2" />
-							</ItemsRepeater.Layout>
-						</ItemsRepeater>
+						<Grid x:Name="PART_ModesHostGrid" />
 
 						<VisualStateManager.VisualStateGroups>
 
-							<VisualStateGroup x:Name="FocusStates">
+							<VisualStateGroup x:Name="PointerStates">
+								<VisualState x:Name="Normal" />
 								<VisualState x:Name="Focused">
 									<VisualState.Setters>
 										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
 										<Setter Target="PART_RootGrid.BorderThickness" Value="{StaticResource OmnibarFocusedBorderThickness}" />
 										<Setter Target="PART_RootGrid.Margin" Value="-1" />
-									</VisualState.Setters>
-								</VisualState>
-								<VisualState x:Name="Unfocused">
-									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-										<Setter Target="PART_RootGrid.BorderThickness" Value="{StaticResource OmnibarUnfocusedBorderThickness}" />
 									</VisualState.Setters>
 								</VisualState>
 							</VisualStateGroup>
@@ -66,6 +67,15 @@
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+	</Style>
+
+	<Style
+		x:Key="DefaultModeDividerStyle"
+		BasedOn="{StaticResource DefaultBorderStyle}"
+		TargetType="Border">
+		<Setter Property="Height" Value="{StaticResource OmnibarModeDividerDefaultHeight}" />
+		<Setter Property="Width" Value="1" />
+		<Setter Property="Background" Value="{StaticResource OmnibarModeDividerDefaultHeight}" />
 	</Style>
 
 </ResourceDictionary>

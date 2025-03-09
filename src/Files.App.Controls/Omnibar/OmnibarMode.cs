@@ -16,7 +16,7 @@ namespace Files.App.Controls
 	{
 		public OmnibarMode()
 		{
-			DefaultStyleKey = typeof(Omnibar);
+			DefaultStyleKey = typeof(OmnibarMode);
 		}
 
 		protected override void OnApplyTemplate()
