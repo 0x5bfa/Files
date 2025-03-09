@@ -69,13 +69,4 @@
 		</Setter>
 	</Style>
 
-	<Style
-		x:Key="DefaultModeDividerStyle"
-		BasedOn="{StaticResource DefaultBorderStyle}"
-		TargetType="Border">
-		<Setter Property="Height" Value="{StaticResource OmnibarModeDividerDefaultHeight}" />
-		<Setter Property="Width" Value="1" />
-		<Setter Property="Background" Value="{StaticResource OmnibarModeDividerDefaultHeight}" />
-	</Style>
-
 </ResourceDictionary>

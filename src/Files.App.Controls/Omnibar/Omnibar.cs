@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml.Shapes;
 using System.Linq;
 using System.Collections.Generic;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI;
 
 namespace Files.App.Controls
 {
@@ -47,22 +48,23 @@ namespace Files.App.Controls
 				// Insert a divider
 				if (_modesHostGrid.Children.Count is not 0)
 				{
-					var divider = new Border()
+					var divider = new Rectangle()
 					{
+						Fill = (SolidColorBrush)Application.Current.Resources["DividerStrokeColorDefaultBrush"],
+						Height = 20,
+						Margin = new(2,0,2,0),
 						Width = 1,
-						Height = 24,
-						//Style = (Style)Application.Current.Resources["DefaultModeDividerStyle"]
 					};
 
 					_modesHostGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+					Grid.SetColumn(divider, _modesHostGrid.Children.Count);
 					_modesHostGrid.Children.Add(divider);
-					Grid.SetColumn(divider, _modesHostGrid.Children.Count - 1);
 				}
 
 				// Insert the mode
 				_modesHostGrid.ColumnDefinitions.Add(new() { Width = GridLength.Auto });
+				Grid.SetColumn(mode, _modesHostGrid.Children.Count);
 				_modesHostGrid.Children.Add(mode);
-				Grid.SetColumn(mode, _modesHostGrid.Children.Count - 1);
 			}
 
 			GotFocus += Omnibar_GotFocus;
