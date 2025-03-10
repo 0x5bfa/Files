@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Shapes;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI;
+using CommunityToolkit.WinUI;
 
 namespace Files.App.Controls
 {
@@ -40,7 +41,7 @@ namespace Files.App.Controls
 			if (Modes is null)
 				return;
 
-			// Populate the modes1
+			// Populate the modes
 			foreach (var mode in Modes)
 			{
 				// Insert a divider
@@ -66,6 +67,10 @@ namespace Files.App.Controls
 				mode.Host = _modesHostGrid;
 			}
 
+			var parentElement = this.FindAscendant<FrameworkElement>()!;
+			parentElement.GettingFocus += ParentElement_GettingFocus;
+			parentElement.GotFocus += ParentElement_GotFocus;
+			GettingFocus += Omnibar_GettingFocus;
 			GotFocus += Omnibar_GotFocus;
 			LostFocus += Omnibar_LostFocus;
 
@@ -85,6 +90,18 @@ namespace Files.App.Controls
 		}
 
 		// Events
+
+		private void Omnibar_GettingFocus(UIElement sender, GettingFocusEventArgs args)
+		{
+		}
+
+		private void ParentElement_GettingFocus(UIElement sender, GettingFocusEventArgs args)
+		{
+		}
+
+		private void ParentElement_GotFocus(object sender, RoutedEventArgs e)
+		{
+		}
 
 		private void Omnibar_GotFocus(object sender, RoutedEventArgs e)
 		{
