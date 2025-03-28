@@ -20,7 +20,6 @@
 	xmlns:vm="using:Files.App.ViewModels.UserControls"
 	x:Name="NavToolbar"
 	Height="50"
-	Loading="NavToolbar_Loading"
 	mc:Ignorable="d">
 
 	<UserControl.Resources>
@@ -356,7 +355,7 @@
 				AutomationProperties.Name="{helpers:ResourceString Name=StatusCenter}"
 				Style="{StaticResource AddressToolbarButtonStyle}"
 				ToolTipService.ToolTip="{helpers:ResourceString Name=StatusCenter}"
-				Visibility="{x:Bind OngoingTasksViewModel.HasAnyItem, Mode=OneWay}">
+				Visibility="{x:Bind StatusCenterViewModel.HasAnyItem, Mode=OneWay}">
 
 				<Grid Margin="-16">
 
@@ -365,23 +364,23 @@
 							x:Name="StatusCenterIcon"
 							Width="16"
 							Height="16"
-							x:Load="{x:Bind OngoingTasksViewModel.HasAnyItemInProgress, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
+							x:Load="{x:Bind StatusCenterViewModel.HasAnyItemInProgress, Converter={StaticResource BoolNegationConverter}, Mode=OneWay}"
 							Style="{StaticResource App.ThemedIcons.StatusCenter}" />-->
 
 					<ProgressRing
 						x:Name="MedianOperationProgressRing"
 						HorizontalAlignment="Center"
 						VerticalAlignment="Center"
-						x:Load="{x:Bind OngoingTasksViewModel.HasAnyItemInProgress, Mode=OneWay}"
+						x:Load="{x:Bind StatusCenterViewModel.HasAnyItemInProgress, Mode=OneWay}"
 						Background="{ThemeResource SubtleFillColorSecondaryBrush}"
 						IsIndeterminate="False"
-						Value="{x:Bind OngoingTasksViewModel.AverageOperationProgressValue, Mode=OneWay}" />
+						Value="{x:Bind StatusCenterViewModel.AverageOperationProgressValue, Mode=OneWay}" />
 
 					<InfoBadge
 						x:Name="StatusInfoBadge"
 						HorizontalAlignment="Center"
 						VerticalAlignment="Center"
-						Value="{x:Bind OngoingTasksViewModel.InfoBadgeValue, Mode=OneWay}" />
+						Value="{x:Bind StatusCenterViewModel.InfoBadgeValue, Mode=OneWay}" />
 
 				</Grid>
 
@@ -466,7 +465,7 @@
 		<TeachingTip
 			x:Name="StatusCenterTeachingTip"
 			Title="{helpers:ResourceString Name=OngoingTasksTeachingTip/Title}"
-			IsOpen="False"
+			IsOpen="{x:Bind StatusCenterViewModel.ShowStatusCenterTeachingTip, Mode=OneWay}"
 			Subtitle="{helpers:ResourceString Name=OngoingTasksTeachingTip/Subtitle}"
 			Target="{x:Bind ShowStatusCenterButton}" />
 
@@ -494,7 +493,7 @@
 					<VisualState.StateTriggers>
 						<triggers:CompareStateTrigger
 							Comparison="Equal"
-							Value="{x:Bind OngoingTasksViewModel.InfoBadgeState, Mode=OneWay}"
+							Value="{x:Bind StatusCenterViewModel.InfoBadgeState, Mode=OneWay}"
 							To="0" />
 					</VisualState.StateTriggers>
 					<VisualState.Setters>
@@ -505,7 +504,7 @@
 					<VisualState.StateTriggers>
 						<triggers:CompareStateTrigger
 							Comparison="Equal"
-							Value="{x:Bind OngoingTasksViewModel.InfoBadgeState, Mode=OneWay}"
+							Value="{x:Bind StatusCenterViewModel.InfoBadgeState, Mode=OneWay}"
 							To="1" />
 					</VisualState.StateTriggers>
 					<VisualState.Setters>
@@ -516,7 +515,7 @@
 					<VisualState.StateTriggers>
 						<triggers:CompareStateTrigger
 							Comparison="Equal"
-							Value="{x:Bind OngoingTasksViewModel.InfoBadgeState, Mode=OneWay}"
+							Value="{x:Bind StatusCenterViewModel.InfoBadgeState, Mode=OneWay}"
 							To="2" />
 					</VisualState.StateTriggers>
 					<VisualState.Setters>
@@ -527,7 +526,7 @@
 					<VisualState.StateTriggers>
 						<triggers:CompareStateTrigger
 							Comparison="Equal"
-							Value="{x:Bind OngoingTasksViewModel.InfoBadgeState, Mode=OneWay}"
+							Value="{x:Bind StatusCenterViewModel.InfoBadgeState, Mode=OneWay}"
 							To="3" />
 					</VisualState.StateTriggers>
 					<VisualState.Setters>

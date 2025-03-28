@@ -5,14 +5,15 @@ namespace Files.App.ViewModels.UserControls
 {
 	public sealed partial class StatusCenterViewModel : ObservableObject
 	{
+		private readonly IAppSettingsService AppSettingsService = Ioc.Default.GetRequiredService<IAppSettingsService>();
+
 		public ObservableCollection<StatusCenterItem> StatusCenterItems { get; } = [];
 
 		private int _AverageOperationProgressValue = 0;
-		public int AverageOperationProgressValue
-		{
-			get => _AverageOperationProgressValue;
-			private set => SetProperty(ref _AverageOperationProgressValue, value);
-		}
+		public int AverageOperationProgressValue { get => _AverageOperationProgressValue; private set => SetProperty(ref _AverageOperationProgressValue, value); }
+
+		private bool _ShowStatusCenterTeachingTip;
+		public bool ShowStatusCenterTeachingTip { get => _ShowStatusCenterTeachingTip; private set => SetProperty(ref _ShowStatusCenterTeachingTip, value); }
 
 		public int InProgressItemCount
 		{
@@ -90,6 +91,12 @@ namespace Files.App.ViewModels.UserControls
 
 			StatusCenterItems.Insert(0, banner);
 			NewItemAdded?.Invoke(this, banner);
+
+			if (AppSettingsService.ShowStatusCenterTeachingTip)
+			{
+				ShowStatusCenterTeachingTip = true;
+				AppSettingsService.ShowStatusCenterTeachingTip = false;
+			}
 
 			NotifyChanges();
 

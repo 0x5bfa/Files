@@ -22,7 +22,7 @@ namespace Files.App.UserControls
 		private readonly IUserSettingsService userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
 		private readonly MainPageViewModel MainPageViewModel = Ioc.Default.GetRequiredService<MainPageViewModel>();
 		private readonly ICommandManager Commands = Ioc.Default.GetRequiredService<ICommandManager>();
-		private readonly StatusCenterViewModel OngoingTasksViewModel = Ioc.Default.GetRequiredService<StatusCenterViewModel>();
+		private readonly StatusCenterViewModel StatusCenterViewModel = Ioc.Default.GetRequiredService<StatusCenterViewModel>();
 
 		// Properties
 
@@ -41,24 +41,11 @@ namespace Files.App.UserControls
 		[GeneratedDependencyProperty]
 		public partial NavigationToolbarViewModel ViewModel { get; set; }
 
-		// Commands
-
-		private readonly ICommand historyItemClickedCommand;
-
 		// Constructor
 
 		public NavigationToolbar()
 		{
 			InitializeComponent();
-
-			historyItemClickedCommand = new RelayCommand<ToolbarHistoryItemModel?>(HistoryItemClicked);
-		}
-
-		private void NavToolbar_Loading(FrameworkElement _, object e)
-		{
-			Loading -= NavToolbar_Loading;
-			if (OngoingTasksViewModel is not null)
-				OngoingTasksViewModel.NewItemAdded += OngoingTasksActions_ProgressBannerPosted;
 		}
 
 		private void VisiblePath_Loaded(object _, RoutedEventArgs e)
@@ -135,19 +122,6 @@ namespace Files.App.UserControls
 		private void VisiblePath_QuerySubmitted(AutoSuggestBox sender, AutoSuggestBoxQuerySubmittedEventArgs args)
 			=> ViewModel.VisiblePath_QuerySubmitted(sender, args);
 
-		private void OngoingTasksActions_ProgressBannerPosted(object? _, StatusCenterItem e)
-		{
-			if (OngoingTasksViewModel is not null)
-				OngoingTasksViewModel.NewItemAdded -= OngoingTasksActions_ProgressBannerPosted;
-
-			// Displays a teaching tip the first time a banner is posted
-			if (userSettingsService.AppSettingsService.ShowStatusCenterTeachingTip)
-			{
-				StatusCenterTeachingTip.IsOpen = true;
-				userSettingsService.AppSettingsService.ShowStatusCenterTeachingTip = false;
-			}
-		}
-
 		private void Button_AccessKeyInvoked(UIElement sender, AccessKeyInvokedEventArgs args)
 		{
 			// Suppress access key invocation if any dialog is open
@@ -197,7 +171,7 @@ namespace Files.App.UserControls
 				{
 					Icon = new FontIcon { Glyph = "\uE8B7" }, // Use font icon as placeholder
 					Text = fileName,
-					Command = historyItemClickedCommand,
+					Command = new RelayCommand<ToolbarHistoryItemModel?>(HistoryItemClicked),
 					CommandParameter = new ToolbarHistoryItemModel(item, isBackMode)
 				};
 
