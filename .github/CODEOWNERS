@@ -1,0 +1,12 @@
+# Users referenced in this file will automatically be requested as reviewers for PRs that modify the given paths.
+# See https://help.github.com/articles/about-code-owners/
+
+# Files.App.Controls
+/src/Files.App.Controls/Omnibar/                                  @0x5bfa
+/src/Files.App.Controls/BreadcrumbBar/                            @0x5bfa
+
+# Files.App.CsWin32
+/src/Files.App.CsWin32/                                           @0x5bfa
+
+# Files.App.Storage
+/src/Files.App.Storage/Storables/WindowsStorage/                  @0x5bfa
