@@ -13,6 +13,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <ProjectReference Include="..\Files.Shared\Files.Shared.csproj" />
         <PackageReference Include="Microsoft.Windows.CsWin32" PrivateAssets="all" />
         <PackageReference Include="Dongle.GuidRVAGen" />
     </ItemGroup>
