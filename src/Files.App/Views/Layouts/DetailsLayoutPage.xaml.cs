@@ -300,16 +300,16 @@ namespace Files.App.Views.Layouts
 
 		private void UpdateSortIndicator()
 		{
-			NameHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.Name ? FolderSettings.DirectorySortDirection : null;
-			TagHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.FileTag ? FolderSettings.DirectorySortDirection : null;
-			PathHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.Path ? FolderSettings.DirectorySortDirection : null;
-			OriginalPathHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.OriginalFolder ? FolderSettings.DirectorySortDirection : null;
-			DateDeletedHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.DateDeleted ? FolderSettings.DirectorySortDirection : null;
-			DateModifiedHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.DateModified ? FolderSettings.DirectorySortDirection : null;
-			DateCreatedHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.DateCreated ? FolderSettings.DirectorySortDirection : null;
-			FileTypeHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.FileType ? FolderSettings.DirectorySortDirection : null;
-			ItemSizeHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.Size ? FolderSettings.DirectorySortDirection : null;
-			SyncStatusHeader.ColumnSortOption = FolderSettings.DirectorySortOption == SortOption.SyncStatus ? FolderSettings.DirectorySortDirection : null;
+			NameHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.Name ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			TagHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.FileTag ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			PathHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.Path ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			OriginalPathHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.OriginalFolder ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			DateDeletedHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.DateDeleted ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			DateModifiedHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.DateModified ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			DateCreatedHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.DateCreated ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			FileTypeHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.FileType ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			ItemSizeHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.Size ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
+			SyncStatusHeader.SortDirection = FolderSettings.DirectorySortOption == SortOption.SyncStatus ? (TableViewHeaderSortKind)FolderSettings.DirectorySortDirection : null;
 		}
 
 		private void FilesystemViewModel_PageTypeUpdated(object? sender, PageTypeUpdatedEventArgs e)
