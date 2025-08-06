@@ -1,16 +1,9 @@
+// Copyright (c) Files Community
+// Licensed under the MIT License.
+
 using CommunityToolkit.WinUI;
 using CommunityToolkit.WinUI.Controls;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Data;
-using Microsoft.UI.Xaml.Input;
-using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Collections.Specialized;
-using System.Data;
-using System.Linq;
-using Files.App.Controls;
 using Windows.Foundation.Collections;
 
 namespace Files.App.Controls
@@ -93,7 +86,7 @@ namespace Files.App.Controls
 					break;
 
 				case NotifyCollectionChangedAction.Move:
-					if (e.OldItems!.Count == 1)
+					if (e.OldItems!.Count is 1)
 					{
 						if (e.OldItems[0] is UIElement movedItem)
 						{

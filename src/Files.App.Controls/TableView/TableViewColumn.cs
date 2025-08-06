@@ -1,9 +1,9 @@
+// Copyright (c) Files Community
+// Licensed under the MIT License.
+
 using CommunityToolkit.WinUI;
 using CommunityToolkit.WinUI.Controls;
-using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using System;
 
 namespace Files.App.Controls
 {
