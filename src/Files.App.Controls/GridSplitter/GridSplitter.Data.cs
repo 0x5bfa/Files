@@ -4,147 +4,153 @@
 namespace Files.App.Controls
 {
 	/// <summary>
-	/// Enum to indicate whether GridSplitter resizes Columns or Rows
+	/// Represents the control that redistributes space between columns or rows of a Grid control.
 	/// </summary>
-	public enum GridResizeDirection
+	public partial class GridSplitter
 	{
 		/// <summary>
-		/// Determines whether to resize rows or columns based on its Alignment and
-		/// width compared to height
+		/// Enum to indicate whether GridSplitter resizes Columns or Rows
 		/// </summary>
-		Auto,
+		public enum GridResizeDirection
+		{
+			/// <summary>
+			/// Determines whether to resize rows or columns based on its Alignment and
+			/// width compared to height
+			/// </summary>
+			Auto,
+
+			/// <summary>
+			/// Resize columns when dragging Splitter.
+			/// </summary>
+			Columns,
+
+			/// <summary>
+			/// Resize rows when dragging Splitter.
+			/// </summary>
+			Rows
+		}
 
 		/// <summary>
-		/// Resize columns when dragging Splitter.
+		/// Enum to indicate what Columns or Rows the GridSplitter resizes
 		/// </summary>
-		Columns,
+		public enum GridResizeBehavior
+		{
+			/// <summary>
+			/// Determine which columns or rows to resize based on its Alignment.
+			/// </summary>
+			BasedOnAlignment,
+
+			/// <summary>
+			/// Resize the current and next Columns or Rows.
+			/// </summary>
+			CurrentAndNext,
+
+			/// <summary>
+			/// Resize the previous and current Columns or Rows.
+			/// </summary>
+			PreviousAndCurrent,
+
+			/// <summary>
+			/// Resize the previous and next Columns or Rows.
+			/// </summary>
+			PreviousAndNext
+		}
 
 		/// <summary>
-		/// Resize rows when dragging Splitter.
+		///  Enum to indicate the supported gripper cursor types.
 		/// </summary>
-		Rows
-	}
+		public enum GripperCursorType
+		{
+			/// <summary>
+			/// Change the cursor based on the splitter direction
+			/// </summary>
+			Default = -1,
 
-	/// <summary>
-	/// Enum to indicate what Columns or Rows the GridSplitter resizes
-	/// </summary>
-	public enum GridResizeBehavior
-	{
-		/// <summary>
-		/// Determine which columns or rows to resize based on its Alignment.
-		/// </summary>
-		BasedOnAlignment,
+			/// <summary>
+			/// Standard Arrow cursor
+			/// </summary>
+			Arrow,
 
-		/// <summary>
-		/// Resize the current and next Columns or Rows.
-		/// </summary>
-		CurrentAndNext,
+			/// <summary>
+			/// Standard Cross cursor
+			/// </summary>
+			Cross,
 
-		/// <summary>
-		/// Resize the previous and current Columns or Rows.
-		/// </summary>
-		PreviousAndCurrent,
+			/// <summary>
+			/// Standard Custom cursor
+			/// </summary>
+			Custom,
 
-		/// <summary>
-		/// Resize the previous and next Columns or Rows.
-		/// </summary>
-		PreviousAndNext
-	}
+			/// <summary>
+			/// Standard Hand cursor
+			/// </summary>
+			Hand,
 
-	/// <summary>
-	///  Enum to indicate the supported gripper cursor types.
-	/// </summary>
-	public enum GripperCursorType
-	{
-		/// <summary>
-		/// Change the cursor based on the splitter direction
-		/// </summary>
-		Default = -1,
+			/// <summary>
+			/// Standard Help cursor
+			/// </summary>
+			Help,
 
-		/// <summary>
-		/// Standard Arrow cursor
-		/// </summary>
-		Arrow,
+			/// <summary>
+			/// Standard IBeam cursor
+			/// </summary>
+			IBeam,
 
-		/// <summary>
-		/// Standard Cross cursor
-		/// </summary>
-		Cross,
+			/// <summary>
+			/// Standard SizeAll cursor
+			/// </summary>
+			SizeAll,
 
-		/// <summary>
-		/// Standard Custom cursor
-		/// </summary>
-		Custom,
+			/// <summary>
+			/// Standard SizeNortheastSouthwest cursor
+			/// </summary>
+			SizeNortheastSouthwest,
 
-		/// <summary>
-		/// Standard Hand cursor
-		/// </summary>
-		Hand,
+			/// <summary>
+			/// Standard SizeNorthSouth cursor
+			/// </summary>
+			SizeNorthSouth,
 
-		/// <summary>
-		/// Standard Help cursor
-		/// </summary>
-		Help,
+			/// <summary>
+			/// Standard SizeNorthwestSoutheast cursor
+			/// </summary>
+			SizeNorthwestSoutheast,
 
-		/// <summary>
-		/// Standard IBeam cursor
-		/// </summary>
-		IBeam,
+			/// <summary>
+			/// Standard SizeWestEast cursor
+			/// </summary>
+			SizeWestEast,
 
-		/// <summary>
-		/// Standard SizeAll cursor
-		/// </summary>
-		SizeAll,
+			/// <summary>
+			/// Standard UniversalNo cursor
+			/// </summary>
+			UniversalNo,
 
-		/// <summary>
-		/// Standard SizeNortheastSouthwest cursor
-		/// </summary>
-		SizeNortheastSouthwest,
+			/// <summary>
+			/// Standard UpArrow cursor
+			/// </summary>
+			UpArrow,
 
-		/// <summary>
-		/// Standard SizeNorthSouth cursor
-		/// </summary>
-		SizeNorthSouth,
+			/// <summary>
+			/// Standard Wait cursor
+			/// </summary>
+			Wait
+		}
 
 		/// <summary>
-		/// Standard SizeNorthwestSoutheast cursor
+		///  Enum to indicate the behavior of window cursor on grid splitter hover
 		/// </summary>
-		SizeNorthwestSoutheast,
+		public enum SplitterCursorBehavior
+		{
+			/// <summary>
+			/// Update window cursor on Grid Splitter hover
+			/// </summary>
+			ChangeOnSplitterHover,
 
-		/// <summary>
-		/// Standard SizeWestEast cursor
-		/// </summary>
-		SizeWestEast,
-
-		/// <summary>
-		/// Standard UniversalNo cursor
-		/// </summary>
-		UniversalNo,
-
-		/// <summary>
-		/// Standard UpArrow cursor
-		/// </summary>
-		UpArrow,
-
-		/// <summary>
-		/// Standard Wait cursor
-		/// </summary>
-		Wait
-	}
-
-	/// <summary>
-	///  Enum to indicate the behavior of window cursor on grid splitter hover
-	/// </summary>
-	public enum SplitterCursorBehavior
-	{
-		/// <summary>
-		/// Update window cursor on Grid Splitter hover
-		/// </summary>
-		ChangeOnSplitterHover,
-
-		/// <summary>
-		/// Update window cursor on Grid Splitter Gripper hover
-		/// </summary>
-		ChangeOnGripperHover
+			/// <summary>
+			/// Update window cursor on Grid Splitter Gripper hover
+			/// </summary>
+			ChangeOnGripperHover
+		}
 	}
 }
