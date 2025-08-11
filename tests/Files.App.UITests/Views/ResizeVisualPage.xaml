@@ -8,7 +8,6 @@
 	xmlns:local="using:Files.App.UITests.Views"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	Loaded="Page_Loaded"
-	Unloaded="Page_Unloaded"
 	mc:Ignorable="d">
 
 	<StackPanel Spacing="24">
@@ -44,11 +43,10 @@
 						Grid.ColumnSpan="2"
 						HorizontalAlignment="Left"
 						VerticalAlignment="Stretch"
-						DragCompleted="Thumb1_DragCompleted"
-						DragDelta="Thumb1_DragDelta"
-						DragStarted="Thumb1_DragStarted" />
+						Orientation="Horizontal"
+						Target="{x:Bind Rectangle1}" />
 
-					<controls:ResizeVisual
+					<!--<controls:ResizeVisual
 						x:Name="Thumb2"
 						Grid.Column="1"
 						Grid.ColumnSpan="2"
@@ -56,7 +54,7 @@
 						VerticalAlignment="Stretch"
 						DragCompleted="Thumb2_DragCompleted"
 						DragDelta="Thumb2_DragDelta"
-						DragStarted="Thumb2_DragStarted" />
+						DragStarted="Thumb2_DragStarted" />-->
 
 				</Grid>
 			</controls:SamplePanel.MainContent>

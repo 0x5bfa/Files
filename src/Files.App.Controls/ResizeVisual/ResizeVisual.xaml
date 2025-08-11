@@ -7,8 +7,8 @@
 
 	<Style x:Key="DefaultResizeVisualStyle" TargetType="local:ResizeVisual">
 		<Style.Setters>
-			<Setter Property="ThumbHeight" Value="32" />
 			<Setter Property="ThumbWidth" Value="16" />
+			<Setter Property="ThumbHeight" Value="32" />
 			<Setter Property="CornerRadius" Value="8" />
 			<Setter Property="Background" Value="{ThemeResource AcrylicInAppFillColorDefaultBrush}" />
 			<Setter Property="BorderThickness" Value="1" />
@@ -42,6 +42,13 @@
 							</Thumb>
 
 							<VisualStateManager.VisualStateGroups>
+
+								<VisualStateGroup x:Name="CommonStates">
+									<VisualState x:Name="Normal" />
+									<VisualState x:Name="PointerOver" />
+									<VisualState x:Name="PointerPressed" />
+									<VisualState x:Name="Disabled" />
+								</VisualStateGroup>
 
 								<VisualStateGroup x:Name="VisibilityStates">
 									<VisualState x:Name="Collapsed">
