@@ -1,6 +1,8 @@
 ﻿// Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.Storage;
+using Files.Shared.Helpers;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 using Microsoft.VisualStudio.TestTools.UnitTesting.AppContainer;
@@ -13,14 +15,11 @@ namespace App1
 		[TestMethod]
 		public void TestMethod1()
 		{
-			Assert.AreEqual(0, 0);
-		}
+			var windowsFile = WindowsStorable.TryParse("Shell:AppsFolder");
 
-		[UITestMethod]
-		public void TestMethod2()
-		{
-			var grid = new Grid();
-			Assert.AreEqual(0, grid.MinWidth);
+			Assert.IsNotNull(windowsFile);
+
+			ChecksumHelpers.CalculateChecksumForPath("C:\\");
 		}
 	}
 }

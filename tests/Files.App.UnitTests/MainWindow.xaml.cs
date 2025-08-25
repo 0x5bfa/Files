@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using App1;
 using Microsoft.UI.Xaml;
 
 namespace Files.App.UnitTests
@@ -12,6 +13,9 @@ namespace Files.App.UnitTests
 			InitializeComponent();
 
 			ExtendsContentIntoTitleBar = true;
+
+			var testClass = new UnitTest1();
+			testClass.TestMethod1();
 		}
 	}
 }
