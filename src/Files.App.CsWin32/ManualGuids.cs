@@ -12,6 +12,9 @@ namespace Windows.Win32
 		public static Guid* IID_IStorageProviderStatusUISourceFactory
 			=> (Guid*)Unsafe.AsPointer(ref Unsafe.AsRef(in IStorageProviderStatusUISourceFactory.Guid));
 
+		[GuidRVAGen.Guid("E9C5EF8D-FD41-4F72-BA87-EB03BAD5817C")]
+		public static partial Guid* IID_IAutomaticDestinationList { get; }
+
 		[GuidRVAGen.Guid("000214E4-0000-0000-C000-000000000046")]
 		public static partial Guid* IID_IContextMenu { get; }
 
@@ -66,6 +69,9 @@ namespace Windows.Win32
 
 	public static unsafe partial class CLSID
 	{
+		[GuidRVAGen.Guid("F0AE1542-F497-484B-A175-A20DB09144BA")]
+		public static partial Guid* CLSID_AutomaticDestinationList { get; }
+
 		[GuidRVAGen.Guid("3AD05575-8857-4850-9277-11B85BDB8E09")]
 		public static partial Guid* CLSID_FileOperation { get; }
 

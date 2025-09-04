@@ -400,6 +400,11 @@ namespace Files.App.Helpers
 			Process.GetCurrentProcess().Kill();
 		}
 
+		public static void RefreshJumpList()
+		{
+			var jumpList = JumpListManager.Create("Microsoft.Windows.Explorer");
+		}
+
 		/// <summary>
 		/// Updates the visibility of the system tray icon
 		/// </summary>
