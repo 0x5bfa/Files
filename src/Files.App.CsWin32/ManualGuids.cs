@@ -15,6 +15,12 @@ namespace Windows.Win32
 		[GuidRVAGen.Guid("E9C5EF8D-FD41-4F72-BA87-EB03BAD5817C")]
 		public static partial Guid* IID_IAutomaticDestinationList { get; }
 
+		[GuidRVAGen.Guid("6332DEBF-87B5-4670-90C0-5E57B408A49E")]
+		public static partial Guid* IID_ICustomDestinationList { get; }
+
+		[GuidRVAGen.Guid("507101CD-F6AD-46C8-8E20-EEB9E6BAC47F")]
+		public static partial Guid* IID_IInternalCustomDestinationList { get; }
+
 		[GuidRVAGen.Guid("000214E4-0000-0000-C000-000000000046")]
 		public static partial Guid* IID_IContextMenu { get; }
 
@@ -71,6 +77,9 @@ namespace Windows.Win32
 	{
 		[GuidRVAGen.Guid("F0AE1542-F497-484B-A175-A20DB09144BA")]
 		public static partial Guid* CLSID_AutomaticDestinationList { get; }
+
+		[GuidRVAGen.Guid("77F10CF0-3DB5-4966-B520-B7C54FD35ED6")]
+		public static partial Guid* CLSID_DestinationList { get; }
 
 		[GuidRVAGen.Guid("3AD05575-8857-4850-9277-11B85BDB8E09")]
 		public static partial Guid* CLSID_FileOperation { get; }

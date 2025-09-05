@@ -3,6 +3,7 @@
 
 using System;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Windows.Win32.Foundation;
 using Windows.Win32.UI.Shell;
 
@@ -107,12 +108,20 @@ namespace Windows.Win32.System.Com
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, HWND, int, IShellItem*, Guid*, void**, int>)lpVtbl[12])
 				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), hWnd, a2, pShellItem, riid, ppvObject);
 
-		public HRESULT ClearList(int iListType)
-			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, int, int>)lpVtbl[13])
-				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), iListType);
+		public HRESULT ClearList(bool clearPinsToo)
+			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, bool, int>)lpVtbl[13])
+				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), clearPinsToo);
 
 		[GuidRVAGen.Guid("E9C5EF8D-FD41-4F72-BA87-EB03BAD5817C")]
 		public static partial ref readonly Guid Guid { get; }
+
+		internal static ref readonly Guid IID_Guid
+			=> ref MemoryMarshal.AsRef<Guid>([0xBF, 0xDE, 0x32, 0x63, 0xB5, 0x87, 0x70, 0x46, 0x90, 0xC0, 0x5E, 0x57, 0xB4, 0x08, 0xA4, 0x9E]);
+
+		internal static Guid* IID_Guid2
+			=> (Guid*)Unsafe.AsPointer(ref Unsafe.AsRef(in IID_Guid));
+
+		static ref readonly Guid IComIID.Guid => ref IID_Guid;
 	}
 
 	public enum DESTLISTTYPE : uint

@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.Actions;
 using Files.App.Helpers.Application;
 using Files.App.Services.SizeProvider;
 using Files.App.Utils.Logger;
@@ -12,10 +13,13 @@ using Microsoft.Win32;
 using Sentry;
 using Sentry.Protocol;
 using System.IO;
+using System.Runtime.CompilerServices;
 using System.Text;
 using Windows.ApplicationModel;
 using Windows.Storage;
 using Windows.System;
+using Windows.Win32;
+using Windows.Win32.Foundation;
 using LogLevel = Microsoft.Extensions.Logging.LogLevel;
 
 namespace Files.App.Helpers
@@ -400,9 +404,31 @@ namespace Files.App.Helpers
 			Process.GetCurrentProcess().Kill();
 		}
 
-		public static void RefreshJumpList()
+		public unsafe static Task RefreshJumpList()
 		{
-			var jumpList = JumpListManager.Create("Microsoft.Windows.Explorer");
+			return STATask.Run(() =>
+			{
+				var explorerJumpList = JumpListManager.Create("Microsoft.Windows.Explorer");
+				if (explorerJumpList is null)
+					return;
+
+				ComHeapPtr<char> pwszAppId = default;
+				HRESULT hr = PInvoke.GetCurrentProcessExplicitAppUserModelID((PWSTR*)pwszAppId.GetAddressOf());
+				if (hr.Failed)
+					return;
+
+				var filesJumpList = JumpListManager.Create(new string(pwszAppId.Get()));
+				if (filesJumpList is null || filesJumpList.ClearCustomDestinations()) // Clear the custom destinations set before, we no longer use them
+					return;
+
+				// Fetch the recent items from Explorer and sync them to Files
+				var recentItems = explorerJumpList.GetRecentItems(50);
+				filesJumpList.ClearAndAddRecentItems(recentItems);
+
+				// Fetch the pinned items from Explorer and sync them to Files
+				var pinnedItems = explorerJumpList.GetPinnedItems(20);
+				filesJumpList.ClearAndAddPinnedItems(pinnedItems);
+			});
 		}
 
 		/// <summary>
