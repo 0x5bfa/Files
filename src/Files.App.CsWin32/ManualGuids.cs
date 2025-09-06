@@ -18,6 +18,12 @@ namespace Windows.Win32
 		[GuidRVAGen.Guid("6332DEBF-87B5-4670-90C0-5E57B408A49E")]
 		public static partial Guid* IID_ICustomDestinationList { get; }
 
+		[GuidRVAGen.Guid("5632B1A4-E38A-400A-928A-D4CD63230295")]
+		public static partial Guid* IID_IObjectCollection { get; }
+
+		[GuidRVAGen.Guid("00000000-0000-0000-C000-000000000046")]
+		public static partial Guid* IID_IUnknown { get; }
+
 		[GuidRVAGen.Guid("507101CD-F6AD-46C8-8E20-EEB9E6BAC47F")]
 		public static partial Guid* IID_IInternalCustomDestinationList { get; }
 

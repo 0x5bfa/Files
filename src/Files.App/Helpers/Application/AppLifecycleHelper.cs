@@ -408,26 +408,7 @@ namespace Files.App.Helpers
 		{
 			return STATask.Run(() =>
 			{
-				var explorerJumpList = JumpListManager.Create("Microsoft.Windows.Explorer");
-				if (explorerJumpList is null)
-					return;
-
-				ComHeapPtr<char> pwszAppId = default;
-				HRESULT hr = PInvoke.GetCurrentProcessExplicitAppUserModelID((PWSTR*)pwszAppId.GetAddressOf());
-				if (hr.Failed)
-					return;
-
-				var filesJumpList = JumpListManager.Create(new string(pwszAppId.Get()));
-				if (filesJumpList is null || filesJumpList.ClearCustomDestinations()) // Clear the custom destinations set before, we no longer use them
-					return;
-
-				// Fetch the recent items from Explorer and sync them to Files
-				var recentItems = explorerJumpList.GetRecentItems(50);
-				filesJumpList.ClearAndAddRecentItems(recentItems);
-
-				// Fetch the pinned items from Explorer and sync them to Files
-				var pinnedItems = explorerJumpList.GetPinnedItems(20);
-				filesJumpList.ClearAndAddPinnedItems(pinnedItems);
+				JumpListManager.DuplicateExplorerJumpList(100);
 			});
 		}
 

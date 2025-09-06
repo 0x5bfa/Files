@@ -55,20 +55,20 @@ namespace Windows.Win32.System.Com
 				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), type, maxCount, flags, riid, ppvObject);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public HRESULT AddUsagePoint(IUnknown* pObject)
+		public HRESULT AddUsagePoint(IUnknown* pUnk)
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, IUnknown*, int>)lpVtbl[6])
-				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), pObject);
+				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), pUnk);
 
 		/// <summary>
 		/// Pins an item to the list.
 		/// </summary>
-		/// <param name="punk">The native object to pin to the list.</param>
+		/// <param name="pUnk">The native object to pin to the list.</param>
 		/// <param name="index">-1 to pin to the last, -2 to unpin, zero or positive numbers (>= 0) indicate the index to pin to the list at. Passing the other numbers are *UB*.</param>
 		/// <returns>Returns <see cref="HRESULT.S_OK"/> if successful, or an error value otherwise.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public HRESULT PinItem(IUnknown* punk, int index)
+		public HRESULT PinItem(IUnknown* pUnk, int index)
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, IUnknown*, int, int>)lpVtbl[7])
-				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), punk, index);
+				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), pUnk, index);
 
 		/// <summary>
 		/// Gets the index of a pinned item in the Pinned list.
@@ -108,8 +108,8 @@ namespace Windows.Win32.System.Com
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, HWND, int, IShellItem*, Guid*, void**, int>)lpVtbl[12])
 				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), hWnd, a2, pShellItem, riid, ppvObject);
 
-		public HRESULT ClearList(bool clearPinsToo)
-			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, bool, int>)lpVtbl[13])
+		public HRESULT ClearList(BOOL clearPinsToo)
+			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IAutomaticDestinationList*, BOOL, int>)lpVtbl[13])
 				((IAutomaticDestinationList*)Unsafe.AsPointer(ref this), clearPinsToo);
 
 		[GuidRVAGen.Guid("E9C5EF8D-FD41-4F72-BA87-EB03BAD5817C")]

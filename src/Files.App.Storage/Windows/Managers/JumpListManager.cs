@@ -5,6 +5,7 @@ using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.System.Com;
 using Windows.Win32.UI.Shell;
+using Windows.Win32.UI.Shell.Common;
 using static Windows.Win32.ManualMacros;
 
 namespace Files.App.Storage
@@ -15,54 +16,110 @@ namespace Files.App.Storage
 	/// <remarks>
 	/// See <a href="https://github.com/0x5bfa/JumpListManager/blob/HEAD/JumpListManager/JumpList.cs" />
 	/// </remarks>
-	public unsafe class JumpListManager : IDisposable
+	public unsafe static class JumpListManager
 	{
-		private IAutomaticDestinationList* _pAutomaticDestinationList;
-		private IInternalCustomDestinationList* _pInternalCustomDestinationList;
-		private ICustomDestinationList* _pCustomDestinationList;
-
-		public required string AppId { get; init; }
-
-		public static JumpListManager? Create(string appId)
+		public static bool DuplicateExplorerJumpList(int maxCount)
 		{
-			if (string.IsNullOrEmpty(appId))
-				throw new ArgumentException("AMUID cannot be null or empty.", nameof(appId));
-
-			IAutomaticDestinationList* pAutomaticDestinationList = default;
-			IInternalCustomDestinationList* pInternalCustomDestinationList = default;
-			ICustomDestinationList* pCustomDestinationList = default;
+			ClearAutomaticDestinations();
+			//ClearCustomDestinations();
 
 			HRESULT hr = default;
 
-			hr = PInvoke.CoCreateInstance(CLSID.CLSID_AutomaticDestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_IAutomaticDestinationList, (void**)&pAutomaticDestinationList);
-			if (FAILED(hr)) return null;
+			using ComPtr<IAutomaticDestinationList> pExplorerAutoDestList = default;
+			hr = PInvoke.CoCreateInstance(CLSID.CLSID_AutomaticDestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_IAutomaticDestinationList, (void**)pExplorerAutoDestList.GetAddressOf());
+			if (FAILED(hr)) return false;
 
-			hr = PInvoke.CoCreateInstance(CLSID.CLSID_DestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_ICustomDestinationList, (void**)&pInternalCustomDestinationList);
-			if (FAILED(hr)) return null;
+			fixed (char* pwszExplorerAppId = "Microsoft.Windows.Explorer")
+				hr = pExplorerAutoDestList.Get()->Initialize(pwszExplorerAppId, default, default);
+			if (FAILED(hr)) return false;
 
-			hr = PInvoke.CoCreateInstance(CLSID.CLSID_DestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_IInternalCustomDestinationList, (void**)&pCustomDestinationList);
-			if (FAILED(hr)) return null;
+			BOOL hasList = false;
+			hr = pExplorerAutoDestList.Get()->HasList(&hasList);
+			if (hr.Failed || hasList == false) return false;
 
-			// These internally convert the passed AMUID string to the corresponding CRC hash and initialize the path to the destination lists with FOLDERID_Recent.
-			fixed (char* pwszAppId = appId)
+			// Duplicate recent items
+
+			using ComPtr<IObjectCollection> pRecentItemsObjectCollection = default;
+			hr = pExplorerAutoDestList.Get()->GetList(DESTLISTTYPE.RECENT, maxCount, GETDESTLISTFLAGS.NONE, IID.IID_IObjectCollection, (void**)pRecentItemsObjectCollection.GetAddressOf());
+			if (FAILED(hr)) return false;
+
+			using ComHeapPtr<char> pwszAppId = default;
+			hr = PInvoke.GetCurrentProcessExplicitAppUserModelID((PWSTR*)pwszAppId.GetAddressOf());
+			if (FAILED(hr)) return false;
+
+			using ComPtr<IAutomaticDestinationList> pFilesAutoDestList = default;
+			hr = PInvoke.CoCreateInstance(CLSID.CLSID_AutomaticDestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_IAutomaticDestinationList, (void**)pFilesAutoDestList.GetAddressOf());
+			if (FAILED(hr)) return false;
+
+			hr = pFilesAutoDestList.Get()->Initialize(pwszAppId.Get(), default, default);
+			if (FAILED(hr)) return false;
+
+			uint cRecentItems = 0U;
+			hr = pRecentItemsObjectCollection.Get()->GetCount(&cRecentItems);
+
+			for (uint dwIndex = 0U; dwIndex < cRecentItems; dwIndex++)
 			{
-				hr = pAutomaticDestinationList->Initialize(pwszAppId, default, default).ThrowOnFailure();
-				if (FAILED(hr)) return null;
+				using ComPtr<IShellItem> psi = default;
+				hr = pRecentItemsObjectCollection.Get()->GetAt(dwIndex, IID.IID_IShellItem, (void**)psi.GetAddressOf());
+				if (hr.Failed) return false;
 
-				hr = pInternalCustomDestinationList->SetApplicationID(pwszAppId).ThrowOnFailure();
-				if (FAILED(hr)) return null;
-
-				hr = pCustomDestinationList->SetAppID(pwszAppId).ThrowOnFailure();
-				if (FAILED(hr)) return null;
+				pFilesAutoDestList.Get()->AddUsagePoint((IUnknown*)psi.Get());
 			}
 
-			return new() { AppId = appId, _pAutomaticDestinationList = pAutomaticDestinationList, _pInternalCustomDestinationList = pInternalCustomDestinationList, _pCustomDestinationList = pCustomDestinationList };
+			// Duplicate pinned items
+
+			using ComPtr<IObjectCollection> pPinnedItemsObjectCollection = default;
+			hr = pExplorerAutoDestList.Get()->GetList(DESTLISTTYPE.PINNED, maxCount, GETDESTLISTFLAGS.NONE, IID.IID_IObjectCollection, (void**)pPinnedItemsObjectCollection.GetAddressOf());
+
+			uint cPinnedItems = 0U;
+			hr = pPinnedItemsObjectCollection.Get()->GetCount(&cPinnedItems);
+
+			for (uint dwIndex = 0U; dwIndex < cRecentItems; dwIndex++)
+			{
+				using ComPtr<IShellItem> psi = default;
+				hr = pPinnedItemsObjectCollection.Get()->GetAt(dwIndex, IID.IID_IShellItem, (void**)psi.GetAddressOf());
+				if (hr.Failed) return false;
+
+				pFilesAutoDestList.Get()->PinItem((IUnknown*)psi.Get(), -1);
+			}
+
+			return false;
 		}
 
-		public bool ClearCustomDestinations()
+		private static bool ClearAutomaticDestinations()
 		{
+			HRESULT hr = default;
+
+			using ComHeapPtr<char> pwszAppId = default;
+			PInvoke.GetCurrentProcessExplicitAppUserModelID((PWSTR*)pwszAppId.GetAddressOf());
+
+			using ComPtr<IAutomaticDestinationList> pAutomaticDestinationList = default;
+			hr = PInvoke.CoCreateInstance(CLSID.CLSID_AutomaticDestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_IAutomaticDestinationList, (void**)pAutomaticDestinationList.GetAddressOf());
+			if (FAILED(hr)) return false;
+
+			hr = pAutomaticDestinationList.Get()->Initialize(pwszAppId.Get(), default, default);
+			if (FAILED(hr)) return false;
+
+			hr = pAutomaticDestinationList.Get()->ClearList(true);
+			if (FAILED(hr)) return false;
+
+			return true;
+		}
+
+		private static bool ClearCustomDestinations()
+		{
+			using ComHeapPtr<char> pwszAppId = default;
+			PInvoke.GetCurrentProcessExplicitAppUserModelID((PWSTR*)pwszAppId.GetAddressOf());
+
+			using ComPtr<IInternalCustomDestinationList> pInternalCustomDestinationList = default;
+			HRESULT hr = PInvoke.CoCreateInstance(CLSID.CLSID_DestinationList, null, CLSCTX.CLSCTX_INPROC_SERVER, IID.IID_ICustomDestinationList, (void**)pInternalCustomDestinationList.GetAddressOf());
+			if (FAILED(hr)) return false;
+
+			hr = pInternalCustomDestinationList.Get()->SetApplicationID(pwszAppId.Get()).ThrowOnFailure();
+			if (FAILED(hr)) return false;
+
 			uint count = 0U;
-			HRESULT hr = _pInternalCustomDestinationList->GetCategoryCount(&count);
+			pInternalCustomDestinationList.Get()->GetCategoryCount(&count);
 
 			for (uint index = 0U; index < count; index++)
 			{
@@ -70,11 +127,11 @@ namespace Files.App.Storage
 
 				try
 				{
-					hr = _pInternalCustomDestinationList->GetCategory(index, GETCATFLAG.DEFAULT, &category);
+					hr = pInternalCustomDestinationList.Get()->GetCategory(index, GETCATFLAG.DEFAULT, &category);
 					if (FAILED(hr) || category.Type is not APPDESTCATEGORYTYPE.CUSTOM)
 						continue;
 
-					_pInternalCustomDestinationList->DeleteCategory(index, true);
+					pInternalCustomDestinationList.Get()->DeleteCategory(index, true);
 					if (FAILED(hr))
 						continue;
 				}
@@ -86,35 +143,9 @@ namespace Files.App.Storage
 			}
 
 			// Delete the removed destinations too
-			_pInternalCustomDestinationList->ClearRemovedDestinations();
+			pInternalCustomDestinationList.Get()->ClearRemovedDestinations();
 
 			return false;
-		}
-
-		public IEnumerable<JumpListItem> GetRecentItems(int maxCount)
-		{
-			return [];
-		}
-
-		public bool ClearAndAddRecentItems(IEnumerable<JumpListItem> newItems)
-		{
-			_pAutomaticDestinationList->ClearList(true);
-
-			return false;
-		}
-
-		public IEnumerable<JumpListItem> GetPinnedItems(int maxCount)
-		{
-			return [];
-		}
-
-		public bool ClearAndAddPinnedItems(IEnumerable<JumpListItem> newItems)
-		{
-			return false;
-		}
-
-		public void Dispose()
-		{
 		}
 	}
 }

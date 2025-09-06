@@ -14,7 +14,7 @@ namespace Windows.Win32.System.Com
 	/// <remarks>
 	/// - <a href="https://github.com/GigabyteProductions/classicshell/blob/HEAD/src/ClassicStartMenu/ClassicStartMenuDLL/JumpLists.cpp"/>
 	/// </remarks>
-	public unsafe partial struct IInternalCustomDestinationList
+	public unsafe partial struct IInternalCustomDestinationList : IComIID
 	{
 #pragma warning disable CS0649 // Field 'field' is never assigned to, and will always have its default value 'value'
 		private void** lpVtbl;
@@ -36,9 +36,9 @@ namespace Windows.Win32.System.Com
 				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pszAppID);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public HRESULT GetSlotCount(uint* pdwSlotCount)
+		public HRESULT GetSlotCount(uint* pSlotCount)
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, uint*, int>)lpVtbl[5])(
-				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pdwSlotCount);
+				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pSlotCount);
 
 		/// <summary>
 		/// Gets the number of categories in the custom destination list.
@@ -46,9 +46,9 @@ namespace Windows.Win32.System.Com
 		/// <param name="pdwCategoryCount">A pointer that points to a valid <see langword="uint"/> var.</param>
 		/// <returns>Returns <see cref="HRESULT.S_OK"/> if successful, or an error value otherwise.</returns>
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public HRESULT GetCategoryCount(uint* pdwCategoryCount)
+		public HRESULT GetCategoryCount(uint* pCategoryCount)
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, uint*, int>)lpVtbl[6])(
-				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pdwCategoryCount);
+				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pCategoryCount);
 
 		/// <summary>
 		/// Gets the category at the specified index in the custom destination list.
@@ -63,8 +63,8 @@ namespace Windows.Win32.System.Com
 				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), index, flags, pCategory);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public HRESULT DeleteCategory(uint index, bool deletePermanently)
-			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, uint, bool, int>)lpVtbl[8])(
+		public HRESULT DeleteCategory(uint index, BOOL deletePermanently)
+			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, uint, BOOL, int>)lpVtbl[8])(
 				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), index, deletePermanently);
 
 		/// <summary>
@@ -80,19 +80,21 @@ namespace Windows.Win32.System.Com
 				(IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), index, riid, ppvObject);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
-		public HRESULT RemoveDestination(IUnknown* pObject)
+		public HRESULT RemoveDestination(IUnknown* pUnk)
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, IUnknown*, int>)lpVtbl[10])
-			((IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pObject);
+			((IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), pUnk);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public HRESULT HasListEx(int* a1, int* a2)
-			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, int>)lpVtbl[11])
-			((IInternalCustomDestinationList*)Unsafe.AsPointer(ref this));
+			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, int*, int*, int>)lpVtbl[11])
+			((IInternalCustomDestinationList*)Unsafe.AsPointer(ref this), a1, a2);
 
 		[MethodImpl(MethodImplOptions.AggressiveInlining)]
 		public HRESULT ClearRemovedDestinations()
 			=> (HRESULT)((delegate* unmanaged[MemberFunction]<IInternalCustomDestinationList*, int>)lpVtbl[12])
 			((IInternalCustomDestinationList*)Unsafe.AsPointer(ref this));
+
+		static ref readonly Guid IComIID.Guid => throw new NotImplementedException();
 	}
 
 	[StructLayout(LayoutKind.Sequential)]
