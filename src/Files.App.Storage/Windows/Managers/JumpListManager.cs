@@ -18,7 +18,7 @@ namespace Files.App.Storage
 	/// </remarks>
 	public unsafe static class JumpListManager
 	{
-		public static bool DuplicateExplorerJumpList(int maxCount)
+		public static bool SyncWithExplorerJumpList(int maxCount)
 		{
 			ClearAutomaticDestinations();
 			//ClearCustomDestinations();

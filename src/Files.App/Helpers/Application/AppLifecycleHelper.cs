@@ -105,7 +105,6 @@ namespace Files.App.Helpers
 			var userSettingsService = Ioc.Default.GetRequiredService<IUserSettingsService>();
 			var addItemService = Ioc.Default.GetRequiredService<IAddItemService>();
 			var generalSettingsService = userSettingsService.GeneralSettingsService;
-			var jumpListService = Ioc.Default.GetRequiredService<IWindowsJumpListService>();
 
 			// Start off a list of tasks we need to run before we can continue startup
 			await Task.WhenAll(
@@ -120,7 +119,6 @@ namespace Files.App.Helpers
 					App.LibraryManager.UpdateLibrariesAsync(),
 					OptionalTaskAsync(WSLDistroManager.UpdateDrivesAsync(), generalSettingsService.ShowWslSection),
 					OptionalTaskAsync(App.FileTagsManager.UpdateFileTagsAsync(), generalSettingsService.ShowFileTagsSection),
-					jumpListService.InitializeAsync(),
 					addItemService.InitializeAsync(),
 					ContextMenu.WarmUpQueryContextMenuAsync(),
 					CheckAppUpdate()
@@ -128,6 +126,8 @@ namespace Files.App.Helpers
 			});
 
 			FileTagsHelper.UpdateTagsDb();
+
+			_ = STATask.Run(() => { JumpListManager.SyncWithExplorerJumpList(100); });
 
 			static Task OptionalTaskAsync(Task task, bool condition)
 			{
@@ -244,7 +244,6 @@ namespace Files.App.Helpers
 					.AddSingleton<ISizeProvider, UserSizeProvider>()
 					.AddSingleton<IQuickAccessService, QuickAccessService>()
 					.AddSingleton<IResourcesService, ResourcesService>()
-					.AddSingleton<IWindowsJumpListService, WindowsJumpListService>()
 					.AddSingleton<IStorageTrashBinService, StorageTrashBinService>()
 					.AddSingleton<IRemovableDrivesService, RemovableDrivesService>()
 					.AddSingleton<INetworkService, NetworkService>()
