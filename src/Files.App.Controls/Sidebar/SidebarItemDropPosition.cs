@@ -4,7 +4,7 @@
 namespace Files.App.Controls
 {
 	/// <summary>
-	/// The position of the item that was dropped on the sidebar item.
+	/// Defines constants that specify the position of the item dropped on a <see cref="SidebarItem"/>.
 	/// </summary>
 	public enum SidebarItemDropPosition
 	{
@@ -12,10 +12,12 @@ namespace Files.App.Controls
 		/// The item was dropped on the top of the sidebar item indicating it should be moved/inserted above this item.
 		/// </summary>
 		Top,
+
 		/// <summary>
 		/// The item was dropped on the bottom of the sidebar item indicating it should be moved/inserted below this item.
 		/// </summary>
 		Bottom,
+
 		/// <summary>
 		/// The item was dropped on the center of the sidebar item indicating it should be moved/inserted as a child of this item.
 		/// </summary>
