@@ -356,6 +356,21 @@ namespace Files.App.ViewModels.Settings
 			}
 		}
 
+		public bool EnableDynamicRefreshRate
+		{
+			get => field;
+			set
+			{
+				if (value == field)
+					return;
+
+				OnPropertyChanged();
+
+				// TODO: Call DCompositionBoostCompositorClock(TRUE); here.
+				// NOTE: We may want to have an option to display real-time refresh rate in the title bar or somewhere else.
+			}
+		}
+
 		public async Task OpenFilesOnWindowsStartupAsync()
 		{
 			var stateMode = await ReadState();
