@@ -19,7 +19,7 @@
 					</controls:DragSelectionContainer.Targets>
 
 					<Grid Height="800">
-						<ListView x:Name="Sample1ListView1">
+						<ListView x:Name="Sample1ListView1" SelectionMode="Multiple">
 							<ListViewItem Content="ListViewItem 1" />
 							<ListViewItem Content="ListViewItem 2" />
 							<ListViewItem Content="ListViewItem 3" />
