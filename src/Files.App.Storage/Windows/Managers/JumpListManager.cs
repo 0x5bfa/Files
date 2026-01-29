@@ -255,6 +255,7 @@ namespace Files.App.Storage
 				// Get the items in the "Recent" category
 				using ComPtr<IObjectCollection> poc = default;
 				hr = pFilesICDL.Get()->EnumerateCategoryDestinations(indexOfRecentCategory, IID.IID_IObjectCollection, (void**)poc.GetAddressOf());
+				if (FAILED(hr)) return hr;
 
 				// Get the count of items in the "Recent" category
 				uint countOfItems = 0U;
