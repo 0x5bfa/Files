@@ -224,7 +224,8 @@ namespace Files.App.Storage
 
 				// Get the count of categories in the Files' Custom Destinations
 				uint count = 0U;
-				pFilesICDL.Get()->GetCategoryCount(&count);
+				hr = pFilesICDL.Get()->GetCategoryCount(&count);
+				if (FAILED(hr)) return hr;
 
 				// Find the "Recent" category index
 				uint indexOfRecentCategory = 0U;
