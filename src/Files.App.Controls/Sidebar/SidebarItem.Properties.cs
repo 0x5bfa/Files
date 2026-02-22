@@ -8,62 +8,26 @@ namespace Files.App.Controls
 {
 	public sealed partial class SidebarItem : Control
 	{
-		public bool IsSelected
-		{
-			get { return (bool)GetValue(IsSelectedProperty); }
-			set { SetValue(IsSelectedProperty, value); }
-		}
-		public static readonly DependencyProperty IsSelectedProperty =
-			DependencyProperty.Register(nameof(IsSelected), typeof(bool), typeof(SidebarItem), new PropertyMetadata(false, OnPropertyChanged));
+		[GeneratedDependencyProperty]
+		public partial bool IsSelected { get; set; }
 
-		public bool IsExpanded
-		{
-			get { return (bool)GetValue(IsExpandedProperty); }
-			set { SetValue(IsExpandedProperty, value); }
-		}
-		public static readonly DependencyProperty IsExpandedProperty =
-			DependencyProperty.Register(nameof(IsExpanded), typeof(bool), typeof(SidebarItem), new PropertyMetadata(true, OnPropertyChanged));
+		[GeneratedDependencyProperty(DefaultValue = true)]
+		public partial bool IsExpanded { get; set; }
 
-		public double ChildrenPresenterHeight
-		{
-			get { return (double)GetValue(ChildrenPresenterHeightProperty); }
-			set { SetValue(ChildrenPresenterHeightProperty, value); }
-		}
-		// Using 30 as a default in case something goes wrong
-		public static readonly DependencyProperty ChildrenPresenterHeightProperty =
-			DependencyProperty.Register(nameof(ChildrenPresenterHeight), typeof(double), typeof(SidebarItem), new PropertyMetadata(30d));
+		[GeneratedDependencyProperty(DefaultValue = 30D)]
+		public partial double ChildrenPresenterHeight { get; set; }
 
-		public bool UseReorderDrop
-		{
-			get { return (bool)GetValue(UseReorderDropProperty); }
-			set { SetValue(UseReorderDropProperty, value); }
-		}
-		public static readonly DependencyProperty UseReorderDropProperty =
-			DependencyProperty.Register(nameof(UseReorderDrop), typeof(bool), typeof(SidebarItem), new PropertyMetadata(false));
+		[GeneratedDependencyProperty]
+		public partial bool UseReorderDrop { get; set; }
 
-		public FrameworkElement? Icon
-		{
-			get { return (FrameworkElement?)GetValue(IconProperty); }
-			set { SetValue(IconProperty, value); }
-		}
-		public static readonly DependencyProperty IconProperty =
-			DependencyProperty.Register(nameof(Icon), typeof(FrameworkElement), typeof(SidebarItem), new PropertyMetadata(null));
+		[GeneratedDependencyProperty]
+		public partial FrameworkElement? Icon { get; set; }
 
-		public FrameworkElement? Decorator
-		{
-			get { return (FrameworkElement?)GetValue(DecoratorProperty); }
-			set { SetValue(DecoratorProperty, value); }
-		}
-		public static readonly DependencyProperty DecoratorProperty =
-			DependencyProperty.Register(nameof(Decorator), typeof(FrameworkElement), typeof(SidebarItem), new PropertyMetadata(null));
+		[GeneratedDependencyProperty]
+		public partial FrameworkElement? Decorator { get; set; }
 
-		public SidebarDisplayMode DisplayMode
-		{
-			get { return (SidebarDisplayMode)GetValue(DisplayModeProperty); }
-			set { SetValue(DisplayModeProperty, value); }
-		}
-		public static readonly DependencyProperty DisplayModeProperty =
-			DependencyProperty.Register(nameof(DisplayMode), typeof(SidebarDisplayMode), typeof(SidebarItem), new PropertyMetadata(SidebarDisplayMode.Expanded, OnPropertyChanged));
+		[GeneratedDependencyProperty(DefaultValue = SidebarDisplayMode.Expanded)]
+		public partial SidebarDisplayMode DisplayMode { get; set; }
 
 		[GeneratedDependencyProperty]
 		public partial string? Text { get; set; }
@@ -85,6 +49,26 @@ namespace Files.App.Controls
 
 		[GeneratedDependencyProperty]
 		public partial bool IsInFlyout { get; set; }
+
+		partial void OnDisplayModePropertyChanged(DependencyPropertyChangedEventArgs e)
+		{
+			SidebarDisplayModeChanged((SidebarDisplayMode)e.OldValue);
+		}
+
+		partial void OnIsSelectedPropertyChanged(DependencyPropertyChangedEventArgs e)
+		{
+			UpdateSelectionState();
+		}
+
+		partial void OnIsExpandedPropertyChanged(DependencyPropertyChangedEventArgs e)
+		{
+			UpdateExpansionState();
+		}
+
+		partial void OnItemPropertyChanged(DependencyPropertyChangedEventArgs e)
+		{
+			HandleItemChange();
+		}
 
 		partial void OnChildrenPropertyChanged(DependencyPropertyChangedEventArgs e)
 		{
@@ -116,31 +100,6 @@ namespace Files.App.Controls
 		partial void OnIsInFlyoutPropertyChanged(DependencyPropertyChangedEventArgs e)
 		{
 			VisualStateManager.GoToState(this, DisplayMode is SidebarDisplayMode.Compact && !IsInFlyout ? "Compact" : "NonCompact", true);
-		}
-
-		public static void OnPropertyChanged(DependencyObject sender, DependencyPropertyChangedEventArgs e)
-		{
-			if (sender is not SidebarItem item) return;
-			if (e.Property == DisplayModeProperty)
-			{
-				item.SidebarDisplayModeChanged((SidebarDisplayMode)e.OldValue);
-			}
-			else if (e.Property == IsSelectedProperty)
-			{
-				item.UpdateSelectionState();
-			}
-			else if (e.Property == IsExpandedProperty)
-			{
-				item.UpdateExpansionState();
-			}
-			else if (e.Property == ItemProperty)
-			{
-				item.HandleItemChange();
-			}
-			else
-			{
-				Debug.Write(e.Property.ToString());
-			}
 		}
 	}
 }
