@@ -34,7 +34,7 @@ namespace Files.App.Controls
 
 			if (element is UIElement uiElement)
 			{
-				uiElement.ManipulationMode = ManipulationModes.TranslateX | ManipulationModes.TranslateY;
+				uiElement.ManipulationMode = ManipulationModes.System | ManipulationModes.TranslateX | ManipulationModes.TranslateY;
 				uiElement.ManipulationStarting += OnItemManipulationStarting;
 				uiElement.ManipulationDelta += OnItemManipulationDelta;
 				uiElement.ManipulationCompleted += OnItemManipulationCompleted;
