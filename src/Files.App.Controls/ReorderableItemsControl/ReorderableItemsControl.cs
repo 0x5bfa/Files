@@ -7,7 +7,7 @@ using Microsoft.UI.Xaml.Media.Animation;
 
 namespace Files.App.Controls
 {
-	public partial class ReorderablePanelContainer : ItemsControl
+	public partial class ReorderableItemsControl : ItemsControl
 	{
 		private bool _isDragging;
 		private bool _isSnapping;
@@ -23,9 +23,9 @@ namespace Files.App.Controls
 		private Storyboard?[]? _displacementStoryboards;
 		private double[]? _displacementTargets;
 
-		public ReorderablePanelContainer()
+		public ReorderableItemsControl()
 		{
-			DefaultStyleKey = typeof(ReorderablePanelContainer);
+			DefaultStyleKey = typeof(ReorderableItemsControl);
 		}
 
 		protected override void PrepareContainerForItemOverride(DependencyObject element, object item)
