@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using System.Collections;
+using System.Diagnostics.CodeAnalysis;
+using System.Reflection;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -273,6 +275,7 @@ namespace Files.App.Controls
 			_isSnapping = false;
 		}
 
+		[UnconditionalSuppressMessage("Trimming", "IL2075", Justification = "Move is discovered dynamically to support ObservableCollection<T> ItemsSource.")]
 		private bool TryCommitReorderToItemsSource(int[] reorderedIndexMap)
 		{
 			if (ItemsSource is not IList itemsSource ||
@@ -281,15 +284,50 @@ namespace Files.App.Controls
 				itemsSource.Count != reorderedIndexMap.Length)
 				return false;
 
-			var reorderedItems = new object[reorderedIndexMap.Length];
-			for (var i = 0; i < reorderedIndexMap.Length; i++)
-				reorderedItems[i] = itemsSource[reorderedIndexMap[i]]!;
+			// TODO: This uses reflection, consider root the Move method
+			var moveMethod = itemsSource.GetType().GetMethod(
+				"Move",
+				BindingFlags.Instance | BindingFlags.Public,
+				null,
+				[typeof(int), typeof(int)],
+				null);
 
-			itemsSource.Clear();
-			foreach (var item in reorderedItems)
-				itemsSource.Add(item);
+			var currentOrder = Enumerable.Range(0, reorderedIndexMap.Length).ToList();
 
-			return true;
+			try
+			{
+				for (var targetIndex = 0; targetIndex < reorderedIndexMap.Length; targetIndex++)
+				{
+					var desiredOldIndex = reorderedIndexMap[targetIndex];
+					var currentIndex = currentOrder.IndexOf(desiredOldIndex);
+					if (currentIndex == targetIndex)
+						continue;
+
+					if (moveMethod is not null)
+					{
+						_ = moveMethod.Invoke(itemsSource, [currentIndex, targetIndex]);
+					}
+					else
+					{
+						var movedItem = itemsSource[currentIndex];
+						itemsSource.RemoveAt(currentIndex);
+						itemsSource.Insert(targetIndex, movedItem);
+					}
+
+					currentOrder.RemoveAt(currentIndex);
+					currentOrder.Insert(targetIndex, desiredOldIndex);
+				}
+
+				return true;
+			}
+			catch (NotSupportedException)
+			{
+				return false;
+			}
+			catch (TargetInvocationException ex) when (ex.InnerException is NotSupportedException)
+			{
+				return false;
+			}
 		}
 
 		private bool TryCommitReorderToItems(int[] reorderedIndexMap)
