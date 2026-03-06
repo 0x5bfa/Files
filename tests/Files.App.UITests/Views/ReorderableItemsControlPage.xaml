@@ -10,7 +10,7 @@
 
 	<StackPanel Spacing="24">
 
-		<controls:SamplePanel Header="Horizontal">
+		<controls:SamplePanel Header="Horizontal (default)">
 			<controls:SamplePanel.MainContent>
 
 				<controls:ReorderableItemsControl HorizontalAlignment="Left">
@@ -39,7 +39,122 @@
 			</controls:SamplePanel.MainContent>
 		</controls:SamplePanel>
 
-		<controls:SamplePanel Header="Vertical">
+		<controls:SamplePanel Header="Vertical (default)">
+			<controls:SamplePanel.MainContent>
+
+				<ScrollViewer Height="250">
+					<controls:ReorderableItemsControl>
+
+						<controls:ReorderableItemsControl.ItemsPanel>
+							<ItemsPanelTemplate>
+								<StackPanel Orientation="Vertical" />
+							</ItemsPanelTemplate>
+						</controls:ReorderableItemsControl.ItemsPanel>
+
+						<Rectangle
+							Width="200"
+							Height="40"
+							Fill="Blue"
+							Opacity="0.5" />
+						<Rectangle
+							Width="200"
+							Height="60"
+							Fill="Green"
+							Opacity="0.5" />
+						<Rectangle
+							Width="200"
+							Height="30"
+							Fill="Red"
+							Opacity="0.5" />
+						<Rectangle
+							Width="200"
+							Height="50"
+							Fill="Yellow"
+							Opacity="0.5" />
+
+					</controls:ReorderableItemsControl>
+				</ScrollViewer>
+
+			</controls:SamplePanel.MainContent>
+		</controls:SamplePanel>
+
+		<controls:SamplePanel Header="Horizontal with ScrollViewer">
+			<controls:SamplePanel.MainContent>
+
+				<ScrollViewer
+					Width="500"
+					HorizontalScrollBarVisibility="Auto"
+					HorizontalScrollMode="Enabled">
+					<controls:ReorderableItemsControl>
+
+						<Rectangle
+							Width="160"
+							Height="40"
+							Fill="Blue"
+							Opacity="0.5" />
+						<Rectangle
+							Width="70"
+							Height="40"
+							Fill="Green"
+							Opacity="0.5" />
+						<Rectangle
+							Width="200"
+							Height="40"
+							Fill="Red"
+							Opacity="0.5" />
+						<Rectangle
+							Width="100"
+							Height="40"
+							Fill="Yellow"
+							Opacity="0.5" />
+						<Rectangle
+							Width="160"
+							Height="40"
+							Fill="Blue"
+							Opacity="0.5" />
+						<Rectangle
+							Width="70"
+							Height="40"
+							Fill="Green"
+							Opacity="0.5" />
+						<Rectangle
+							Width="200"
+							Height="40"
+							Fill="Red"
+							Opacity="0.5" />
+						<Rectangle
+							Width="100"
+							Height="40"
+							Fill="Yellow"
+							Opacity="0.5" />
+						<Rectangle
+							Width="160"
+							Height="40"
+							Fill="Blue"
+							Opacity="0.5" />
+						<Rectangle
+							Width="70"
+							Height="40"
+							Fill="Green"
+							Opacity="0.5" />
+						<Rectangle
+							Width="200"
+							Height="40"
+							Fill="Red"
+							Opacity="0.5" />
+						<Rectangle
+							Width="100"
+							Height="40"
+							Fill="Yellow"
+							Opacity="0.5" />
+
+					</controls:ReorderableItemsControl>
+				</ScrollViewer>
+
+			</controls:SamplePanel.MainContent>
+		</controls:SamplePanel>
+
+		<controls:SamplePanel Header="Vertical with ScrollViewer">
 			<controls:SamplePanel.MainContent>
 
 				<ScrollViewer Height="250">

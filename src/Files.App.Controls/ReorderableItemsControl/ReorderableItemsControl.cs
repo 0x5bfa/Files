@@ -4,6 +4,7 @@
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
+using Windows.Foundation;
 
 namespace Files.App.Controls
 {
@@ -22,6 +23,10 @@ namespace Files.App.Controls
 		private List<int>? _logicalOrder;
 		private Storyboard?[]? _displacementStoryboards;
 		private double[]? _displacementTargets;
+		private ScrollViewer? _ancestorScrollViewer;
+
+		private const double AutoScrollActivationMargin = 40;
+		private const double AutoScrollMaxStep = 18;
 
 		public ReorderableItemsControl()
 		{
@@ -61,6 +66,8 @@ namespace Files.App.Controls
 			var itemCount = Items.Count;
 			if (itemCount < 2)
 				return;
+
+			_ancestorScrollViewer ??= TryFindAncestorScrollViewer(dragElement);
 
 			_isHorizontal = ItemsPanelRoot switch
 				{
@@ -112,6 +119,9 @@ namespace Files.App.Controls
 			_ = _isHorizontal
 				? _dragItemTransform.X += e.Delta.Translation.X
 				: _dragItemTransform.Y += e.Delta.Translation.Y;
+
+			if (sender is UIElement senderElement)
+				TryAutoScrollDuringDrag(senderElement, e.Position);
 
 			var dragCenterPosition =
 				_originalPositions[_dragItemOriginalIndex] +
@@ -255,7 +265,90 @@ namespace Files.App.Controls
 			_logicalOrder = null;
 			_displacementStoryboards = null;
 			_displacementTargets = null;
+			_ancestorScrollViewer = null;
 			_isSnapping = false;
+		}
+
+		private ScrollViewer? TryFindAncestorScrollViewer(DependencyObject? element)
+		{
+			while (element is not null)
+			{
+				if (element is ScrollViewer scrollViewer)
+					return scrollViewer;
+
+				element = VisualTreeHelper.GetParent(element);
+			}
+
+			return null;
+		}
+
+		private void TryAutoScrollDuringDrag(UIElement senderElement, Point pointerPositionInSender)
+		{
+			if (_ancestorScrollViewer is null || _dragItemTransform is null)
+				return;
+
+			var transformToScrollViewer = senderElement.TransformToVisual(_ancestorScrollViewer);
+			var pointerInViewport = transformToScrollViewer.TransformPoint(pointerPositionInSender);
+
+			if (_isHorizontal)
+			{
+				var horizontalDelta = ComputeAutoScrollDelta(
+					pointerInViewport.X,
+					_ancestorScrollViewer.ViewportWidth,
+					_ancestorScrollViewer.HorizontalOffset,
+					_ancestorScrollViewer.ScrollableWidth);
+
+				if (horizontalDelta == 0)
+					return;
+
+				var newHorizontalOffset = _ancestorScrollViewer.HorizontalOffset + horizontalDelta;
+				var didScroll = _ancestorScrollViewer.ChangeView(newHorizontalOffset, null, null, true);
+				if (didScroll)
+					_dragItemTransform.X += horizontalDelta;
+			}
+			else
+			{
+				var verticalDelta = ComputeAutoScrollDelta(
+					pointerInViewport.Y,
+					_ancestorScrollViewer.ViewportHeight,
+					_ancestorScrollViewer.VerticalOffset,
+					_ancestorScrollViewer.ScrollableHeight);
+
+				if (verticalDelta == 0)
+					return;
+
+				var newVerticalOffset = _ancestorScrollViewer.VerticalOffset + verticalDelta;
+				var didScroll = _ancestorScrollViewer.ChangeView(null, newVerticalOffset, null, true);
+				if (didScroll)
+					_dragItemTransform.Y += verticalDelta;
+			}
+		}
+
+		private static double ComputeAutoScrollDelta(double pointerPosition, double viewportSize, double currentOffset, double scrollableSize)
+		{
+			if (viewportSize <= 0 || scrollableSize <= 0)
+				return 0;
+
+			double delta = 0;
+
+			if (pointerPosition < AutoScrollActivationMargin && currentOffset > 0)
+			{
+				var overscroll = AutoScrollActivationMargin - pointerPosition;
+				var strength = Math.Clamp(overscroll / AutoScrollActivationMargin, 0, 1);
+				delta = -Math.Clamp(strength * AutoScrollMaxStep, 1, AutoScrollMaxStep);
+			}
+			else if (pointerPosition > viewportSize - AutoScrollActivationMargin && currentOffset < scrollableSize)
+			{
+				var overscroll = pointerPosition - (viewportSize - AutoScrollActivationMargin);
+				var strength = Math.Clamp(overscroll / AutoScrollActivationMargin, 0, 1);
+				delta = Math.Clamp(strength * AutoScrollMaxStep, 1, AutoScrollMaxStep);
+			}
+
+			if (delta is 0)
+				return 0;
+
+			var targetOffset = Math.Clamp(currentOffset + delta, 0, scrollableSize);
+			return targetOffset - currentOffset;
 		}
 
 		private double[] ComputeTargetPositions()
