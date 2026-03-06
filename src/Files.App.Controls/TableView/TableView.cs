@@ -12,7 +12,10 @@ namespace Files.App.Controls
 
 		protected internal TableViewColumn? SortedColumn;
 
-		private Grid? _columnsPanel;
+		private ReorderableItemsControl? _columnsPanel;
+		private readonly HashSet<ResizeVisual> _trackedResizeVisuals = [];
+		private bool _isSyncingColumnsFromPanel;
+		private bool _isSyncingPanelFromColumns;
 
 		public TableView()
 		{
@@ -25,8 +28,10 @@ namespace Files.App.Controls
 		{
 			base.OnApplyTemplate();
 
-			_columnsPanel = GetTemplateChild(TemplatePartName_ColumnsPanel) as Grid
+			UnhookColumnsPanel();
+			_columnsPanel = GetTemplateChild(TemplatePartName_ColumnsPanel) as ReorderableItemsControl
 				?? throw new MissingFieldException($"Could not find {TemplatePartName_ColumnsPanel} in the given {nameof(TableView)}'s style.");
+			HookColumnsPanel();
 
 			Unloaded += TableView_Unloaded;
 
@@ -47,58 +52,66 @@ namespace Files.App.Controls
 		private void TableView_Unloaded(object sender, RoutedEventArgs e)
 		{
 			Unloaded -= TableView_Unloaded;
+			UnhookColumnsPanel();
 		}
 
 		private void Columns_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
 		{
-			if (_columnsPanel is null)
+			if (_columnsPanel is null || _isSyncingColumnsFromPanel)
 				return;
 
-			// TODO: Re-arrange ColumnDefinitions accordingly
+			_isSyncingPanelFromColumns = true;
 
-			switch (e.Action)
+			try
 			{
-				case NotifyCollectionChangedAction.Add:
-					int insertIndex = e.NewStartingIndex;
-					foreach (UIElement item in e.NewItems!)
-						_columnsPanel.Children.Insert(insertIndex++, item);
-					break;
+				switch (e.Action)
+				{
+					case NotifyCollectionChangedAction.Add:
+						int insertIndex = e.NewStartingIndex;
+						foreach (object item in e.NewItems!)
+							_columnsPanel.Items.Insert(insertIndex++, item);
+						break;
 
-				case NotifyCollectionChangedAction.Remove:
-					int removeIndex = e.OldStartingIndex;
-					for (int i = 0; i < e.OldItems!.Count; i++)
-						_columnsPanel.Children.RemoveAt(removeIndex);
-					break;
+					case NotifyCollectionChangedAction.Remove:
+						int removeIndex = e.OldStartingIndex;
+						for (int i = 0; i < e.OldItems!.Count; i++)
+							_columnsPanel.Items.RemoveAt(removeIndex);
+						break;
 
-				case NotifyCollectionChangedAction.Replace:
-					int replaceIndex = e.OldStartingIndex;
-					for (int i = 0; i < e.OldItems!.Count; i++)
-						_columnsPanel.Children.RemoveAt(replaceIndex);
-					foreach (UIElement item in e.NewItems!)
-						_columnsPanel.Children.Insert(replaceIndex++, item);
-					break;
+					case NotifyCollectionChangedAction.Replace:
+						int replaceIndex = e.OldStartingIndex;
+						for (int i = 0; i < e.OldItems!.Count; i++)
+							_columnsPanel.Items.RemoveAt(replaceIndex);
+						foreach (object item in e.NewItems!)
+							_columnsPanel.Items.Insert(replaceIndex++, item);
+						break;
 
-				case NotifyCollectionChangedAction.Move:
-					if (e.OldItems!.Count is 1)
-					{
-						if (e.OldItems[0] is UIElement movedItem)
+					case NotifyCollectionChangedAction.Move:
+						if (e.OldItems!.Count is 1)
 						{
-							_columnsPanel.Children.RemoveAt(e.OldStartingIndex);
-							_columnsPanel.Children.Insert(e.NewStartingIndex, movedItem);
+							var movedItem = _columnsPanel.Items[e.OldStartingIndex];
+							_columnsPanel.Items.RemoveAt(e.OldStartingIndex);
+							_columnsPanel.Items.Insert(e.NewStartingIndex, movedItem);
 						}
-					}
-					else
-					{
-						throw new NotSupportedException("It is not supported to move multiple items.");
-					}
-					break;
+						else
+						{
+							throw new NotSupportedException("It is not supported to move multiple items.");
+						}
+						break;
 
-				case NotifyCollectionChangedAction.Reset:
-					_columnsPanel.Children.Clear();
-					foreach (UIElement item in Columns)
-						_columnsPanel.Children.Add(item);
-					break;
+					case NotifyCollectionChangedAction.Reset:
+						_columnsPanel.Items.Clear();
+						foreach (object item in Columns)
+							_columnsPanel.Items.Add(item);
+						break;
+				}
 			}
+			finally
+			{
+				_isSyncingPanelFromColumns = false;
+			}
+
+			RefreshVisibleRows();
 		}
 
 		private void ListViewBase_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -188,35 +201,98 @@ namespace Files.App.Controls
 			}
 		}
 
-		private void UpdateColumns()
+		private void RefreshVisibleRows()
 		{
-			if (_columnsPanel?.Children.Count is not 0) // TODO: Handle updating the property itself
+			if (View is not ListViewBase listViewBase ||
+				listViewBase.ItemsPanelRoot is not ItemsStackPanel itemsStackPanel)
 				return;
 
-			foreach (var column in Columns)
+			for (int index = itemsStackPanel.FirstCacheIndex;
+				index <= itemsStackPanel.LastCacheIndex;
+				index++)
 			{
-				_columnsPanel.Children.Add(column);
-				_columnsPanel.ColumnDefinitions.Add(new() { Width = new(0, GridUnitType.Auto) });
-				Grid.SetColumn(column, _columnsPanel.ColumnDefinitions.Count - 1);
-				column.SetOwner(this);
+				if (index < 0 || index >= listViewBase.Items.Count)
+					continue;
+
+				if (listViewBase.ContainerFromIndex(index) is Control itemContainer)
+					RecycleRowOf(listViewBase, itemContainer, index);
+			}
+		}
+
+		private void UpdateColumns()
+		{
+			if (_columnsPanel?.Items.Count is not 0)
+				return;
+
+			_isSyncingPanelFromColumns = true;
+
+			try
+			{
+				foreach (var column in Columns)
+				{
+					_columnsPanel.Items.Add(column);
+					column.SetOwner(this);
+				}
+			}
+			finally
+			{
+				_isSyncingPanelFromColumns = false;
+			}
+		}
+
+		private void ColumnsPanel_Reordered(object? sender, ReorderedItemsEventArgs e)
+		{
+			if (_columnsPanel is null || _isSyncingPanelFromColumns || _isSyncingColumnsFromPanel)
+				return;
+
+			var reorderedColumns = _columnsPanel.Items.OfType<TableViewColumn>().ToList();
+			if (reorderedColumns.Count != Columns.Count)
+				return;
+
+			_isSyncingColumnsFromPanel = true;
+
+			try
+			{
+				Columns.CollectionChanged -= Columns_CollectionChanged;
+				Columns.Clear();
+				foreach (var column in reorderedColumns)
+					Columns.Add(column);
+			}
+			finally
+			{
+				Columns.CollectionChanged += Columns_CollectionChanged;
+				_isSyncingColumnsFromPanel = false;
 			}
 
-			_columnsPanel.ColumnDefinitions.Add(new() { Width = new(0, GridUnitType.Auto) });
+			RefreshVisibleRows();
+			InvalidateLayoutOfAllRows();
+		}
 
-			// Put resize visual at the end of the Children collection to make sure it's on top of other elements
-			int resizeVisualPosition = 0;
-			foreach (var column in Columns)
+		private void ColumnsPanel_LayoutUpdated(object? sender, object e)
+		{
+			if (_columnsPanel?.ItemsPanelRoot is not ResizablePanel resizablePanel)
+				return;
+
+			var aliveResizeVisuals = new HashSet<ResizeVisual>();
+			foreach (var child in resizablePanel.Children)
 			{
-				// Set resize visual
-				var resizeVisual = new ResizeVisual { Target = column, Orientation = Orientation.Horizontal };
-				_columnsPanel.Children.Add(resizeVisual);
-				Grid.SetColumn(resizeVisual, resizeVisualPosition);
-				Grid.SetColumnSpan(resizeVisual, 2);
+				if (child is not ResizeVisual resizeVisual)
+					continue;
 
-				resizeVisual.DragDelta += ResizeVisual_DragDelta;
-				resizeVisual.DragCompleted += ResizeVisual_DragCompleted;
+				aliveResizeVisuals.Add(resizeVisual);
+				if (_trackedResizeVisuals.Add(resizeVisual))
+				{
+					resizeVisual.DragDelta += ResizeVisual_DragDelta;
+					resizeVisual.DragCompleted += ResizeVisual_DragCompleted;
+				}
+			}
 
-				resizeVisualPosition++;
+			// Unhook the events for resizers that no longer exist and synchronize the cached resizers
+			foreach (var staleVisual in _trackedResizeVisuals.Where(rv => !aliveResizeVisuals.Contains(rv)).ToList())
+			{
+				staleVisual.DragDelta -= ResizeVisual_DragDelta;
+				staleVisual.DragCompleted -= ResizeVisual_DragCompleted;
+				_trackedResizeVisuals.Remove(staleVisual);
 			}
 		}
 
@@ -234,6 +310,32 @@ namespace Files.App.Controls
 			{
 				column.OnColumnResizeCompleted();
 			}
+		}
+
+		private void HookColumnsPanel()
+		{
+			if (_columnsPanel is null)
+				return;
+
+			_columnsPanel.LayoutUpdated += ColumnsPanel_LayoutUpdated;
+			_columnsPanel.Reordered += ColumnsPanel_Reordered;
+		}
+
+		private void UnhookColumnsPanel()
+		{
+			if (_columnsPanel is not null)
+			{
+				_columnsPanel.LayoutUpdated -= ColumnsPanel_LayoutUpdated;
+				_columnsPanel.Reordered -= ColumnsPanel_Reordered;
+			}
+
+			foreach (var resizeVisual in _trackedResizeVisuals)
+			{
+				resizeVisual.DragDelta -= ResizeVisual_DragDelta;
+				resizeVisual.DragCompleted -= ResizeVisual_DragCompleted;
+			}
+
+			_trackedResizeVisuals.Clear();
 		}
 	}
 }

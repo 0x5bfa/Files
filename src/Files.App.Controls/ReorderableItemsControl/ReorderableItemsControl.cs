@@ -33,6 +33,8 @@ namespace Files.App.Controls
 			DefaultStyleKey = typeof(ReorderableItemsControl);
 		}
 
+		public event EventHandler<ReorderedItemsEventArgs>? Reordered;
+
 		protected override void PrepareContainerForItemOverride(DependencyObject element, object item)
 		{
 			base.PrepareContainerForItemOverride(element, item);
@@ -243,6 +245,7 @@ namespace Files.App.Controls
 				if (_logicalOrder is null)
 					return;
 
+				int[] reorderedIndexMap = [.. _logicalOrder];
 				object[] reorderedItemsArray = [.. _logicalOrder.Select(i => Items[i])];
 				Items.Clear();
 
@@ -253,6 +256,8 @@ namespace Files.App.Controls
 				// for the reordered containers
 				if (ItemsPanelRoot is ResizablePanel resizablePanel)
 					resizablePanel.InvalidateAutoGeneration();
+
+				Reordered?.Invoke(this, new ReorderedItemsEventArgs(reorderedIndexMap));
 			}
 
 			// Reset state

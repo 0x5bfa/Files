@@ -28,8 +28,7 @@ namespace Files.App.Controls
 
 			if (_columnsPanel is not null)
 			{
-				_columnsPanel.Children.Clear();
-				_columnsPanel.ColumnDefinitions.Clear();
+				_columnsPanel.Items.Clear();
 			}
 		}
 

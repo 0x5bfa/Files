@@ -58,16 +58,19 @@
 							</Grid.RowDefinitions>
 
 							<!--  Columns  -->
-							<Grid
-								x:Name="PART_ColumnsPanel"
+							<Border
 								Grid.Row="0"
 								Height="44"
 								HorizontalAlignment="Left"
-								wct:UIElementExtensions.ClipToBounds="True"
 								Background="{ThemeResource TableViewColumnBackground}"
 								BorderBrush="{ThemeResource TableViewColumnBorderBrush}"
 								BorderThickness="{StaticResource TableViewColumnBorderThickness}"
-								CornerRadius="{StaticResource TableViewColumnCornerRadius}" />
+								CornerRadius="{StaticResource TableViewColumnCornerRadius}">
+								<local:ReorderableItemsControl
+									x:Name="PART_ColumnsPanel"
+									HorizontalAlignment="Left"
+									wct:UIElementExtensions.ClipToBounds="True" />
+							</Border>
 
 							<!--  View  -->
 							<ContentPresenter
