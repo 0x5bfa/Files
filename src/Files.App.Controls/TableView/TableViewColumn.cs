@@ -47,9 +47,9 @@ namespace Files.App.Controls
 
 		public abstract FrameworkElement GenerateEditingElement(object dataItem);
 
-		public void SetOwner(TableView owner)
+		public void EnsureOwner(TableView owner)
 		{
-			_owner = new(owner);
+			_owner ??= new(owner);
 		}
 
 		public void ResetPointerEventVisual()

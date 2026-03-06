@@ -26,10 +26,9 @@ namespace Files.App.Controls
 			if (e.NewValue is INotifyCollectionChanged newColumns)
 				newColumns.CollectionChanged += Columns_CollectionChanged;
 
-			if (_columnsPanel is not null)
-			{
-				_columnsPanel.Items.Clear();
-			}
+			UpdateColumns();
+			RefreshVisibleRows();
+			InvalidateLayoutOfAllRows();
 		}
 
 		partial void OnIsColumnResizingChanged(bool newValue)

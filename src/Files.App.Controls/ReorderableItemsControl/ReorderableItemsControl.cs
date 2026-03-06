@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using System.Collections;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -240,24 +241,22 @@ namespace Files.App.Controls
 			}
 
 			// Commit reordering if it changed
-			if (orderChanged)
+			if (orderChanged && _logicalOrder is not null)
 			{
-				if (_logicalOrder is null)
-					return;
-
 				int[] reorderedIndexMap = [.. _logicalOrder];
-				object[] reorderedItemsArray = [.. _logicalOrder.Select(i => Items[i])];
-				Items.Clear();
+				var committed = ItemsSource is not null
+					? TryCommitReorderToItemsSource(reorderedIndexMap)
+					: TryCommitReorderToItems(reorderedIndexMap);
 
-				foreach (var item in reorderedItemsArray)
-					Items.Add(item);
+				if (committed)
+				{
+					// If using ResizablePanel, force it to regenerate auto-generated ResizeVisuals
+					// for the reordered containers
+					if (ItemsPanelRoot is ResizablePanel resizablePanel)
+						resizablePanel.InvalidateAutoGeneration();
 
-				// If using ResizablePanel, force it to regenerate auto-generated ResizeVisuals
-				// for the reordered containers
-				if (ItemsPanelRoot is ResizablePanel resizablePanel)
-					resizablePanel.InvalidateAutoGeneration();
-
-				Reordered?.Invoke(this, new ReorderedItemsEventArgs(reorderedIndexMap));
+					Reordered?.Invoke(this, new ReorderedItemsEventArgs(reorderedIndexMap));
+				}
 			}
 
 			// Reset state
@@ -272,6 +271,41 @@ namespace Files.App.Controls
 			_displacementTargets = null;
 			_ancestorScrollViewer = null;
 			_isSnapping = false;
+		}
+
+		private bool TryCommitReorderToItemsSource(int[] reorderedIndexMap)
+		{
+			if (ItemsSource is not IList itemsSource ||
+				itemsSource.IsReadOnly ||
+				itemsSource.IsFixedSize ||
+				itemsSource.Count != reorderedIndexMap.Length)
+				return false;
+
+			var reorderedItems = new object[reorderedIndexMap.Length];
+			for (var i = 0; i < reorderedIndexMap.Length; i++)
+				reorderedItems[i] = itemsSource[reorderedIndexMap[i]]!;
+
+			itemsSource.Clear();
+			foreach (var item in reorderedItems)
+				itemsSource.Add(item);
+
+			return true;
+		}
+
+		private bool TryCommitReorderToItems(int[] reorderedIndexMap)
+		{
+			if (ItemsSource is not null || Items.Count != reorderedIndexMap.Length)
+				return false;
+
+			var reorderedItems = new object[reorderedIndexMap.Length];
+			for (var i = 0; i < reorderedIndexMap.Length; i++)
+				reorderedItems[i] = Items[reorderedIndexMap[i]]!;
+
+			Items.Clear();
+			foreach (var item in reorderedItems)
+				Items.Add(item);
+
+			return true;
 		}
 
 		private ScrollViewer? TryFindAncestorScrollViewer(DependencyObject? element)

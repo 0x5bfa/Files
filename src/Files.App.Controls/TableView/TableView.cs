@@ -14,8 +14,6 @@ namespace Files.App.Controls
 
 		private ReorderableItemsControl? _columnsPanel;
 		private readonly HashSet<ResizeVisual> _trackedResizeVisuals = [];
-		private bool _isSyncingColumnsFromPanel;
-		private bool _isSyncingPanelFromColumns;
 
 		public TableView()
 		{
@@ -57,61 +55,16 @@ namespace Files.App.Controls
 
 		private void Columns_CollectionChanged(object? sender, NotifyCollectionChangedEventArgs e)
 		{
-			if (_columnsPanel is null || _isSyncingColumnsFromPanel)
-				return;
-
-			_isSyncingPanelFromColumns = true;
-
-			try
+			if (e.Action is NotifyCollectionChangedAction.Add or
+				NotifyCollectionChangedAction.Replace or
+				NotifyCollectionChangedAction.Reset)
 			{
-				switch (e.Action)
-				{
-					case NotifyCollectionChangedAction.Add:
-						int insertIndex = e.NewStartingIndex;
-						foreach (object item in e.NewItems!)
-							_columnsPanel.Items.Insert(insertIndex++, item);
-						break;
-
-					case NotifyCollectionChangedAction.Remove:
-						int removeIndex = e.OldStartingIndex;
-						for (int i = 0; i < e.OldItems!.Count; i++)
-							_columnsPanel.Items.RemoveAt(removeIndex);
-						break;
-
-					case NotifyCollectionChangedAction.Replace:
-						int replaceIndex = e.OldStartingIndex;
-						for (int i = 0; i < e.OldItems!.Count; i++)
-							_columnsPanel.Items.RemoveAt(replaceIndex);
-						foreach (object item in e.NewItems!)
-							_columnsPanel.Items.Insert(replaceIndex++, item);
-						break;
-
-					case NotifyCollectionChangedAction.Move:
-						if (e.OldItems!.Count is 1)
-						{
-							var movedItem = _columnsPanel.Items[e.OldStartingIndex];
-							_columnsPanel.Items.RemoveAt(e.OldStartingIndex);
-							_columnsPanel.Items.Insert(e.NewStartingIndex, movedItem);
-						}
-						else
-						{
-							throw new NotSupportedException("It is not supported to move multiple items.");
-						}
-						break;
-
-					case NotifyCollectionChangedAction.Reset:
-						_columnsPanel.Items.Clear();
-						foreach (object item in Columns)
-							_columnsPanel.Items.Add(item);
-						break;
-				}
-			}
-			finally
-			{
-				_isSyncingPanelFromColumns = false;
+				foreach (var column in Columns)
+					column.EnsureOwner(this);
 			}
 
 			RefreshVisibleRows();
+			InvalidateLayoutOfAllRows();
 		}
 
 		private void ListViewBase_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
@@ -221,51 +174,8 @@ namespace Files.App.Controls
 
 		private void UpdateColumns()
 		{
-			if (_columnsPanel?.Items.Count is not 0)
-				return;
-
-			_isSyncingPanelFromColumns = true;
-
-			try
-			{
-				foreach (var column in Columns)
-				{
-					_columnsPanel.Items.Add(column);
-					column.SetOwner(this);
-				}
-			}
-			finally
-			{
-				_isSyncingPanelFromColumns = false;
-			}
-		}
-
-		private void ColumnsPanel_Reordered(object? sender, ReorderedItemsEventArgs e)
-		{
-			if (_columnsPanel is null || _isSyncingPanelFromColumns || _isSyncingColumnsFromPanel)
-				return;
-
-			var reorderedColumns = _columnsPanel.Items.OfType<TableViewColumn>().ToList();
-			if (reorderedColumns.Count != Columns.Count)
-				return;
-
-			_isSyncingColumnsFromPanel = true;
-
-			try
-			{
-				Columns.CollectionChanged -= Columns_CollectionChanged;
-				Columns.Clear();
-				foreach (var column in reorderedColumns)
-					Columns.Add(column);
-			}
-			finally
-			{
-				Columns.CollectionChanged += Columns_CollectionChanged;
-				_isSyncingColumnsFromPanel = false;
-			}
-
-			RefreshVisibleRows();
-			InvalidateLayoutOfAllRows();
+			foreach (var column in Columns)
+				column.EnsureOwner(this);
 		}
 
 		private void ColumnsPanel_LayoutUpdated(object? sender, object e)
@@ -318,7 +228,6 @@ namespace Files.App.Controls
 				return;
 
 			_columnsPanel.LayoutUpdated += ColumnsPanel_LayoutUpdated;
-			_columnsPanel.Reordered += ColumnsPanel_Reordered;
 		}
 
 		private void UnhookColumnsPanel()
@@ -326,7 +235,6 @@ namespace Files.App.Controls
 			if (_columnsPanel is not null)
 			{
 				_columnsPanel.LayoutUpdated -= ColumnsPanel_LayoutUpdated;
-				_columnsPanel.Reordered -= ColumnsPanel_Reordered;
 			}
 
 			foreach (var resizeVisual in _trackedResizeVisuals)

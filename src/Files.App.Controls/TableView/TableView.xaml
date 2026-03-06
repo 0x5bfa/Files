@@ -69,7 +69,8 @@
 								<local:ReorderableItemsControl
 									x:Name="PART_ColumnsPanel"
 									HorizontalAlignment="Left"
-									wct:UIElementExtensions.ClipToBounds="True" />
+									wct:UIElementExtensions.ClipToBounds="True"
+									ItemsSource="{TemplateBinding Columns}" />
 							</Border>
 
 							<!--  View  -->
