@@ -120,15 +120,7 @@ namespace Files.App.Controls
 				sender.Items.ElementAt(itemIndex) is not ITableViewCellValueProvider cellValueProvider)
 				return;
 
-			row.SetOwner(this);
-
-			row.Children.Clear();
-
-			foreach (var column in Columns)
-				row.Children.Add(column.GenerateElement(cellValueProvider));
-
-			row.InvalidateArrange();
-			row.InvalidateMeasure();
+			row.Bind(this, cellValueProvider);
 		}
 
 		public void InvalidateLayoutOfAllRows()

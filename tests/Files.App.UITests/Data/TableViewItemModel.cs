@@ -6,7 +6,7 @@ using Files.App.Controls;
 
 namespace Files.App.UITests.Data
 {
-	internal partial class TableViewItemModel : ObservableObject, ITableViewCellValueProvider
+	internal partial class TableViewItemModel : ObservableObject, ITableViewCellValueProvider, ITableViewCellValueEditor
 	{
 		[ObservableProperty]
 		public partial string? Name { get; set; }
@@ -30,6 +30,27 @@ namespace Files.App.UITests.Data
 				nameof(Size) => Size ?? string.Empty,
 				_ => string.Empty,
 			};
+		}
+
+		public bool TrySetValue(string name, string value)
+		{
+			switch (name)
+			{
+				case nameof(Name):
+					Name = value;
+					return true;
+				case nameof(DateUpdated):
+					DateUpdated = value;
+					return true;
+				case nameof(Type):
+					Type = value;
+					return true;
+				case nameof(Size):
+					Size = value;
+					return true;
+				default:
+					return false;
+			}
 		}
 	}
 }

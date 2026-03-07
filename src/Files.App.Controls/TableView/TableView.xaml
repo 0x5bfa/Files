@@ -36,7 +36,6 @@
 
 	<Style BasedOn="{StaticResource DefaultTableViewStyle}" TargetType="local:TableView" />
 	<Style BasedOn="{StaticResource DefaultTableViewColumnStyle}" TargetType="local:TableViewColumn" />
-	<Style BasedOn="{StaticResource DefaultTableViewRowStyle}" TargetType="local:TableViewRow" />
 	<Style BasedOn="{StaticResource DefaultTableViewTextColumnStyle}" TargetType="local:TableViewTextColumn" />
 
 	<Style x:Key="DefaultTableViewStyle" TargetType="local:TableView">
@@ -200,35 +199,13 @@
 		</Style.Setters>
 	</Style>
 
-	<Style x:Key="DefaultTableViewRowStyle" TargetType="local:TableViewRow">
-		<Style.Setters>
-			<Setter Property="Template">
-				<Setter.Value>
-					<ControlTemplate TargetType="local:TableViewRow">
-						<Grid>
-							<StackPanel x:Name="PART_CellsPanel" Orientation="Horizontal" />
-							<Rectangle
-								Height="1"
-								HorizontalAlignment="Stretch"
-								Canvas.ZIndex="100"
-								Fill="{ThemeResource DividerStrokeColorDefaultBrush}">
-								<Rectangle.RenderTransform>
-									<TranslateTransform X="0" Y="10" />
-								</Rectangle.RenderTransform>
-							</Rectangle>
-						</Grid>
-					</ControlTemplate>
-				</Setter.Value>
-			</Setter>
-		</Style.Setters>
-	</Style>
-
 	<Style
 		x:Key="DefaultTableViewTextColumnStyle"
 		BasedOn="{StaticResource DefaultTableViewColumnStyle}"
 		TargetType="local:TableViewTextColumn">
 		<Style.Setters>
 			<Setter Property="ElementStyle" Value="{StaticResource DefaultTableViewTextBlockStyle}" />
+			<Setter Property="EditingElementStyle" Value="{StaticResource DefaultTableViewTextBoxStyle}" />
 		</Style.Setters>
 	</Style>
 
@@ -239,7 +216,22 @@
 		<Style.Setters>
 			<Setter Property="TextTrimming" Value="CharacterEllipsis" />
 			<Setter Property="TextWrapping" Value="NoWrap" />
+			<Setter Property="HorizontalAlignment" Value="Stretch" />
+			<Setter Property="VerticalAlignment" Value="Center" />
 			<Setter Property="Padding" Value="16,0,16,0" />
+		</Style.Setters>
+	</Style>
+
+	<Style
+		x:Key="DefaultTableViewTextBoxStyle"
+		BasedOn="{StaticResource DefaultTextBoxStyle}"
+		TargetType="TextBox">
+		<Style.Setters>
+			<Setter Property="HorizontalAlignment" Value="Stretch" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+			<Setter Property="VerticalContentAlignment" Value="Center" />
+			<Setter Property="MinWidth" Value="0" />
+			<Setter Property="Padding" Value="15,6,5,6" />
 		</Style.Setters>
 	</Style>
 

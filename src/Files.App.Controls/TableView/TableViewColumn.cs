@@ -1,4 +1,4 @@
-﻿// Copyright (c) Files Community
+// Copyright (c) Files Community
 // Licensed under the MIT License.
 
 namespace Files.App.Controls
@@ -6,8 +6,9 @@ namespace Files.App.Controls
 	public abstract partial class TableViewColumn : Control
 	{
 		private WeakReference<TableView>? _owner;
-
 		private Grid? _rootGrid;
+
+		public TimeSpan EditDoubleClickInterval { get; set; } = TimeSpan.FromMilliseconds(1500);
 
 		public TableViewColumn()
 		{
@@ -32,6 +33,24 @@ namespace Files.App.Controls
 		public abstract FrameworkElement GenerateElement(object dataItem);
 
 		public abstract FrameworkElement GenerateEditingElement(object dataItem);
+
+		protected internal virtual bool CanEdit(object dataItem)
+		{
+			return false;
+		}
+
+		protected internal virtual void PrepareCellForEdit(TableViewCell cell, FrameworkElement editingElement)
+		{
+		}
+
+		protected internal virtual bool CommitCellEdit(TableViewCell cell)
+		{
+			return true;
+		}
+
+		protected internal virtual void CancelCellEdit(TableViewCell cell)
+		{
+		}
 
 		public void EnsureOwner(TableView owner)
 		{
