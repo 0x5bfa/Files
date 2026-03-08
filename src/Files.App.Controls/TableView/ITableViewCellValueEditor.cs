@@ -5,6 +5,6 @@ namespace Files.App.Controls
 {
 	public interface ITableViewCellValueEditor
 	{
-		public bool TrySetValue(string name, string value);
+		public bool TrySetValue<T>(string name, T value);
 	}
 }

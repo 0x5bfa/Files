@@ -7,6 +7,7 @@
 	xmlns:data="using:Files.App.UITests.Data"
 	xmlns:local="using:Files.App.UITests.Views"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+	xmlns:selectors="using:Files.App.UITests.Views.TemplateSelectors"
 	Loaded="TableViewPage_Loaded"
 	mc:Ignorable="d">
 
@@ -30,6 +31,19 @@
 						</Style.Setters>
 					</Style>
 
+					<DataTemplate x:Key="TextTableViewColumnTemplate" x:DataType="data:TableViewColumnModel">
+						<controls:TableViewTextColumn Binding="{Binding PropertyName}" Header="{Binding Header}" />
+					</DataTemplate>
+
+					<DataTemplate x:Key="DateTableViewColumnTemplate" x:DataType="data:TableViewColumnModel">
+						<controls:TableViewDateColumn Binding="{Binding PropertyName}" Header="{Binding Header}" />
+					</DataTemplate>
+
+					<selectors:TableViewColumnTemplateSelector
+						x:Key="TableViewColumnTemplateSelector"
+						DateColumnTemplate="{StaticResource DateTableViewColumnTemplate}"
+						TextColumnTemplate="{StaticResource TextTableViewColumnTemplate}" />
+
 				</ResourceDictionary>
 			</ResourceDictionary.MergedDictionaries>
 		</ResourceDictionary>
@@ -52,13 +66,8 @@
 						VerticalAlignment="Top"
 						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
 						BorderThickness="1"
+						ColumnTemplateSelector="{StaticResource TableViewColumnTemplateSelector}"
 						ColumnsSource="{x:Bind Columns, Mode=OneWay}">
-
-						<controls:TableView.ColumnTemplate>
-							<DataTemplate x:DataType="data:TableViewColumnModel">
-								<controls:TableViewTextColumn Binding="{Binding PropertyName}" Header="{Binding Header}" />
-							</DataTemplate>
-						</controls:TableView.ColumnTemplate>
 
 						<controls:TableView.View>
 							<ListView

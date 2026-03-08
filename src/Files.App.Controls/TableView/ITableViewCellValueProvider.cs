@@ -5,6 +5,6 @@ namespace Files.App.Controls
 {
 	public interface ITableViewCellValueProvider
 	{
-		public string GetValue(string name);
+		public T GetValue<T>(string name);
 	}
 }

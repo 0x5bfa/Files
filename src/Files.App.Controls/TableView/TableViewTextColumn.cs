@@ -17,10 +17,7 @@ namespace Files.App.Controls
 
 		public override FrameworkElement GenerateElement(object dataItem)
 		{
-			if (string.IsNullOrEmpty(Binding) ||
-				dataItem is not ITableViewCellValueProvider cellValueProvider ||
-				cellValueProvider?.GetValue(Binding) is not string cellValue)
-				throw new ArgumentException("The type of the argument was invalid.", $"{dataItem}");
+			var cellValue = GetPropertyValue<string>(dataItem);
 
 			return new TextBlock()
 			{
@@ -31,10 +28,7 @@ namespace Files.App.Controls
 
 		public override FrameworkElement GenerateEditingElement(object dataItem)
 		{
-			if (string.IsNullOrEmpty(Binding) ||
-				dataItem is not ITableViewCellValueProvider cellValueProvider ||
-				cellValueProvider?.GetValue(Binding) is not string cellValue)
-				throw new ArgumentException("The type of the argument was invalid.", $"{dataItem}");
+			var cellValue = GetPropertyValue<string>(dataItem);
 
 			return new TextBox()
 			{
@@ -61,28 +55,26 @@ namespace Files.App.Controls
 
 		protected internal override bool CommitCellEdit(TableViewCell cell)
 		{
-			if (cell.EditingElement is not TextBox textBox)
-				return true;
+			if (cell.EditingElement is not TextBox textBox ||
+				cell.Data is null)
+				return false;
 
-			if (cell.DataItem is not ITableViewCellValueEditor cellEditor ||
-				string.IsNullOrEmpty(Binding))
+			if (SetPropertyValue(cell.Data, textBox.Text))
 			{
 				UnhookTextBoxEvents(textBox);
+
 				return true;
 			}
-
-			if (!cellEditor.TrySetValue(Binding, textBox.Text))
+			else
 			{
 				textBox.DispatcherQueue.TryEnqueue(() =>
 				{
 					textBox.Focus(FocusState.Programmatic);
 					textBox.SelectAll();
 				});
+
 				return false;
 			}
-
-			UnhookTextBoxEvents(textBox);
-			return true;
 		}
 
 		protected internal override void CancelCellEdit(TableViewCell cell)
@@ -142,7 +134,7 @@ namespace Files.App.Controls
 				cell.CommitEdit();
 				e.Handled = true;
 			}
-			else
+			else if (e.Key is VirtualKey.Escape)
 			{
 				cell.CancelEdit();
 				e.Handled = true;

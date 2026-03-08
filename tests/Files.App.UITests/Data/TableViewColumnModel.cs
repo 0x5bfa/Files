@@ -3,9 +3,17 @@
 
 namespace Files.App.UITests.Data;
 
-internal class TableViewColumnModel(string header, string propertyName)
+internal enum TableViewColumnValueType
+{
+	Text,
+	DateTimeOffset,
+}
+
+internal class TableViewColumnModel(string header, string propertyName, TableViewColumnValueType valueType = TableViewColumnValueType.Text)
 {
 	public string? Header { get; set; } = header;
 
 	public string? PropertyName { get; set; } = propertyName;
+
+	public TableViewColumnValueType ValueType { get; set; } = valueType;
 }

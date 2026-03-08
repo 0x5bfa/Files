@@ -37,6 +37,7 @@
 	<Style BasedOn="{StaticResource DefaultTableViewStyle}" TargetType="local:TableView" />
 	<Style BasedOn="{StaticResource DefaultTableViewColumnStyle}" TargetType="local:TableViewColumn" />
 	<Style BasedOn="{StaticResource DefaultTableViewTextColumnStyle}" TargetType="local:TableViewTextColumn" />
+	<Style BasedOn="{StaticResource DefaultTableViewDateColumnStyle}" TargetType="local:TableViewDateColumn" />
 
 	<Style x:Key="DefaultTableViewStyle" TargetType="local:TableView">
 		<Style.Setters>
@@ -210,6 +211,16 @@
 	</Style>
 
 	<Style
+		x:Key="DefaultTableViewDateColumnStyle"
+		BasedOn="{StaticResource DefaultTableViewColumnStyle}"
+		TargetType="local:TableViewDateColumn">
+		<Style.Setters>
+			<Setter Property="ElementStyle" Value="{StaticResource DefaultTableViewTextBlockStyle}" />
+			<Setter Property="EditingElementStyle" Value="{StaticResource DefaultTableViewDatePickerStyle}" />
+		</Style.Setters>
+	</Style>
+
+	<Style
 		x:Key="DefaultTableViewTextBlockStyle"
 		BasedOn="{StaticResource BodyTextBlockStyle}"
 		TargetType="TextBlock">
@@ -232,6 +243,18 @@
 			<Setter Property="VerticalContentAlignment" Value="Center" />
 			<Setter Property="MinWidth" Value="0" />
 			<Setter Property="Padding" Value="15,6,5,6" />
+		</Style.Setters>
+	</Style>
+
+	<Style
+		x:Key="DefaultTableViewDatePickerStyle"
+		BasedOn="{StaticResource DefaultDatePickerStyle}"
+		TargetType="DatePicker">
+		<Style.Setters>
+			<Setter Property="HorizontalAlignment" Value="Stretch" />
+			<Setter Property="VerticalAlignment" Value="Center" />
+			<Setter Property="MinWidth" Value="0" />
+			<Setter Property="Padding" Value="15,0,5,0" />
 		</Style.Setters>
 	</Style>
 

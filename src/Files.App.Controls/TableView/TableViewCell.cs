@@ -10,11 +10,11 @@ namespace Files.App.Controls
 	public partial class TableViewCell : ContentControl
 	{
 		private static readonly SolidColorBrush TransparentBackground = new(Microsoft.UI.Colors.Transparent);
-		private ITableViewCellValueProvider? _dataItem;
+		private object? _data;
 		private DateTimeOffset _lastClickTimestamp;
 
 		internal TableViewColumn? Column { get; private set; }
-		internal ITableViewCellValueProvider? DataItem => _dataItem;
+		internal object? Data => _data;
 		internal FrameworkElement? EditingElement => IsEditing ? Content as FrameworkElement : null;
 		internal bool IsEditing { get; private set; }
 
@@ -30,16 +30,16 @@ namespace Files.App.Controls
 
 		internal void Bind(TableViewColumn column, ITableViewCellValueProvider dataItem)
 		{
-			EndEditBeforeRecycle();
+			EnsureEndEdit();
 
 			Column = column;
-			_dataItem = dataItem;
+			_data = dataItem;
 			IsEditing = false;
-			ResetEditGesture();
+			_lastClickTimestamp = default;
 			Content = column.GenerateElement(dataItem);
 		}
 
-		internal void EndEditBeforeRecycle()
+		internal void EnsureEndEdit()
 		{
 			if (!IsEditing)
 				return;
@@ -50,28 +50,27 @@ namespace Files.App.Controls
 
 		internal bool BeginEdit()
 		{
-			if (IsEditing || Column is null || _dataItem is null || !Column.CanEdit(_dataItem))
+			if (IsEditing || Column is null || _data is null || !Column.CanEdit(_data))
 				return false;
 
-			var editingElement = Column.GenerateEditingElement(_dataItem);
+			var editingElement = Column.GenerateEditingElement(_data);
 			Content = editingElement;
 			IsEditing = true;
-			ResetEditGesture();
+			_lastClickTimestamp = default;
 			Column.PrepareCellForEdit(this, editingElement);
 			return true;
 		}
 
 		internal bool CommitEdit()
 		{
-			if (!IsEditing || Column is null)
+			if (!IsEditing || Column is null || !Column.CommitCellEdit(this))
 				return false;
 
-			if (!Column.CommitCellEdit(this))
-				return false;
-
+			// End edit
 			IsEditing = false;
-			ResetEditGesture();
-			Content = _dataItem is null ? null : Column.GenerateElement(_dataItem);
+			_lastClickTimestamp = default;
+			Content = _data is null ? null : Column.GenerateElement(_data);
+
 			return true;
 		}
 
@@ -82,38 +81,33 @@ namespace Files.App.Controls
 
 			Column.CancelCellEdit(this);
 			IsEditing = false;
-			ResetEditGesture();
-			Content = _dataItem is null ? null : Column.GenerateElement(_dataItem);
+			_lastClickTimestamp = default;
+			Content = _data is null ? null : Column.GenerateElement(_data);
 		}
 
 		private void TableViewCell_PointerReleased(object sender, PointerRoutedEventArgs e)
 		{
 			if (Column is null ||
-				_dataItem is null ||
+				_data is null ||
 				IsEditing ||
-				!Column.CanEdit(_dataItem) ||
+				!Column.CanEdit(_data) ||
 				e.Pointer.PointerDeviceType is not PointerDeviceType.Mouse ||
 				e.GetCurrentPoint(this).Properties.PointerUpdateKind is not PointerUpdateKind.LeftButtonReleased)
-			{
 				return;
-			}
 
 			var now = DateTimeOffset.UtcNow;
 			if (_lastClickTimestamp != default &&
 				now - _lastClickTimestamp <= Column.EditDoubleClickInterval)
 			{
-				ResetEditGesture();
+				_lastClickTimestamp = default;
+
 				if (BeginEdit())
 					e.Handled = true;
+
 				return;
 			}
 
 			_lastClickTimestamp = now;
-		}
-
-		private void ResetEditGesture()
-		{
-			_lastClickTimestamp = default;
 		}
 	}
 }

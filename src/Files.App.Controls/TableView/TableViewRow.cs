@@ -94,7 +94,7 @@ namespace Files.App.Controls
 		private void EndEditingCells()
 		{
 			foreach (var cell in Children.OfType<TableViewCell>())
-				cell.EndEditBeforeRecycle();
+				cell.EnsureEndEdit();
 		}
 	}
 }
