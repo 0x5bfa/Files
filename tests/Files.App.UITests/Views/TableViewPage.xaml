@@ -51,13 +51,15 @@
 						Height="600"
 						VerticalAlignment="Top"
 						BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
-						BorderThickness="1">
-						<controls:TableView.Columns>
-							<controls:TableViewTextColumn Binding="Name" Header="Name" />
-							<controls:TableViewTextColumn Binding="DateUpdated" Header="Date updated" />
-							<controls:TableViewTextColumn Binding="Type" Header="Type" />
-							<controls:TableViewTextColumn Binding="Size" Header="Size" />
-						</controls:TableView.Columns>
+						BorderThickness="1"
+						ColumnsSource="{x:Bind Columns, Mode=OneWay}">
+
+						<controls:TableView.ColumnTemplate>
+							<DataTemplate x:DataType="data:TableViewColumnModel">
+								<controls:TableViewTextColumn Binding="{Binding PropertyName}" Header="{Binding Header}" />
+							</DataTemplate>
+						</controls:TableView.ColumnTemplate>
+
 						<controls:TableView.View>
 							<ListView
 								x:Name="Sample1ListView1"
@@ -71,6 +73,7 @@
 								</ListView.ItemTemplate>
 							</ListView>
 						</controls:TableView.View>
+
 					</controls:TableView>
 
 					<!--</controls:DragSelectionContainer>-->

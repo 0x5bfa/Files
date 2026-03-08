@@ -1,4 +1,4 @@
-﻿// Copyright (c) Files Community
+// Copyright (c) Files Community
 // Licensed under the MIT License.
 
 using System.Collections;
@@ -31,12 +31,12 @@ namespace Files.App.Controls
 		private const double AutoScrollActivationMargin = 40;
 		private const double AutoScrollMaxStep = 18;
 
+		public event EventHandler<ReorderedItemsEventArgs>? Reordered;
+
 		public ReorderableItemsControl()
 		{
 			DefaultStyleKey = typeof(ReorderableItemsControl);
 		}
-
-		public event EventHandler<ReorderedItemsEventArgs>? Reordered;
 
 		protected override void PrepareContainerForItemOverride(DependencyObject element, object item)
 		{

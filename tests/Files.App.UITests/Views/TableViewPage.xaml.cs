@@ -37,6 +37,14 @@ namespace Files.App.UITests.Views
 			new() { Name = "Meeting Recording.m4a", DateUpdated = "Feb 25, 2026 5:11 PM", Type = "M4A Audio File", Size = "48.6 MB" },
 		];
 
+		public ObservableCollection<TableViewColumnModel> Columns { get; } =
+		[
+			new("Name" , nameof(TableViewItemModel.Name)),
+			new("Date updated", nameof(TableViewItemModel.DateUpdated)),
+			new("Type" , nameof(TableViewItemModel.Type)),
+			new("Size" , nameof(TableViewItemModel.Size)),
+		];
+
 		public ObservableCollection<TableViewItemModel> Items { get; set; }
 
 		public TableViewPage()
@@ -54,13 +62,10 @@ namespace Files.App.UITests.Views
 			{
 				Items.Clear();
 
-				// TODO:
-				//   This invokes 4000 collection changed events and thus cause a hang,
-				//   we should replace this with AddRange (which does not exist out of box) in the future
 				foreach (var item in list)
 					Items.Add(item);
 
-				Items = new(list);
+				Items = [.. list];
 			});
 
 		}

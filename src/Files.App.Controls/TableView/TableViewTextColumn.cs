@@ -67,7 +67,7 @@ namespace Files.App.Controls
 			if (cell.DataItem is not ITableViewCellValueEditor cellEditor ||
 				string.IsNullOrEmpty(Binding))
 			{
-				DetachEditingTextBox(textBox);
+				UnhookTextBoxEvents(textBox);
 				return true;
 			}
 
@@ -81,13 +81,13 @@ namespace Files.App.Controls
 				return false;
 			}
 
-			DetachEditingTextBox(textBox);
+			UnhookTextBoxEvents(textBox);
 			return true;
 		}
 
 		protected internal override void CancelCellEdit(TableViewCell cell)
 		{
-			DetachEditingTextBox(cell.EditingElement as TextBox);
+			UnhookTextBoxEvents(cell.EditingElement as TextBox);
 		}
 
 		private void EditingTextBox_Loaded(object sender, RoutedEventArgs e)
@@ -135,24 +135,21 @@ namespace Files.App.Controls
 		{
 			if (sender is not TextBox textBox ||
 				textBox.FindAscendant<TableViewCell>() is not { } cell)
-			{
 				return;
-			}
 
-			switch (e.Key)
+			if (e.Key is VirtualKey.Enter)
 			{
-				case VirtualKey.Enter:
-					cell.CommitEdit();
-					e.Handled = true;
-					break;
-				case VirtualKey.Escape:
-					cell.CancelEdit();
-					e.Handled = true;
-					break;
+				cell.CommitEdit();
+				e.Handled = true;
+			}
+			else
+			{
+				cell.CancelEdit();
+				e.Handled = true;
 			}
 		}
 
-		private void DetachEditingTextBox(TextBox? textBox)
+		private void UnhookTextBoxEvents(TextBox? textBox)
 		{
 			if (textBox is null)
 				return;
