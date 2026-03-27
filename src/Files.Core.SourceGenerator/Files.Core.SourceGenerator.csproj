@@ -11,6 +11,7 @@
         <Configurations>Debug;Release</Configurations>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <IsRoslynComponent>true</IsRoslynComponent>
+        <EmitCompilerGeneratedFiles>true</EmitCompilerGeneratedFiles>
     </PropertyGroup>
 
     <ItemGroup>
