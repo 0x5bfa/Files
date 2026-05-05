@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.Controls;
 using Files.App.UITests.Views;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -52,6 +53,9 @@ namespace Files.App.UITests
 					nameof(SidebarViewPage) => typeof(SidebarViewPage),
 					nameof(OmnibarPage) => typeof(OmnibarPage),
 					nameof(BreadcrumbBarPage) => typeof(BreadcrumbBarPage),
+					nameof(ReorderableItemsControlPage) => typeof(ReorderableItemsControlPage),
+					nameof(ResizablePanelPage) => typeof(ResizablePanelPage),
+					nameof(ResizeVisualPage) => typeof(ResizeVisualPage),
 					_ => throw new InvalidOperationException("There's no applicable page associated with the given key."),
 				});
 
