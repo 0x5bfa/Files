@@ -61,6 +61,7 @@
 
 		<!--#region SidebarView-->
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/Sidebar/SidebarStyles.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/SidebarView/SidebarView.xaml" />
 		<!--#endregion-->
 
 		<!--#region Omnibar-->
@@ -73,6 +74,14 @@
 
 		<!--#region Breadcrumb-->
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/BreadcrumbBar/BreadcrumbBar.xaml" />
+		<!--#endregion-->
+
+		<!--#region TableView-->
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ReorderableItemsControl/ReorderableItemsControl.xaml" />
+		<!--#endregion-->
+
+		<!--#region ResizeVisual-->
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ResizeVisual/ResizeVisual.xaml" />
 		<!--#endregion-->
 
 	</ResourceDictionary.MergedDictionaries>

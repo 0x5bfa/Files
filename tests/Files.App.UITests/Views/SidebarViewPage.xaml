@@ -4,6 +4,110 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="using:Files.App.Controls"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+	xmlns:data="using:Files.App.UITests.Data"
 	xmlns:local="using:Files.App.UITests.Views"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-	mc:Ignorable="d" />
+	mc:Ignorable="d">
+
+	<Page.Resources>
+		<ResourceDictionary>
+
+			<data:SidebarViewSampleMenuItemTemplateSelector
+				x:Key="SidebarViewSampleMenuItemTemplateSelector"
+				HeaderItemTemplate="{StaticResource SidebarViewHeaderItemTemplate}"
+				ItemTemplate="{StaticResource SidebarViewItemTemplate}"
+				SeparatorItemTemplate="{StaticResource SidebarViewSeparatorItemTemplate}" />
+
+			<DataTemplate x:Key="SidebarViewItemTemplate" x:DataType="local:SidebarViewSampleItem">
+				<controls:SidebarViewItem Children="{x:Bind Children}" Text="{x:Bind Text}">
+					<controls:SidebarViewItem.Icon>
+						<FontIcon
+							Width="16"
+							Height="16"
+							FontSize="16"
+							Glyph="{x:Bind Glyph}" />
+					</controls:SidebarViewItem.Icon>
+				</controls:SidebarViewItem>
+			</DataTemplate>
+
+			<DataTemplate x:Key="SidebarViewHeaderItemTemplate" x:DataType="local:SidebarViewSampleHeaderItem">
+				<controls:SidebarViewItem Children="{x:Bind Children}" Text="{x:Bind Text}">
+					<controls:SidebarViewItem.Icon>
+						<FontIcon
+							Width="16"
+							Height="16"
+							FontSize="16"
+							Glyph="{x:Bind Glyph}" />
+					</controls:SidebarViewItem.Icon>
+				</controls:SidebarViewItem>
+			</DataTemplate>
+
+			<DataTemplate x:Key="SidebarViewSeparatorItemTemplate" x:DataType="local:SidebarViewSampleSeparatorItem">
+				<controls:SidebarViewSeparatorItem />
+			</DataTemplate>
+
+		</ResourceDictionary>
+	</Page.Resources>
+
+	<StackPanel Spacing="24">
+
+		<controls:SamplePanel Header="Default usage">
+			<controls:SamplePanel.MainContent>
+				<Grid
+					Height="360"
+					BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+					BorderThickness="1">
+					<controls:SidebarView2
+						x:Name="SampleSidebarView"
+						CompactPaneLength="56"
+						DisplayMode="Compact"
+						FooterMenuItemTemplate="{StaticResource SidebarViewItemTemplate}"
+						FooterMenuItemsSource="{x:Bind FooterItems}"
+						IsPaneOpen="True"
+						MenuItemTemplateSelector="{StaticResource SidebarViewSampleMenuItemTemplateSelector}"
+						MenuItemsSource="{x:Bind SampleItems}"
+						OpenPaneLength="240">
+						<controls:SidebarView2.PaneHeader>
+							<TextBox />
+						</controls:SidebarView2.PaneHeader>
+
+						<Grid
+							Padding="24"
+							Background="{StaticResource CardBackgroundFillColorDefault}"
+							BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+							BorderThickness="1,1,0,0"
+							CornerRadius="8,0,0,0">
+							<TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="SidebarView2 content area" />
+						</Grid>
+					</controls:SidebarView2>
+				</Grid>
+			</controls:SamplePanel.MainContent>
+			<controls:SamplePanel.SideContent>
+				<StackPanel Spacing="8">
+
+					<ToggleSwitch
+						x:Name="PaneToggleSwitch"
+						Header="IsPaneOpen"
+						IsOn="{x:Bind SampleSidebarView.IsPaneOpen, Mode=TwoWay}" />
+
+					<ComboBox
+						x:Name="DisplayModeComboBox"
+						Header="Display Mode"
+						ItemsSource="{x:Bind DisplayModes}"
+						SelectedValuePath="Key"
+						SelectionChanged="DisplayModeComboBox_SelectionChanged">
+						<ComboBox.ItemTemplate>
+							<DataTemplate>
+								<TextBlock Text="{Binding Value}" />
+							</DataTemplate>
+						</ComboBox.ItemTemplate>
+					</ComboBox>
+
+				</StackPanel>
+			</controls:SamplePanel.SideContent>
+
+		</controls:SamplePanel>
+
+	</StackPanel>
+
+</Page>
