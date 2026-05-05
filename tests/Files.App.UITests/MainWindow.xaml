@@ -94,6 +94,9 @@
 						<NavigationViewItem Content="StorageRing/StorageBar" Tag="StorageControlsPage" />
 						<NavigationViewItem Content="Omnibar" Tag="OmnibarPage" />
 						<NavigationViewItem Content="BreadcrumbBar" Tag="BreadcrumbBarPage" />
+						<NavigationViewItem Content="ReorderableItemsControl" Tag="ReorderableItemsControlPage" />
+						<NavigationViewItem Content="ResizablePanel" Tag="ResizablePanelPage" />
+						<NavigationViewItem Content="ResizeVisual" Tag="ResizeVisualPage" />
 					</NavigationViewItem.MenuItems>
 				</NavigationViewItem>
 			</NavigationView.MenuItems>
