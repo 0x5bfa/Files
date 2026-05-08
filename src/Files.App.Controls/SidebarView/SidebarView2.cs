@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Microsoft.UI.Input;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
@@ -37,10 +38,17 @@ public partial class SidebarView2 : Control
 	private ItemsControl? _footerMenuItemsHost;
 
 	public event EventHandler<SidebarView2ItemInvokedEventArgs>? ItemInvoked;
+	public SidebarView2TemplateSettings TemplateSettings { get; } = new();
 
 	public SidebarView2()
 	{
 		DefaultStyleKey = typeof(SidebarView2);
+		UpdateTemplateSettings();
+	}
+
+	protected override AutomationPeer OnCreateAutomationPeer()
+	{
+		return new SidebarView2AutomationPeer(this);
 	}
 
 	protected override void OnApplyTemplate()
@@ -244,6 +252,15 @@ public partial class SidebarView2 : Control
 			DisplayMode = SidebarDisplayMode.Expanded;
 			OpenPaneLength = newPaneWidth;
 		}
+	}
+
+	private void UpdateTemplateSettings()
+	{
+		if (TemplateSettings is null)
+			return;
+
+		TemplateSettings.NegativeOpenPaneLength = -OpenPaneLength;
+		TemplateSettings.NegativeCompactPaneLength = -CompactPaneLength;
 	}
 
 	private void UpdateOpenPaneLengthColumn()

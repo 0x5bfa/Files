@@ -4,6 +4,7 @@
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Automation.Peers;
 using Windows.System;
 
 namespace Files.App.Controls;
@@ -27,6 +28,11 @@ public partial class SidebarViewItem : Control
 	public SidebarViewItem()
 	{
 		DefaultStyleKey = typeof(SidebarViewItem);
+	}
+
+	protected override AutomationPeer OnCreateAutomationPeer()
+	{
+		return new SidebarViewItemAutomationPeer(this);
 	}
 
 	protected override void OnApplyTemplate()
@@ -112,6 +118,11 @@ public partial class SidebarViewItem : Control
 		}
 
 		Owner?.RaiseItemInvoked(this);
+	}
+
+	internal void InvokeFromAutomationPeer()
+	{
+		Invoke();
 	}
 
 	internal void UpdateExpansionState()

@@ -20,14 +20,8 @@ public partial class SidebarView2
 	[GeneratedDependencyProperty(DefaultValue = 240d)]
 	public partial double OpenPaneLength { get; set; }
 
-	[GeneratedDependencyProperty(DefaultValue = -240d)]
-	public partial double NegativeOpenPaneLength { get; set; }
-
 	[GeneratedDependencyProperty(DefaultValue = 56d)]
 	public partial double CompactPaneLength { get; set; }
-
-	[GeneratedDependencyProperty(DefaultValue = -56d)]
-	public partial double NegativeCompactPaneLength { get; set; }
 
 	[GeneratedDependencyProperty(DefaultValue = SidebarDisplayMode.Expanded)]
 	public partial SidebarDisplayMode DisplayMode { get; set; }
@@ -100,7 +94,7 @@ public partial class SidebarView2
 
 	partial void OnOpenPaneLengthChanged(double newValue)
 	{
-		NegativeOpenPaneLength = -newValue;
+		UpdateTemplateSettings();
 		UpdateOpenPaneLengthColumn();
 	}
 
@@ -121,7 +115,7 @@ public partial class SidebarView2
 
 	partial void OnCompactPaneLengthChanged(double newValue)
 	{
-		NegativeCompactPaneLength = -newValue;
+		UpdateTemplateSettings();
 		UpdateDisplayMode();
 	}
 }
