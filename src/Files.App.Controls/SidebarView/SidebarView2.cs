@@ -191,7 +191,7 @@ public partial class SidebarView2 : Control
 				item.ChildItemTemplateSelector = MenuItemTemplateSelector;
 
 				item.IsSelected = Equals(item, SelectedItem);
-				item.IsSelected |= !item.IsExpanded && HasSelectedDescendant(item);
+				item.IsSelected |= (DisplayMode == SidebarDisplayMode.Compact || !item.IsExpanded) && HasSelectedDescendant(item);
 				item.UpdateExpansionState();
 			}
 		}
@@ -238,6 +238,7 @@ public partial class SidebarView2 : Control
 				break;
 		}
 
+		UpdatePreparedMenuItems();
 		UpdateResizerAvailability();
 	}
 

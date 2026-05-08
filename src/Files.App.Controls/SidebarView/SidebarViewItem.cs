@@ -113,7 +113,9 @@ public partial class SidebarViewItem : Control
 	{
 		if (Children is IList { Count: > 0 })
 		{
-			IsExpanded = !IsExpanded;
+			if (Owner?.DisplayMode != SidebarDisplayMode.Compact)
+				IsExpanded = !IsExpanded;
+
 			return;
 		}
 
@@ -128,7 +130,20 @@ public partial class SidebarViewItem : Control
 	internal void UpdateExpansionState()
 	{
 		var hasChildren = Children is IList { Count: > 0 };
-		VisualStateManager.GoToState(this, hasChildren ? IsExpanded ? "Expanded" : "Collapsed" : "NoChildren", true);
+		if (!hasChildren)
+		{
+			VisualStateManager.GoToState(this, "NoChildren", true);
+			return;
+		}
+
+		if (Owner?.DisplayMode == SidebarDisplayMode.Compact)
+		{
+			VisualStateManager.GoToState(this, "NoExpansion", true);
+			VisualStateManager.GoToState(this, "CollapsedIconNormal", true);
+			return;
+		}
+
+		VisualStateManager.GoToState(this, IsExpanded ? "Expanded" : "Collapsed", true);
 		VisualStateManager.GoToState(this, IsExpanded ? "ExpandedIconNormal" : "CollapsedIconNormal", true);
 	}
 

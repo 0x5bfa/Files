@@ -154,6 +154,12 @@
 							</VisualStateGroup>
 
 							<VisualStateGroup x:Name="ExpansionStates">
+								<VisualState x:Name="NoExpansion">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.Visibility" Value="Collapsed" />
+										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Collapsed" />
+									</VisualState.Setters>
+								</VisualState>
 								<VisualState x:Name="NoChildren">
 									<VisualState.Setters>
 										<Setter Target="ExpandCollapseChevron.Visibility" Value="Collapsed" />
@@ -473,6 +479,12 @@
 							</VisualStateGroup>
 
 							<VisualStateGroup x:Name="ExpansionStates">
+								<VisualState x:Name="NoExpansion">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.Visibility" Value="Collapsed" />
+										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Collapsed" />
+									</VisualState.Setters>
+								</VisualState>
 								<VisualState x:Name="NoChildren">
 									<VisualState.Setters>
 										<Setter Target="ExpandCollapseChevron.Visibility" Value="Collapsed" />
