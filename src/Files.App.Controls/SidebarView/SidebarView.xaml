@@ -7,6 +7,7 @@
 	<Style BasedOn="{StaticResource DefaultSidebarView2Style}" TargetType="local:SidebarView2" />
 
 	<Thickness x:Key="SidebarViewItemsControlMargin">4,8,4,8</Thickness>
+	<x:Double x:Key="SidebarViewItemsControlSpacing">4</x:Double>
 
 	<Style x:Key="DefaultSidebarView2Style" TargetType="local:SidebarView2">
 		<Setter Property="Background" Value="{ThemeResource ControlFillColorTransparentBrush}" />
@@ -50,7 +51,6 @@
 							HorizontalAlignment="Stretch"
 							VerticalAlignment="Stretch"
 							Canvas.ZIndex="10"
-							Translation="0,0,32"
 							XYFocusKeyboardNavigation="Enabled">
 							<Grid.RowDefinitions>
 								<RowDefinition Height="Auto" />
@@ -99,6 +99,11 @@
 											<Setter Property="HorizontalAlignment" Value="Stretch" />
 										</Style>
 									</ItemsControl.ItemContainerStyle>
+									<ItemsControl.ItemsPanel>
+										<ItemsPanelTemplate>
+											<StackPanel Orientation="Vertical" Spacing="{StaticResource SidebarViewItemsControlSpacing}" />
+										</ItemsPanelTemplate>
+									</ItemsControl.ItemsPanel>
 								</ItemsControl>
 							</ScrollViewer>
 
@@ -117,11 +122,11 @@
 										<Setter Property="HorizontalAlignment" Value="Stretch" />
 									</Style>
 								</ItemsControl.ItemContainerStyle>
-								<!--<ItemsControl.ItemsPanel>
+								<ItemsControl.ItemsPanel>
 									<ItemsPanelTemplate>
-										<StackPanel Orientation="Vertical" Spacing="2" />
+										<StackPanel Orientation="Vertical" Spacing="{StaticResource SidebarViewItemsControlSpacing}" />
 									</ItemsPanelTemplate>
-								</ItemsControl.ItemsPanel>-->
+								</ItemsControl.ItemsPanel>
 							</ItemsControl>
 
 							<ContentPresenter

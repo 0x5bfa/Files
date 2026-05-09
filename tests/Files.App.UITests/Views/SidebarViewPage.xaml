@@ -31,15 +31,15 @@
 			</DataTemplate>
 
 			<DataTemplate x:Key="SidebarViewHeaderItemTemplate" x:DataType="local:SidebarViewSampleHeaderItem">
-				<controls:SidebarViewHeaderItem Children="{x:Bind Children}" Text="{x:Bind Text}">
-					<controls:SidebarViewHeaderItem.Icon>
+				<controls:SidebarViewItem Children="{x:Bind Children}" Text="{x:Bind Text}">
+					<controls:SidebarViewItem.Icon>
 						<FontIcon
 							Width="16"
 							Height="16"
 							FontSize="16"
 							Glyph="{x:Bind Glyph}" />
-					</controls:SidebarViewHeaderItem.Icon>
-				</controls:SidebarViewHeaderItem>
+					</controls:SidebarViewItem.Icon>
+				</controls:SidebarViewItem>
 			</DataTemplate>
 
 			<DataTemplate x:Key="SidebarViewSeparatorItemTemplate" x:DataType="local:SidebarViewSampleSeparatorItem">
