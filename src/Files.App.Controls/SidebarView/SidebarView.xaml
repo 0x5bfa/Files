@@ -172,21 +172,6 @@
 							ContentTemplate="{TemplateBinding ContentTemplate}"
 							TabFocusNavigation="Local" />
 
-						<Button
-							x:Name="PART_PaneToggleButton"
-							Width="40"
-							Height="40"
-							Margin="8"
-							HorizontalAlignment="Left"
-							VerticalAlignment="Top"
-							AutomationProperties.Name="Toggle pane"
-							Background="{ThemeResource SubtleFillColorTransparentBrush}"
-							BorderBrush="Transparent"
-							Canvas.ZIndex="200"
-							Visibility="Collapsed">
-							<FontIcon FontSize="16" Glyph="&#xE700;" />
-						</Button>
-
 						<VisualStateManager.VisualStateGroups>
 							<VisualStateGroup x:Name="DisplayModes">
 								<VisualState x:Name="Expanded" />
