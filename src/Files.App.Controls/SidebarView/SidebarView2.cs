@@ -26,7 +26,6 @@ public partial class SidebarView2 : Control
 	private const string TemplatePartNamePaneLightDismissLayer = "PART_PaneLightDismissLayer";
 	private const string TemplatePartNameMenuItemsHost = "PART_MenuItemsHost";
 	private const string TemplatePartNameFooterMenuItemsHost = "PART_FooterMenuItemsHost";
-	private const string TemplatePartNamePaneToggleButton = "PART_PaneToggleButton";
 
 	private bool _draggingSidebarResizer;
 	private double _preManipulationSidebarWidth;
@@ -37,7 +36,6 @@ public partial class SidebarView2 : Control
 	private Grid? _paneLightDismissLayer;
 	private ItemsControl? _menuItemsHost;
 	private ItemsControl? _footerMenuItemsHost;
-	private Button? _paneToggleButton;
 	private readonly SidebarViewItemFactory _itemFactory;
 
 	public event EventHandler<SidebarView2ItemInvokedEventArgs>? ItemInvoked;
@@ -85,9 +83,6 @@ public partial class SidebarView2 : Control
 		if (_footerMenuItemsHost is not null)
 			_footerMenuItemsHost.Loaded -= ItemsHost_Loaded;
 
-		if (_paneToggleButton is not null)
-			_paneToggleButton.Click -= PaneToggleButton_Click;
-
 		base.OnApplyTemplate();
 
 		_paneColumnDefinition = GetTemplateChild(TemplatePartNamePaneColumnDefinition) as ColumnDefinition;
@@ -97,7 +92,6 @@ public partial class SidebarView2 : Control
 		_paneLightDismissLayer = GetTemplateChild(TemplatePartNamePaneLightDismissLayer) as Grid;
 		_menuItemsHost = GetTemplateChild(TemplatePartNameMenuItemsHost) as ItemsControl;
 		_footerMenuItemsHost = GetTemplateChild(TemplatePartNameFooterMenuItemsHost) as ItemsControl;
-		_paneToggleButton = GetTemplateChild(TemplatePartNamePaneToggleButton) as Button;
 
 		if (_sidebarResizer is not null)
 		{
@@ -124,9 +118,6 @@ public partial class SidebarView2 : Control
 
 		if (_footerMenuItemsHost is not null)
 			_footerMenuItemsHost.Loaded += ItemsHost_Loaded;
-
-		if (_paneToggleButton is not null)
-			_paneToggleButton.Click += PaneToggleButton_Click;
 
 		UpdatePreparedMenuItems();
 		UpdateDisplayMode();
@@ -396,11 +387,6 @@ public partial class SidebarView2 : Control
 	{
 		IsPaneOpen = false;
 		e.Handled = true;
-	}
-
-	private void PaneToggleButton_Click(object sender, RoutedEventArgs e)
-	{
-		IsPaneOpen = !IsPaneOpen;
 	}
 
 	private void SidebarResizer_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
