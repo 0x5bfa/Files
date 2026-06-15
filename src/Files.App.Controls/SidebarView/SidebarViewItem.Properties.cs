@@ -33,6 +33,7 @@ public partial class SidebarViewItem
 
 	partial void OnChildrenChanged(object? newValue)
 	{
+		UpdateSelectionFromOwner();
 		UpdateExpansionState();
 		PrepareChildItems();
 	}
@@ -45,6 +46,8 @@ public partial class SidebarViewItem
 	partial void OnIsExpandedChanged(bool newValue)
 	{
 		UpdateExpansionState();
+		UpdateSelectionFromOwner();
+		PrepareChildItems();
 		Owner?.OnItemExpandedChanged(this);
 	}
 }

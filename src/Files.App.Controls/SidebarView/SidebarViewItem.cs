@@ -6,6 +6,8 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Automation.Peers;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using CommunityToolkit.WinUI;
+using System.Collections;
 using Windows.System;
 
 namespace Files.App.Controls;
@@ -34,16 +36,24 @@ public partial class SidebarViewItem : Control
 	public SidebarViewItem()
 	{
 		DefaultStyleKey = typeof(SidebarViewItem);
+		Loaded += SidebarViewItem_Loaded;
 	}
 
 	internal object? ItemValue
 	{
 		get
 		{
-			var localDataContext = ReadLocalValue(DataContextProperty);
-			return localDataContext == DependencyProperty.UnsetValue
-				? this
-				: DataContext ?? this;
+			if (VisualTreeHelper.GetParent(this) is ContentPresenter { Content: { } content } &&
+				!ReferenceEquals(content, this) &&
+				(Owner is null || Owner.ContainsItemValue(this, content)))
+			{
+				return content;
+			}
+
+			if (Owner is not null && DataContext is { } dataContext && Owner.ContainsItemValue(this, dataContext))
+				return dataContext;
+
+			return this;
 		}
 	}
 
@@ -52,6 +62,16 @@ public partial class SidebarViewItem : Control
 	protected override AutomationPeer OnCreateAutomationPeer()
 	{
 		return new SidebarViewItemAutomationPeer(this);
+	}
+
+	private void SidebarViewItem_Loaded(object sender, RoutedEventArgs e)
+	{
+		var parentItem = this.FindAscendant<SidebarViewItem>();
+		var owner = parentItem?.Owner ?? this.FindAscendant<SidebarView2>();
+		if (owner is null)
+			return;
+
+		owner.ItemFactory.Prepare(this, parentItem);
 	}
 
 	protected override void OnApplyTemplate()
@@ -88,7 +108,7 @@ public partial class SidebarViewItem : Control
 
 	private void ChildrenItemsControl_Loaded(object sender, RoutedEventArgs e)
 	{
-		PrepareChildItems();
+		DispatcherQueue.TryEnqueue(PrepareChildItems);
 	}
 
 	private void AttachMoveAnimations()
@@ -226,11 +246,16 @@ public partial class SidebarViewItem : Control
 		if (Owner is null)
 			return;
 
-		var isSelected = IsSelectedItem(Owner.SelectedItem);
-		isSelected |= (Owner.DisplayMode == SidebarDisplayMode.Compact || !IsExpanded) && Owner.HasSelectedDescendant(this);
+		var selectedItem = Owner.SelectedItem;
+		var isSelectedItem = IsSelectedItem(selectedItem);
+		var isSelected = isSelectedItem;
+		isSelected |= (Owner.DisplayMode == SidebarDisplayMode.Compact || !IsExpanded) && HasSelectedDescendant(selectedItem);
 
 		if (IsSelected != isSelected)
 			IsSelected = isSelected;
+
+		if (isSelectedItem)
+			Owner.UpdateSelectedItemContainer(this);
 	}
 
 	internal bool HasSelectedDescendant(object? selectedItem)
@@ -243,6 +268,9 @@ public partial class SidebarViewItem : Control
 			if (ReferenceEquals(item.ParentItem, this))
 				return true;
 		}
+
+		if (ContainsDescendantItemValue(selectedItem, Children))
+			return true;
 
 		foreach (var childItem in EnumerateDirectChildItems())
 		{
@@ -257,6 +285,32 @@ public partial class SidebarViewItem : Control
 	{
 		return Equals(this, selectedItem) ||
 			Equals(ItemValue, selectedItem);
+	}
+
+	private static bool ContainsDescendantItemValue(object selectedItem, object? children)
+	{
+		if (children is not IEnumerable childItems || children is string)
+			return false;
+
+		foreach (var childItem in childItems)
+		{
+			if (Equals(childItem, selectedItem))
+				return true;
+
+			if (childItem is SidebarViewItem sidebarViewItem &&
+				(sidebarViewItem.IsSelectedItem(selectedItem) || sidebarViewItem.HasSelectedDescendant(selectedItem)))
+			{
+				return true;
+			}
+
+			if (childItem is ISidebarItemModel sidebarItemModel &&
+				ContainsDescendantItemValue(selectedItem, sidebarItemModel.Children))
+			{
+				return true;
+			}
+		}
+
+		return false;
 	}
 
 	private static IEnumerable<SidebarViewItem> EnumerateDirectSidebarViewItems(DependencyObject? parent)

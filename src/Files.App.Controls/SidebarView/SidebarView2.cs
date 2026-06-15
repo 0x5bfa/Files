@@ -43,6 +43,7 @@ public partial class SidebarView2 : Control
 	public event EventHandler<SidebarView2ItemInvokedEventArgs>? ItemInvoked;
 	public SidebarView2TemplateSettings TemplateSettings { get; } = new();
 	internal SidebarViewItemFactory ItemFactory => _itemFactory;
+	internal SidebarViewItem? SelectedItemContainer { get; private set; }
 
 	public SidebarView2()
 	{
@@ -134,9 +135,10 @@ public partial class SidebarView2 : Control
 
 	internal void RaiseItemInvoked(SidebarViewItem item)
 	{
-		SelectedItem = item;
+		SelectedItem = item.ItemValue;
+		SelectedItemContainer = item;
 		UpdatePreparedMenuItems();
-		ItemInvoked?.Invoke(this, new(item));
+		ItemInvoked?.Invoke(this, new(item.ItemValue));
 	}
 
 	internal void OnItemExpandedChanged(SidebarViewItem item)
@@ -152,6 +154,21 @@ public partial class SidebarView2 : Control
 	internal bool HasSelectedDescendant(SidebarViewItem item)
 	{
 		return item.HasSelectedDescendant(SelectedItem);
+	}
+
+	internal void UpdateSelectedItemContainer(SidebarViewItem item)
+	{
+		if (Equals(SelectedItem, item.ItemValue) || ReferenceEquals(SelectedItem, item))
+			SelectedItemContainer = item;
+	}
+
+	internal bool ContainsItemValue(SidebarViewItem item, object itemValue)
+	{
+		if (item.ParentItem?.Children is IEnumerable parentItems && ContainsItemValue(parentItems, itemValue))
+			return true;
+
+		return ContainsItemValue(MenuItemsSource, itemValue) ||
+			ContainsItemValue(FooterMenuItemsSource, itemValue);
 	}
 
 	internal static void CreateAndAttachMoveAnimation(Microsoft.UI.Composition.Visual visual)
@@ -183,6 +200,20 @@ public partial class SidebarView2 : Control
 	{
 		foreach (var item in EnumerateDirectSidebarViewItems(host))
 			_itemFactory.Prepare(item);
+	}
+
+	private static bool ContainsItemValue(object? itemsSource, object itemValue)
+	{
+		if (itemsSource is not IEnumerable items || itemsSource is string)
+			return false;
+
+		foreach (var item in items)
+		{
+			if (Equals(item, itemValue))
+				return true;
+		}
+
+		return false;
 	}
 
 	private static IEnumerable<SidebarViewItem> EnumerateDirectSidebarViewItems(DependencyObject? parent)
