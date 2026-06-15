@@ -25,13 +25,27 @@ public partial class SidebarViewItem : Control
 	private const string VisualStateNamePointerOverSelected = "PointerOverSelected";
 	private const string VisualStateNamePressedUnselected = "PressedUnselected";
 	private const string VisualStateNamePressedSelected = "PressedSelected";
+	private const string VisualStateNameChevronHidden = "ChevronHidden";
+	private const string VisualStateNameChevronVisibleOpen = "ChevronVisibleOpen";
+	private const string VisualStateNameChevronVisibleClosed = "ChevronVisibleClosed";
+	private const string VisualStateNameNormalChevronHidden = "NormalChevronHidden";
+	private const string VisualStateNameNormalChevronVisibleOpen = "NormalChevronVisibleOpen";
+	private const string VisualStateNameNormalChevronVisibleClosed = "NormalChevronVisibleClosed";
+	private const string VisualStateNamePointerOverChevronHidden = "PointerOverChevronHidden";
+	private const string VisualStateNamePointerOverChevronVisibleOpen = "PointerOverChevronVisibleOpen";
+	private const string VisualStateNamePointerOverChevronVisibleClosed = "PointerOverChevronVisibleClosed";
+	private const string VisualStateNamePressedChevronHidden = "PressedChevronHidden";
+	private const string VisualStateNamePressedChevronVisibleOpen = "PressedChevronVisibleOpen";
+	private const string VisualStateNamePressedChevronVisibleClosed = "PressedChevronVisibleClosed";
 
 	private Grid? _rootGrid;
 	private ItemsControl? _childrenItemsControl;
 	private Panel? _childrenItemsControlParent;
 	private ContentPresenter? _childrenOverflowFlyoutContentPresenter;
+	private FlyoutBase? _childrenFlyout;
 	private bool _isPointerOver;
 	private bool _isPressed;
+	private bool _suppressChildrenFlyoutClosing;
 
 	public SidebarViewItem()
 	{
@@ -83,6 +97,8 @@ public partial class SidebarViewItem : Control
 		_rootGrid?.Tapped -= RootBorder_Tapped;
 		if (_childrenItemsControl is not null)
 			_childrenItemsControl.Loaded -= ChildrenItemsControl_Loaded;
+		if (_childrenFlyout is not null)
+			_childrenFlyout.Closing -= ChildrenFlyout_Closing;
 
 		base.OnApplyTemplate();
 
@@ -90,6 +106,7 @@ public partial class SidebarViewItem : Control
 		_childrenItemsControl = GetTemplateChild(TemplatePartNameChildrenItemsControl) as ItemsControl;
 		_childrenItemsControlParent = VisualTreeHelper.GetParent(_childrenItemsControl) as Panel;
 		_childrenOverflowFlyoutContentPresenter = GetTemplateChild(TemplatePartNameChildrenOverflowFlyoutContentPresenter) as ContentPresenter;
+		_childrenFlyout = _rootGrid is null ? null : FlyoutBase.GetAttachedFlyout(_rootGrid);
 
 		_rootGrid?.PointerEntered += RootBorder_PointerEntered;
 		_rootGrid?.PointerExited += RootBorder_PointerExited;
@@ -98,6 +115,8 @@ public partial class SidebarViewItem : Control
 		_rootGrid?.Tapped += RootBorder_Tapped;
 		if (_childrenItemsControl is not null)
 			_childrenItemsControl.Loaded += ChildrenItemsControl_Loaded;
+		if (_childrenFlyout is not null)
+			_childrenFlyout.Closing += ChildrenFlyout_Closing;
 
 		ApplyOwnerTemplates();
 		UpdateStateFromOwner();
@@ -109,6 +128,21 @@ public partial class SidebarViewItem : Control
 	private void ChildrenItemsControl_Loaded(object sender, RoutedEventArgs e)
 	{
 		DispatcherQueue.TryEnqueue(PrepareChildItems);
+	}
+
+	private void ChildrenFlyout_Closing(FlyoutBase sender, FlyoutBaseClosingEventArgs args)
+	{
+		if (_suppressChildrenFlyoutClosing)
+			return;
+
+		if (!ShouldChildrenShowInFlyout())
+			return;
+
+		if (IsExpanded)
+			IsExpanded = false;
+
+		if (_childrenItemsControl is not null)
+			_childrenItemsControl.Visibility = Visibility.Collapsed;
 	}
 
 	private void AttachMoveAnimations()
@@ -132,6 +166,7 @@ public partial class SidebarViewItem : Control
 	{
 		_isPointerOver = true;
 		UpdateBackgroundState();
+		UpdateChevronState();
 	}
 
 	private void RootBorder_PointerExited(object sender, PointerRoutedEventArgs e)
@@ -139,18 +174,21 @@ public partial class SidebarViewItem : Control
 		_isPointerOver = false;
 		_isPressed = false;
 		UpdateBackgroundState();
+		UpdateChevronState();
 	}
 
 	private void RootBorder_PointerCanceled(object sender, PointerRoutedEventArgs e)
 	{
 		_isPressed = false;
 		UpdateBackgroundState();
+		UpdateChevronState();
 	}
 
 	private void RootBorder_PointerPressed(object sender, PointerRoutedEventArgs e)
 	{
 		_isPressed = true;
 		UpdateBackgroundState();
+		UpdateChevronState();
 	}
 
 	private void RootBorder_Tapped(object sender, TappedRoutedEventArgs e)
@@ -158,20 +196,22 @@ public partial class SidebarViewItem : Control
 		Invoke();
 		_isPressed = false;
 		UpdateBackgroundState();
+		UpdateChevronState();
 		e.Handled = true;
 	}
 
 	protected virtual void Invoke()
 	{
-		if (Children is IList { Count: > 0 }) // Has children
+		if (HasChildren())
 		{
-			if (Owner?.DisplayMode != SidebarDisplayMode.Compact)
+			if (ShouldChildrenShowInFlyout())
 			{
-				IsExpanded = !IsExpanded;
+				IsExpanded = true;
+				SetFlyoutOpen(true);
 			}
 			else
 			{
-				SetFlyoutOpen(true);
+				IsExpanded = !IsExpanded;
 			}
 
 			return;
@@ -187,27 +227,30 @@ public partial class SidebarViewItem : Control
 
 	internal void UpdateExpansionState()
 	{
-		var hasChildren = Children is IList { Count: > 0 };
+		var hasChildren = HasChildren();
 		if (!hasChildren)
 		{
 			SetFlyoutOpen(false);
 			ReparentChildrenInline();
 			VisualStateManager.GoToState(this, "NoChildren", true);
+			UpdateChevronState();
 			return;
 		}
 
-		if (Owner?.DisplayMode == SidebarDisplayMode.Compact)
+		if (ShouldChildrenShowInFlyout())
 		{
 			ReparentChildrenToFlyout();
-			VisualStateManager.GoToState(this, "NoExpansion", true);
-			VisualStateManager.GoToState(this, "CollapsedIconNormal", true);
+			if (_childrenItemsControl is not null && !IsExpanded)
+				_childrenItemsControl.Visibility = Visibility.Collapsed;
+			VisualStateManager.GoToState(this, "ChildrenInFlyout", true);
+			UpdateChevronState();
 			return;
 		}
 
 		SetFlyoutOpen(false);
 		ReparentChildrenInline();
 		VisualStateManager.GoToState(this, IsExpanded ? "Expanded" : "Collapsed", true);
-		VisualStateManager.GoToState(this, IsExpanded ? "ExpandedIconNormal" : "CollapsedIconNormal", true);
+		UpdateChevronState();
 	}
 
 	internal void ApplyOwnerTemplates()
@@ -249,7 +292,7 @@ public partial class SidebarViewItem : Control
 		var selectedItem = Owner.SelectedItem;
 		var isSelectedItem = IsSelectedItem(selectedItem);
 		var isSelected = isSelectedItem;
-		isSelected |= (Owner.DisplayMode == SidebarDisplayMode.Compact || !IsExpanded) && HasSelectedDescendant(selectedItem);
+		isSelected |= (ShouldChildrenShowInFlyout() || !IsExpanded) && HasSelectedDescendant(selectedItem);
 
 		if (IsSelected != isSelected)
 			IsSelected = isSelected;
@@ -285,6 +328,21 @@ public partial class SidebarViewItem : Control
 	{
 		return Equals(this, selectedItem) ||
 			Equals(ItemValue, selectedItem);
+	}
+
+	private bool HasChildren()
+	{
+		return Children is IList { Count: > 0 };
+	}
+
+	private bool IsTopLevelItem()
+	{
+		return ParentItem is null;
+	}
+
+	private bool ShouldChildrenShowInFlyout()
+	{
+		return Owner?.IsClosedCompact == true && IsTopLevelItem();
 	}
 
 	private static bool ContainsDescendantItemValue(object selectedItem, object? children)
@@ -351,7 +409,18 @@ public partial class SidebarViewItem : Control
 		}
 		else
 		{
-			attachedFlyout.Hide();
+			_suppressChildrenFlyoutClosing = true;
+			try
+			{
+				attachedFlyout.Hide();
+			}
+			finally
+			{
+				_suppressChildrenFlyoutClosing = false;
+			}
+
+			if (_childrenItemsControl is not null && ShouldChildrenShowInFlyout())
+				_childrenItemsControl.Visibility = Visibility.Collapsed;
 		}
 	}
 
@@ -390,6 +459,55 @@ public partial class SidebarViewItem : Control
 		UpdateBackgroundState();
 	}
 
+	private void UpdateChevronState()
+	{
+		var chevronState = HasChildren() && !ShouldChildrenShowInFlyout()
+			? IsExpanded ? ChevronState.VisibleOpen : ChevronState.VisibleClosed
+			: ChevronState.Hidden;
+
+		var pointerChevronStateName = GetPointerChevronStateName(chevronState);
+		VisualStateManager.GoToState(this, pointerChevronStateName, true);
+
+		var chevronStateName = chevronState switch
+		{
+			ChevronState.VisibleOpen => VisualStateNameChevronVisibleOpen,
+			ChevronState.VisibleClosed => VisualStateNameChevronVisibleClosed,
+			_ => VisualStateNameChevronHidden,
+		};
+
+		VisualStateManager.GoToState(this, chevronStateName, true);
+	}
+
+	private string GetPointerChevronStateName(ChevronState chevronState)
+	{
+		if (_isPressed)
+		{
+			return chevronState switch
+			{
+				ChevronState.VisibleOpen => VisualStateNamePressedChevronVisibleOpen,
+				ChevronState.VisibleClosed => VisualStateNamePressedChevronVisibleClosed,
+				_ => VisualStateNamePressedChevronHidden,
+			};
+		}
+
+		if (_isPointerOver)
+		{
+			return chevronState switch
+			{
+				ChevronState.VisibleOpen => VisualStateNamePointerOverChevronVisibleOpen,
+				ChevronState.VisibleClosed => VisualStateNamePointerOverChevronVisibleClosed,
+				_ => VisualStateNamePointerOverChevronHidden,
+			};
+		}
+
+		return chevronState switch
+		{
+			ChevronState.VisibleOpen => VisualStateNameNormalChevronVisibleOpen,
+			ChevronState.VisibleClosed => VisualStateNameNormalChevronVisibleClosed,
+			_ => VisualStateNameNormalChevronHidden,
+		};
+	}
+
 	private void UpdateBackgroundState()
 	{
 		var state = _isPressed
@@ -399,5 +517,12 @@ public partial class SidebarViewItem : Control
 				: IsSelected ? VisualStateNameNormalSelected : VisualStateNameNormalUnselected;
 
 		VisualStateManager.GoToState(this, state, true);
+	}
+
+	private enum ChevronState
+	{
+		Hidden,
+		VisibleOpen,
+		VisibleClosed,
 	}
 }

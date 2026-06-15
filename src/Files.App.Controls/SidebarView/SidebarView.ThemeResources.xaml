@@ -1,0 +1,85 @@
+<!--  Copyright (c) Files Community. Licensed under the MIT License.  -->
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+	<ResourceDictionary.MergedDictionaries>
+		<XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
+	</ResourceDictionary.MergedDictionaries>
+
+	<ResourceDictionary.ThemeDictionaries>
+		<ResourceDictionary x:Key="Light">
+			<StaticResource x:Key="SidebarViewDefaultPaneBackground" ResourceKey="AcrylicInAppFillColorDefaultBrush" />
+			<StaticResource x:Key="SidebarViewExpandedPaneBackground" ResourceKey="SolidBackgroundFillColorTransparent" />
+
+			<StaticResource x:Key="SidebarViewItemBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelected" ResourceKey="ControlFillColorDefaultBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelectedPointerOver" ResourceKey="ControlFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelectedPressed" ResourceKey="ControlFillColorTertiaryBrush" />
+
+			<StaticResource x:Key="SidebarViewItemBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelected" ResourceKey="ButtonBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelectedPointerOver" ResourceKey="ButtonBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelectedPressed" ResourceKey="ButtonBorderBrush" />
+
+			<StaticResource x:Key="SidebarViewItemSelectionIndicatorBackground" ResourceKey="AccentFillColorDefaultBrush" />
+			<StaticResource x:Key="SidebarViewItemSelectionIndicatorBackgroundPointerOver" ResourceKey="AccentFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemSelectionIndicatorBackgroundPressed" ResourceKey="AccentFillColorTertiaryBrush" />
+		</ResourceDictionary>
+
+		<ResourceDictionary x:Key="Dark">
+			<StaticResource x:Key="SidebarViewDefaultPaneBackground" ResourceKey="AcrylicInAppFillColorDefaultBrush" />
+			<StaticResource x:Key="SidebarViewExpandedPaneBackground" ResourceKey="SolidBackgroundFillColorTransparent" />
+
+			<StaticResource x:Key="SidebarViewItemBackground" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelected" ResourceKey="ControlFillColorDefaultBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelectedPointerOver" ResourceKey="ControlFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelectedPressed" ResourceKey="ControlFillColorTertiaryBrush" />
+
+			<StaticResource x:Key="SidebarViewItemBorderBrush" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushPointerOver" ResourceKey="SubtleFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushPressed" ResourceKey="SubtleFillColorTertiaryBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushDisabled" ResourceKey="SubtleFillColorTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelected" ResourceKey="ButtonBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelectedPointerOver" ResourceKey="ButtonBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelectedPressed" ResourceKey="ButtonBorderBrush" />
+
+			<StaticResource x:Key="SidebarViewItemSelectionIndicatorBackground" ResourceKey="AccentFillColorDefaultBrush" />
+			<StaticResource x:Key="SidebarViewItemSelectionIndicatorBackgroundPointerOver" ResourceKey="AccentFillColorSecondaryBrush" />
+			<StaticResource x:Key="SidebarViewItemSelectionIndicatorBackgroundPressed" ResourceKey="AccentFillColorTertiaryBrush" />
+		</ResourceDictionary>
+
+		<ResourceDictionary x:Key="HighContrast">
+			<StaticResource x:Key="SidebarViewDefaultPaneBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+			<SolidColorBrush x:Key="SidebarViewExpandedPaneBackground" Color="{ThemeResource SystemColorWindowColor}" />
+
+			<StaticResource x:Key="SidebarViewItemBackground" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundPointerOver" ResourceKey="SystemControlHighlightListLowRevealBackgroundBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundPressed" ResourceKey="SystemControlHighlightListMediumRevealBackgroundBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundDisabled" ResourceKey="SystemControlBackgroundBaseLowBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelected" ResourceKey="SystemControlHighlightListLowRevealBackgroundBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelectedPointerOver" ResourceKey="SystemControlHighlightListLowRevealBackgroundBrush" />
+			<StaticResource x:Key="SidebarViewItemBackgroundSelectedPressed" ResourceKey="SystemControlHighlightListMediumRevealBackgroundBrush" />
+
+			<StaticResource x:Key="SidebarViewItemBorderBrush" ResourceKey="SystemControlTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushPointerOver" ResourceKey="SystemControlHighlightAltTransparentRevealBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushPressed" ResourceKey="SystemControlHighlightAltTransparentRevealBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushDisabled" ResourceKey="SystemControlTransparentBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelected" ResourceKey="SystemControlBackgroundTransparentRevealBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelectedPointerOver" ResourceKey="SystemControlHighlightAltTransparentRevealBorderBrush" />
+			<StaticResource x:Key="SidebarViewItemBorderBrushSelectedPressed" ResourceKey="SystemControlHighlightAltTransparentRevealBorderBrush" />
+
+			<SolidColorBrush x:Key="SidebarViewItemSelectionIndicatorBackground" Color="{ThemeResource SystemColorHighlightTextColor}" />
+			<SolidColorBrush x:Key="SidebarViewItemSelectionIndicatorBackgroundPointerOver" Color="{ThemeResource SystemColorHighlightTextColor}" />
+			<SolidColorBrush x:Key="SidebarViewItemSelectionIndicatorBackgroundPressed" Color="{ThemeResource SystemColorHighlightTextColor}" />
+		</ResourceDictionary>
+	</ResourceDictionary.ThemeDictionaries>
+
+</ResourceDictionary>

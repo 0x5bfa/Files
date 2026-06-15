@@ -61,6 +61,7 @@
 
 		<!--#region SidebarView-->
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/Sidebar/SidebarStyles.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/SidebarView/SidebarView.ThemeResources.xaml" />
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/SidebarView/SidebarView.xaml" />
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/SidebarView/SidebarViewItem.xaml" />
 		<!--#endregion-->

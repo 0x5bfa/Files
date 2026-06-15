@@ -2,7 +2,9 @@
 // Licensed under the MIT License.
 
 using Microsoft.UI.Input;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Automation.Peers;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Hosting;
 using Microsoft.UI.Xaml.Input;
@@ -10,6 +12,7 @@ using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using System.Collections;
 using System.Numerics;
+using Windows.Foundation;
 using Windows.System;
 using Windows.UI.Core;
 
@@ -19,18 +22,37 @@ namespace Files.App.Controls;
 public partial class SidebarView2 : Control
 {
 	private const double CompactMaxWidth = 200;
-	private const string TemplatePartNamePaneColumnDefinition = "PART_PaneColumnDefinition";
+	private const float PaneOverlayShadowDepth = 16f;
+	private const string TemplatePartNameRootSplitView = "PART_RootSplitView";
 	private const string TemplatePartNamePaneColumnGrid = "PART_PaneColumnGrid";
+	private const string TemplatePartNamePaneToggleButton = "PART_PaneToggleButton";
+	private const string TemplatePartNameBackButton = "PART_BackButton";
+	private const string TemplatePartNameAutoSuggestButton = "PART_AutoSuggestButton";
 	private const string TemplatePartNameSidebarResizer = "PART_SidebarResizer";
 	private const string TemplatePartNameSidebarResizerControl = "PART_SidebarResizerControl";
 	private const string TemplatePartNamePaneLightDismissLayer = "PART_PaneLightDismissLayer";
 	private const string TemplatePartNameMenuItemsHost = "PART_MenuItemsHost";
 	private const string TemplatePartNameFooterMenuItemsHost = "PART_FooterMenuItemsHost";
+	private const string VisualStateNameClosedCompact = "ClosedCompact";
+	private const string VisualStateNameNotClosedCompact = "NotClosedCompact";
+	private const string VisualStateNameListSizeCompact = "ListSizeCompact";
+	private const string VisualStateNameListSizeFull = "ListSizeFull";
+	private const string VisualStateNamePaneOverlaying = "PaneOverlaying";
+	private const string VisualStateNamePaneNotOverlaying = "PaneNotOverlaying";
 
 	private bool _draggingSidebarResizer;
+	private bool _fromOnApplyTemplate;
+	private bool _updateVisualStateForDisplayModeFromOnLoaded;
+	private bool _isClosedCompact;
 	private double _preManipulationSidebarWidth;
-	private ColumnDefinition? _paneColumnDefinition;
+	private SidebarViewDisplayMode _autoDisplayMode = SidebarViewDisplayMode.LeftCompact;
+	private long _rootSplitViewIsPaneOpenChangedToken;
+	private long _rootSplitViewDisplayModeChangedToken;
+	private SplitView? _rootSplitView;
 	private Grid? _paneColumnGrid;
+	private Button? _paneToggleButton;
+	private Button? _backButton;
+	private Button? _autoSuggestButton;
 	private Border? _sidebarResizer;
 	private Control? _sidebarResizerControl;
 	private Grid? _paneLightDismissLayer;
@@ -39,14 +61,21 @@ public partial class SidebarView2 : Control
 	private readonly SidebarViewItemFactory _itemFactory;
 
 	public event EventHandler<SidebarView2ItemInvokedEventArgs>? ItemInvoked;
+	public event TypedEventHandler<SidebarView2, SidebarView2BackRequestedEventArgs>? BackRequested;
 	public SidebarView2TemplateSettings TemplateSettings { get; } = new();
 	internal SidebarViewItemFactory ItemFactory => _itemFactory;
+	internal SidebarViewDisplayMode EffectiveDisplayMode => DisplayMode == SidebarViewDisplayMode.Auto
+		? _autoDisplayMode
+		: DisplayMode;
+	internal bool IsClosedCompact => _isClosedCompact;
 	internal SidebarViewItem? SelectedItemContainer { get; private set; }
 
 	public SidebarView2()
 	{
 		DefaultStyleKey = typeof(SidebarView2);
 		_itemFactory = new(this);
+		Loaded += SidebarView2_Loaded;
+		SizeChanged += SidebarView2_SizeChanged;
 		UpdateTemplateSettings();
 	}
 
@@ -57,71 +86,124 @@ public partial class SidebarView2 : Control
 
 	protected override void OnApplyTemplate()
 	{
-		if (_sidebarResizer is not null)
+		_fromOnApplyTemplate = true;
+		try
 		{
-			_sidebarResizer.DoubleTapped -= SidebarResizer_DoubleTapped;
-			_sidebarResizer.ManipulationCompleted -= SidebarResizer_ManipulationCompleted;
-			_sidebarResizer.ManipulationDelta -= SidebarResizer_ManipulationDelta;
-			_sidebarResizer.ManipulationStarted -= SidebarResizer_ManipulationStarted;
-			_sidebarResizer.PointerCanceled -= SidebarResizer_PointerExited;
-			_sidebarResizer.PointerEntered -= SidebarResizer_PointerEntered;
-			_sidebarResizer.PointerExited -= SidebarResizer_PointerExited;
+			if (_sidebarResizer is not null)
+			{
+				_sidebarResizer.DoubleTapped -= SidebarResizer_DoubleTapped;
+				_sidebarResizer.ManipulationCompleted -= SidebarResizer_ManipulationCompleted;
+				_sidebarResizer.ManipulationDelta -= SidebarResizer_ManipulationDelta;
+				_sidebarResizer.ManipulationStarted -= SidebarResizer_ManipulationStarted;
+				_sidebarResizer.PointerCanceled -= SidebarResizer_PointerExited;
+				_sidebarResizer.PointerEntered -= SidebarResizer_PointerEntered;
+				_sidebarResizer.PointerExited -= SidebarResizer_PointerExited;
+			}
+
+			if (_sidebarResizerControl is not null)
+				_sidebarResizerControl.KeyDown -= SidebarResizerControl_KeyDown;
+
+			if (_paneToggleButton is not null)
+				_paneToggleButton.Click -= PaneToggleButton_Click;
+
+			if (_backButton is not null)
+				_backButton.Click -= BackButton_Click;
+
+			if (_autoSuggestButton is not null)
+				_autoSuggestButton.Click -= AutoSuggestButton_Click;
+
+			if (_paneLightDismissLayer is not null)
+			{
+				_paneLightDismissLayer.PointerPressed -= PaneLightDismissLayer_PointerPressed;
+				_paneLightDismissLayer.Tapped -= PaneLightDismissLayer_Tapped;
+			}
+
+			if (_menuItemsHost is not null)
+				_menuItemsHost.Loaded -= ItemsHost_Loaded;
+
+			if (_footerMenuItemsHost is not null)
+				_footerMenuItemsHost.Loaded -= ItemsHost_Loaded;
+
+			if (_rootSplitView is not null)
+			{
+				if (_rootSplitViewIsPaneOpenChangedToken != 0)
+				{
+					_rootSplitView.UnregisterPropertyChangedCallback(SplitView.IsPaneOpenProperty, _rootSplitViewIsPaneOpenChangedToken);
+					_rootSplitViewIsPaneOpenChangedToken = 0;
+				}
+
+				if (_rootSplitViewDisplayModeChangedToken != 0)
+				{
+					_rootSplitView.UnregisterPropertyChangedCallback(SplitView.DisplayModeProperty, _rootSplitViewDisplayModeChangedToken);
+					_rootSplitViewDisplayModeChangedToken = 0;
+				}
+			}
+
+			base.OnApplyTemplate();
+
+			_rootSplitView = GetTemplateChild(TemplatePartNameRootSplitView) as SplitView;
+			_paneColumnGrid = GetTemplateChild(TemplatePartNamePaneColumnGrid) as Grid;
+			_paneToggleButton = GetTemplateChild(TemplatePartNamePaneToggleButton) as Button;
+			_backButton = GetTemplateChild(TemplatePartNameBackButton) as Button;
+			_autoSuggestButton = GetTemplateChild(TemplatePartNameAutoSuggestButton) as Button;
+			_sidebarResizer = GetTemplateChild(TemplatePartNameSidebarResizer) as Border;
+			_sidebarResizerControl = GetTemplateChild(TemplatePartNameSidebarResizerControl) as Control;
+			_paneLightDismissLayer = GetTemplateChild(TemplatePartNamePaneLightDismissLayer) as Grid;
+			_menuItemsHost = GetTemplateChild(TemplatePartNameMenuItemsHost) as ItemsControl;
+			_footerMenuItemsHost = GetTemplateChild(TemplatePartNameFooterMenuItemsHost) as ItemsControl;
+
+			if (_rootSplitView is not null)
+			{
+				_rootSplitViewIsPaneOpenChangedToken = _rootSplitView.RegisterPropertyChangedCallback(SplitView.IsPaneOpenProperty, OnSplitViewClosedCompactChanged);
+				_rootSplitViewDisplayModeChangedToken = _rootSplitView.RegisterPropertyChangedCallback(SplitView.DisplayModeProperty, OnSplitViewClosedCompactChanged);
+				UpdateIsClosedCompact();
+				UpdatePaneOverlayGroup();
+			}
+
+			if (_sidebarResizer is not null)
+			{
+				_sidebarResizer.DoubleTapped += SidebarResizer_DoubleTapped;
+				_sidebarResizer.ManipulationCompleted += SidebarResizer_ManipulationCompleted;
+				_sidebarResizer.ManipulationDelta += SidebarResizer_ManipulationDelta;
+				_sidebarResizer.ManipulationStarted += SidebarResizer_ManipulationStarted;
+				_sidebarResizer.PointerCanceled += SidebarResizer_PointerExited;
+				_sidebarResizer.PointerEntered += SidebarResizer_PointerEntered;
+				_sidebarResizer.PointerExited += SidebarResizer_PointerExited;
+			}
+
+			if (_sidebarResizerControl is not null)
+				_sidebarResizerControl.KeyDown += SidebarResizerControl_KeyDown;
+
+			if (_paneToggleButton is not null)
+				_paneToggleButton.Click += PaneToggleButton_Click;
+
+			if (_backButton is not null)
+				_backButton.Click += BackButton_Click;
+
+			if (_autoSuggestButton is not null)
+				_autoSuggestButton.Click += AutoSuggestButton_Click;
+
+			if (_paneLightDismissLayer is not null)
+			{
+				_paneLightDismissLayer.PointerPressed += PaneLightDismissLayer_PointerPressed;
+				_paneLightDismissLayer.Tapped += PaneLightDismissLayer_Tapped;
+			}
+
+			if (_menuItemsHost is not null)
+				_menuItemsHost.Loaded += ItemsHost_Loaded;
+
+			if (_footerMenuItemsHost is not null)
+				_footerMenuItemsHost.Loaded += ItemsHost_Loaded;
+
+			UpdatePreparedMenuItems();
+			UpdateAdaptiveDisplayMode(ActualWidth, true);
+			UpdatePaneButtons();
+			UpdateResizerAvailability();
 		}
-
-		if (_sidebarResizerControl is not null)
-			_sidebarResizerControl.KeyDown -= SidebarResizerControl_KeyDown;
-
-		if (_paneLightDismissLayer is not null)
+		finally
 		{
-			_paneLightDismissLayer.PointerPressed -= PaneLightDismissLayer_PointerPressed;
-			_paneLightDismissLayer.Tapped -= PaneLightDismissLayer_Tapped;
+			_fromOnApplyTemplate = false;
 		}
-
-		if (_menuItemsHost is not null)
-			_menuItemsHost.Loaded -= ItemsHost_Loaded;
-
-		if (_footerMenuItemsHost is not null)
-			_footerMenuItemsHost.Loaded -= ItemsHost_Loaded;
-
-		base.OnApplyTemplate();
-
-		_paneColumnDefinition = GetTemplateChild(TemplatePartNamePaneColumnDefinition) as ColumnDefinition;
-		_paneColumnGrid = GetTemplateChild(TemplatePartNamePaneColumnGrid) as Grid;
-		_sidebarResizer = GetTemplateChild(TemplatePartNameSidebarResizer) as Border;
-		_sidebarResizerControl = GetTemplateChild(TemplatePartNameSidebarResizerControl) as Control;
-		_paneLightDismissLayer = GetTemplateChild(TemplatePartNamePaneLightDismissLayer) as Grid;
-		_menuItemsHost = GetTemplateChild(TemplatePartNameMenuItemsHost) as ItemsControl;
-		_footerMenuItemsHost = GetTemplateChild(TemplatePartNameFooterMenuItemsHost) as ItemsControl;
-
-		if (_sidebarResizer is not null)
-		{
-			_sidebarResizer.DoubleTapped += SidebarResizer_DoubleTapped;
-			_sidebarResizer.ManipulationCompleted += SidebarResizer_ManipulationCompleted;
-			_sidebarResizer.ManipulationDelta += SidebarResizer_ManipulationDelta;
-			_sidebarResizer.ManipulationStarted += SidebarResizer_ManipulationStarted;
-			_sidebarResizer.PointerCanceled += SidebarResizer_PointerExited;
-			_sidebarResizer.PointerEntered += SidebarResizer_PointerEntered;
-			_sidebarResizer.PointerExited += SidebarResizer_PointerExited;
-		}
-
-		if (_sidebarResizerControl is not null)
-			_sidebarResizerControl.KeyDown += SidebarResizerControl_KeyDown;
-
-		if (_paneLightDismissLayer is not null)
-		{
-			_paneLightDismissLayer.PointerPressed += PaneLightDismissLayer_PointerPressed;
-			_paneLightDismissLayer.Tapped += PaneLightDismissLayer_Tapped;
-		}
-
-		if (_menuItemsHost is not null)
-			_menuItemsHost.Loaded += ItemsHost_Loaded;
-
-		if (_footerMenuItemsHost is not null)
-			_footerMenuItemsHost.Loaded += ItemsHost_Loaded;
-
-		UpdatePreparedMenuItems();
-		UpdateDisplayMode();
-		UpdateResizerAvailability();
 	}
 
 	internal void RaiseItemInvoked(SidebarViewItem item)
@@ -140,6 +222,24 @@ public partial class SidebarView2 : Control
 	private void ItemsHost_Loaded(object sender, RoutedEventArgs e)
 	{
 		UpdatePreparedMenuItems();
+	}
+
+	private void SidebarView2_Loaded(object sender, RoutedEventArgs e)
+	{
+		if (!_updateVisualStateForDisplayModeFromOnLoaded)
+			return;
+
+		_updateVisualStateForDisplayModeFromOnLoaded = false;
+		UpdateVisualStateForDisplayModeGroup(GetVisualStateDisplayMode());
+		UpdateIsClosedCompact();
+		UpdatePaneOverlayGroup();
+		UpdatePaneShadow();
+		UpdatePaneButtons();
+	}
+
+	private void SidebarView2_SizeChanged(object sender, SizeChangedEventArgs e)
+	{
+		UpdateAdaptiveDisplayMode(e.NewSize.Width);
 	}
 
 	internal bool HasSelectedDescendant(SidebarViewItem item)
@@ -242,44 +342,83 @@ public partial class SidebarView2 : Control
 		}
 	}
 
-	private void UpdateMinimalMode()
+	private void UpdatePaneState()
 	{
-		if (DisplayMode != SidebarDisplayMode.Minimal)
-			return;
+		UpdateIsClosedCompact();
+		UpdatePaneOverlayGroup();
+		UpdatePaneShadow();
+		UpdatePaneButtons();
 
-		VisualStateManager.GoToState(this, IsPaneOpen ? "MinimalExpanded" : "MinimalCollapsed", true);
+		if (GetVisualStateDisplayMode() == SidebarViewVisualStateDisplayMode.Minimal)
+			VisualStateManager.GoToState(this, IsPaneOpen ? "MinimalExpanded" : "MinimalCollapsed", true);
 	}
 
 	private void UpdateDisplayMode()
 	{
-		switch (DisplayMode)
+		var displayMode = GetVisualStateDisplayMode();
+		switch (displayMode)
 		{
-			case SidebarDisplayMode.Compact:
-				VisualStateManager.GoToState(this, "Compact", true);
+			case SidebarViewVisualStateDisplayMode.Expanded:
+				OpenPane();
 				break;
-			case SidebarDisplayMode.Expanded:
-				UpdateOpenPaneLengthColumn();
-				VisualStateManager.GoToState(this, "Expanded", true);
-				break;
-			case SidebarDisplayMode.Minimal:
-				IsPaneOpen = false;
-				UpdateMinimalMode();
+			case SidebarViewVisualStateDisplayMode.Compact:
+			case SidebarViewVisualStateDisplayMode.Minimal:
+				ClosePane();
 				break;
 		}
 
+		UpdateVisualStateForDisplayModeGroup(displayMode);
 		UpdatePreparedMenuItems();
+		UpdatePaneButtons();
 		UpdateResizerAvailability();
+	}
+
+	private void UpdateAdaptiveDisplayMode(double width, bool forceSetDisplayMode = false)
+	{
+		if (DisplayMode != SidebarViewDisplayMode.Auto)
+		{
+			if (forceSetDisplayMode)
+				UpdateDisplayMode();
+
+			return;
+		}
+
+		var displayMode = SidebarViewDisplayMode.LeftCompact;
+		if (width >= ExpandedModeThresholdWidth)
+		{
+			displayMode = SidebarViewDisplayMode.Left;
+		}
+		else if (width > 0 && width < CompactModeThresholdWidth)
+		{
+			displayMode = SidebarViewDisplayMode.LeftMinimal;
+		}
+
+		if (!forceSetDisplayMode && _autoDisplayMode == displayMode)
+			return;
+
+		_autoDisplayMode = displayMode;
+		UpdateDisplayMode();
+	}
+
+	private SidebarViewVisualStateDisplayMode GetVisualStateDisplayMode()
+	{
+		return EffectiveDisplayMode switch
+		{
+			SidebarViewDisplayMode.LeftCompact => SidebarViewVisualStateDisplayMode.Compact,
+			SidebarViewDisplayMode.LeftMinimal => SidebarViewVisualStateDisplayMode.Minimal,
+			_ => SidebarViewVisualStateDisplayMode.Expanded,
+		};
 	}
 
 	private void UpdateDisplayModeForPaneWidth(double newPaneWidth)
 	{
 		if (newPaneWidth < CompactMaxWidth)
 		{
-			DisplayMode = SidebarDisplayMode.Compact;
+			DisplayMode = SidebarViewDisplayMode.LeftCompact;
 		}
 		else if (newPaneWidth > CompactMaxWidth)
 		{
-			DisplayMode = SidebarDisplayMode.Expanded;
+			DisplayMode = SidebarViewDisplayMode.Left;
 			OpenPaneLength = newPaneWidth;
 		}
 	}
@@ -293,12 +432,207 @@ public partial class SidebarView2 : Control
 		TemplateSettings.NegativeCompactPaneLength = -CompactPaneLength;
 	}
 
-	private void UpdateOpenPaneLengthColumn()
+	private void UpdateSplitViewDisplayMode()
 	{
-		if (DisplayMode != SidebarDisplayMode.Expanded || _paneColumnDefinition is null)
+		UpdateVisualStateForDisplayModeGroup(GetVisualStateDisplayMode());
+	}
+
+	private void UpdateVisualStateForDisplayModeGroup(SidebarViewVisualStateDisplayMode displayMode)
+	{
+		var visualStateName = displayMode switch
+		{
+			SidebarViewVisualStateDisplayMode.Compact => "Compact",
+			SidebarViewVisualStateDisplayMode.Minimal => IsPaneOpen ? "MinimalExpanded" : "MinimalCollapsed",
+			_ => "Expanded",
+		};
+
+		VisualStateManager.GoToState(this, visualStateName, true);
+		UpdateSplitViewDisplayMode(displayMode);
+	}
+
+	private void UpdateSplitViewDisplayMode(SidebarViewVisualStateDisplayMode displayMode)
+	{
+		if (_rootSplitView is null)
 			return;
 
-		_paneColumnDefinition.Width = new GridLength(OpenPaneLength);
+		var splitViewDisplayMode = displayMode switch
+		{
+			SidebarViewVisualStateDisplayMode.Compact => SplitViewDisplayMode.CompactOverlay,
+			SidebarViewVisualStateDisplayMode.Minimal => SplitViewDisplayMode.Overlay,
+			_ => SplitViewDisplayMode.CompactInline,
+		};
+
+		if (_fromOnApplyTemplate)
+		{
+			_updateVisualStateForDisplayModeFromOnLoaded = true;
+			return;
+		}
+
+		_rootSplitView.DisplayMode = splitViewDisplayMode;
+		UpdateIsClosedCompact();
+		UpdatePaneOverlayGroup();
+		UpdatePaneShadow();
+		UpdatePaneButtons();
+	}
+
+	private void UpdatePaneShadow()
+	{
+		if (_paneColumnGrid is null)
+			return;
+
+		var translation = _paneColumnGrid.Translation;
+		if (IsPaneOverlaying())
+		{
+			_paneColumnGrid.Shadow ??= new ThemeShadow();
+			_paneColumnGrid.Translation = new Vector3(translation.X, translation.Y, PaneOverlayShadowDepth);
+		}
+		else
+		{
+			_paneColumnGrid.Shadow = null;
+			_paneColumnGrid.Translation = new Vector3(translation.X, translation.Y, 0);
+		}
+	}
+
+	private void UpdatePaneOverlayGroup()
+	{
+		VisualStateManager.GoToState(
+			this,
+			IsPaneOverlaying() ? VisualStateNamePaneOverlaying : VisualStateNamePaneNotOverlaying,
+			true);
+	}
+
+	private bool IsPaneOverlaying()
+	{
+		if (_rootSplitView is null)
+			return false;
+
+		var splitViewDisplayMode = _rootSplitView.DisplayMode;
+		return IsPaneOpen &&
+			(splitViewDisplayMode == SplitViewDisplayMode.CompactOverlay ||
+			 splitViewDisplayMode == SplitViewDisplayMode.Overlay);
+	}
+
+	private void UpdateIsClosedCompact()
+	{
+		if (_rootSplitView is null)
+			return;
+
+		var splitViewDisplayMode = _rootSplitView.DisplayMode;
+		var isClosedCompact = !_rootSplitView.IsPaneOpen &&
+			(splitViewDisplayMode == SplitViewDisplayMode.CompactOverlay ||
+			 splitViewDisplayMode == SplitViewDisplayMode.CompactInline);
+		var closedCompactChanged = _isClosedCompact != isClosedCompact;
+
+		_isClosedCompact = isClosedCompact;
+		VisualStateManager.GoToState(this, isClosedCompact ? VisualStateNameClosedCompact : VisualStateNameNotClosedCompact, true);
+		VisualStateManager.GoToState(this, isClosedCompact ? VisualStateNameListSizeCompact : VisualStateNameListSizeFull, true);
+
+		if (closedCompactChanged)
+			UpdatePreparedMenuItems();
+
+		UpdatePaneButtons();
+	}
+
+	private void OnSplitViewClosedCompactChanged(DependencyObject sender, DependencyProperty property)
+	{
+		if (property == SplitView.IsPaneOpenProperty || property == SplitView.DisplayModeProperty)
+		{
+			UpdateIsClosedCompact();
+			UpdatePaneOverlayGroup();
+			UpdatePaneShadow();
+		}
+	}
+
+	private void OpenPane()
+	{
+		IsPaneOpen = true;
+	}
+
+	private void ClosePane()
+	{
+		IsPaneOpen = false;
+	}
+
+	private void PaneToggleButton_Click(object sender, RoutedEventArgs e)
+	{
+		if (IsPaneOpen)
+		{
+			ClosePane();
+		}
+		else
+		{
+			OpenPane();
+		}
+	}
+
+	private void BackButton_Click(object sender, RoutedEventArgs e)
+	{
+		BackRequested?.Invoke(this, new SidebarView2BackRequestedEventArgs());
+	}
+
+	private void AutoSuggestButton_Click(object sender, RoutedEventArgs e)
+	{
+		OpenPane();
+		AutoSuggestBox?.Focus(FocusState.Keyboard);
+	}
+
+	private void UpdatePaneButtons()
+	{
+		UpdatePaneToggleButtonVisibility();
+		UpdateBackButtonVisibility();
+		UpdateAutoSuggestButtonVisibility();
+		UpdatePaneToggleButtonAutomationName();
+	}
+
+	private void UpdatePaneToggleButtonVisibility()
+	{
+		if (_paneToggleButton is null)
+			return;
+
+		_paneToggleButton.Visibility = IsPaneToggleButtonVisible ? Visibility.Visible : Visibility.Collapsed;
+	}
+
+	private void UpdateBackButtonVisibility()
+	{
+		if (_backButton is null)
+			return;
+
+		_backButton.Visibility = ShouldShowBackButton() ? Visibility.Visible : Visibility.Collapsed;
+	}
+
+	private void UpdateAutoSuggestButtonVisibility()
+	{
+		if (_autoSuggestButton is null)
+			return;
+
+		_autoSuggestButton.Visibility = ShouldShowAutoSuggestButton() ? Visibility.Visible : Visibility.Collapsed;
+	}
+
+	private void UpdatePaneToggleButtonAutomationName()
+	{
+		if (_paneToggleButton is null)
+			return;
+
+		var name = IsPaneOpen ? "Close navigation pane" : "Open navigation pane";
+		AutomationProperties.SetName(_paneToggleButton, name);
+		ToolTipService.SetToolTip(_paneToggleButton, name);
+	}
+
+	private bool ShouldShowBackButton()
+	{
+		if (_backButton is null)
+			return false;
+
+		if (GetVisualStateDisplayMode() == SidebarViewVisualStateDisplayMode.Minimal && IsPaneOpen)
+			return false;
+
+		return IsBackButtonVisible == SidebarViewBackButtonVisible.Visible ||
+			IsBackButtonVisible == SidebarViewBackButtonVisible.Auto;
+	}
+
+	private bool ShouldShowAutoSuggestButton()
+	{
+		return AutoSuggestBox is not null && IsClosedCompact;
 	}
 
 	private void UpdateResizerAvailability()
@@ -314,7 +648,7 @@ public partial class SidebarView2 : Control
 		}
 
 		_sidebarResizer.IsHitTestVisible = true;
-		if (DisplayMode != SidebarDisplayMode.Minimal)
+		if (EffectiveDisplayMode != SidebarViewDisplayMode.LeftMinimal)
 			_sidebarResizer.Visibility = Visibility.Visible;
 	}
 
@@ -351,11 +685,11 @@ public partial class SidebarView2 : Control
 		}
 
 		var primaryInvocation = e.Key == VirtualKey.Space || e.Key == VirtualKey.Enter;
-		if (DisplayMode == SidebarDisplayMode.Expanded)
+		if (EffectiveDisplayMode == SidebarViewDisplayMode.Left)
 		{
 			if (primaryInvocation)
 			{
-				DisplayMode = SidebarDisplayMode.Compact;
+				DisplayMode = SidebarViewDisplayMode.LeftCompact;
 				return;
 			}
 
@@ -370,22 +704,22 @@ public partial class SidebarView2 : Control
 			return;
 		}
 
-		if (DisplayMode == SidebarDisplayMode.Compact && (primaryInvocation || e.Key == VirtualKey.Right))
+		if (EffectiveDisplayMode == SidebarViewDisplayMode.LeftCompact && (primaryInvocation || e.Key == VirtualKey.Right))
 		{
-			DisplayMode = SidebarDisplayMode.Expanded;
+			ExpandPane();
 			e.Handled = true;
 		}
 	}
 
 	private void PaneLightDismissLayer_PointerPressed(object sender, PointerRoutedEventArgs e)
 	{
-		IsPaneOpen = false;
+		ClosePane();
 		e.Handled = true;
 	}
 
 	private void PaneLightDismissLayer_Tapped(object sender, TappedRoutedEventArgs e)
 	{
-		IsPaneOpen = false;
+		ClosePane();
 		e.Handled = true;
 	}
 
@@ -394,10 +728,21 @@ public partial class SidebarView2 : Control
 		if (!CanResizePane)
 			return;
 
-		DisplayMode = DisplayMode == SidebarDisplayMode.Expanded
-			? SidebarDisplayMode.Compact
-			: SidebarDisplayMode.Expanded;
+		if (EffectiveDisplayMode == SidebarViewDisplayMode.Left)
+		{
+			DisplayMode = SidebarViewDisplayMode.LeftCompact;
+		}
+		else
+		{
+			ExpandPane();
+		}
+
 		e.Handled = true;
+	}
+
+	private void ExpandPane()
+	{
+		UpdateDisplayModeForPaneWidth(Math.Max(OpenPaneLength, CompactMaxWidth + 1));
 	}
 
 	private void SidebarResizer_PointerEntered(object sender, PointerRoutedEventArgs e)
@@ -428,9 +773,20 @@ public partial class SidebarView2 : Control
 		VisualStateManager.GoToState(this, "ResizerNormal", true);
 		e.Handled = true;
 	}
+
+	private enum SidebarViewVisualStateDisplayMode
+	{
+		Compact,
+		Expanded,
+		Minimal,
+	}
 }
 
 public sealed class SidebarView2ItemInvokedEventArgs(object? invokedItem)
 {
 	public object? InvokedItem { get; } = invokedItem;
+}
+
+public sealed class SidebarView2BackRequestedEventArgs
+{
 }

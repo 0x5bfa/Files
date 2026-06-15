@@ -32,6 +32,7 @@
 
 						<Grid
 							x:Name="PART_RootGrid"
+							Height="{StaticResource SidebarViewItemHeight}"
 							MinHeight="{StaticResource SidebarViewItemHeight}"
 							BorderThickness="1"
 							CornerRadius="{ThemeResource ControlCornerRadius}"
@@ -55,7 +56,7 @@
 								Height="16"
 								HorizontalAlignment="Left"
 								VerticalAlignment="Center"
-								Background="{ThemeResource AccentFillColorDefaultBrush}"
+								Background="{ThemeResource SidebarViewItemSelectionIndicatorBackground}"
 								CornerRadius="2"
 								Opacity="0"
 								RenderTransformOrigin="0.5,0.5">
@@ -102,13 +103,12 @@
 								</AnimatedIcon.RenderTransform>
 							</AnimatedIcon>
 
-							<TextBlock
+							<ContentPresenter
 								x:Name="ItemNameTextBlock"
 								Grid.Column="2"
 								Margin="12,0,12,0"
 								VerticalAlignment="Center"
-								Text="{TemplateBinding Text}"
-								TextTrimming="CharacterEllipsis"
+								Content="{TemplateBinding Text}"
 								TextWrapping="NoWrap" />
 
 							<ContentPresenter
@@ -128,7 +128,7 @@
 								<Flyout x:Name="ChildrenFlyout" Placement="Right">
 									<Flyout.FlyoutPresenterStyle>
 										<Style BasedOn="{StaticResource DefaultFlyoutPresenterStyle}" TargetType="FlyoutPresenter">
-											<Setter Target="Padding" Value="0,4" />
+											<Setter Target="Padding" Value="4,4" />
 											<Setter Target="MinWidth" Value="200" />
 											<Setter Target="MinHeight" Value="20" />
 										</Style>
@@ -176,47 +176,87 @@
 								<VisualState x:Name="NoExpansion">
 									<VisualState.Setters>
 										<Setter Target="ItemNameTextBlock.Visibility" Value="Collapsed" />
-										<Setter Target="ExpandCollapseChevron.Visibility" Value="Collapsed" />
 										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Collapsed" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="NoChildren">
 									<VisualState.Setters>
-										<Setter Target="ExpandCollapseChevron.Visibility" Value="Collapsed" />
 										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Collapsed" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="Collapsed">
 									<VisualState.Setters>
-										<Setter Target="ExpandCollapseChevron.Visibility" Value="Visible" />
 										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Collapsed" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="Expanded">
 									<VisualState.Setters>
-										<Setter Target="ExpandCollapseChevron.Visibility" Value="Visible" />
 										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Visible" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="ChildrenInFlyout">
+									<VisualState.Setters>
+										<Setter Target="PART_ChildrenItemsControl.Visibility" Value="Collapsed" />
 									</VisualState.Setters>
 								</VisualState>
 							</VisualStateGroup>
 
-							<VisualStateGroup x:Name="ExpansionIconStates">
-								<VisualState x:Name="ExpandedIconNormal">
+							<VisualStateGroup x:Name="ChevronStates">
+								<VisualState x:Name="ChevronHidden" />
+								<VisualState x:Name="ChevronVisibleOpen">
 									<VisualState.Setters>
-										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="NormalOn" />
+										<Setter Target="ExpandCollapseChevron.Visibility" Value="Visible" />
 									</VisualState.Setters>
 								</VisualState>
-								<VisualState x:Name="ExpandedIconPressed">
+								<VisualState x:Name="ChevronVisibleClosed">
 									<VisualState.Setters>
-										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PressedOn" />
+										<Setter Target="ExpandCollapseChevron.Visibility" Value="Visible" />
 									</VisualState.Setters>
 								</VisualState>
-								<VisualState x:Name="CollapsedIconNormal">
+							</VisualStateGroup>
+
+							<VisualStateGroup x:Name="PointerChevronStates">
+								<VisualState x:Name="NormalChevronHidden">
 									<VisualState.Setters>
 										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="NormalOff" />
 									</VisualState.Setters>
 								</VisualState>
-								<VisualState x:Name="CollapsedIconPressed">
+								<VisualState x:Name="NormalChevronVisibleOpen">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="NormalOn" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="NormalChevronVisibleClosed">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="NormalOff" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="PointerOverChevronHidden">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PointerOverOff" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="PointerOverChevronVisibleOpen">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PointerOverOn" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="PointerOverChevronVisibleClosed">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PointerOverOff" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="PressedChevronHidden">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PressedOff" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="PressedChevronVisibleOpen">
+									<VisualState.Setters>
+										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PressedOn" />
+									</VisualState.Setters>
+								</VisualState>
+								<VisualState x:Name="PressedChevronVisibleClosed">
 									<VisualState.Setters>
 										<Setter Target="ExpandCollapseChevron.(AnimatedIcon.State)" Value="PressedOff" />
 									</VisualState.Setters>
@@ -224,126 +264,46 @@
 							</VisualStateGroup>
 
 							<VisualStateGroup x:Name="BackgroundStates">
-								<!--<VisualStateGroup.Transitions>
-									<VisualTransition From="NormalSelected" To="PointerOverSelected">
-										<Storyboard>
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicator"
-												Storyboard.TargetProperty="Opacity"
-												To="1"
-												Duration="0:0:0.083" />
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicatorScaleTransform"
-												Storyboard.TargetProperty="ScaleY"
-												To="1"
-												Duration="0:0:0.167">
-												<DoubleAnimation.EasingFunction>
-													<CubicEase EasingMode="EaseOut" />
-												</DoubleAnimation.EasingFunction>
-											</DoubleAnimation>
-										</Storyboard>
-									</VisualTransition>
-									<VisualTransition From="PointerOverSelected" To="NormalSelected">
-										<Storyboard>
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicator"
-												Storyboard.TargetProperty="Opacity"
-												To="1"
-												Duration="0:0:0.083" />
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicatorScaleTransform"
-												Storyboard.TargetProperty="ScaleY"
-												To="1"
-												Duration="0:0:0.167">
-												<DoubleAnimation.EasingFunction>
-													<CubicEase EasingMode="EaseOut" />
-												</DoubleAnimation.EasingFunction>
-											</DoubleAnimation>
-										</Storyboard>
-									</VisualTransition>
-									<VisualTransition From="PointerOverSelected" To="PressedSelected">
-										<Storyboard>
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicator"
-												Storyboard.TargetProperty="Opacity"
-												To="1"
-												Duration="0:0:0.083" />
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicatorScaleTransform"
-												Storyboard.TargetProperty="ScaleY"
-												To="0.7"
-												Duration="0:0:0.083">
-												<DoubleAnimation.EasingFunction>
-													<CubicEase EasingMode="EaseOut" />
-												</DoubleAnimation.EasingFunction>
-											</DoubleAnimation>
-										</Storyboard>
-									</VisualTransition>
-									<VisualTransition From="PressedSelected" To="PointerOverSelected">
-										<Storyboard>
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicator"
-												Storyboard.TargetProperty="Opacity"
-												To="1"
-												Duration="0:0:0.083" />
-											<DoubleAnimation
-												Storyboard.TargetName="SelectionIndicatorScaleTransform"
-												Storyboard.TargetProperty="ScaleY"
-												To="1"
-												Duration="0:0:0.167">
-												<DoubleAnimation.EasingFunction>
-													<CubicEase EasingMode="EaseOut" />
-												</DoubleAnimation.EasingFunction>
-											</DoubleAnimation>
-										</Storyboard>
-									</VisualTransition>
-								</VisualStateGroup.Transitions>-->
 								<VisualState x:Name="NormalUnselected">
 									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SubtleFillColorTransparentBrush}" />
-										<Setter Target="PART_RootGrid.BorderBrush" Value="Transparent" />
-										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SidebarViewItemBackground}" />
+										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SidebarViewItemBorderBrush}" />
+										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource SidebarViewItemSelectionIndicatorBackground}" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="NormalSelected">
 									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource ControlFillColorDefaultBrush}" />
-										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrush}" />
-										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
-										<!--<Setter Target="SelectionIndicatorScaleTransform.ScaleY" Value="1" />
-										<Setter Target="SelectionIndicator.Opacity" Value="1" />-->
+										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SidebarViewItemBackgroundSelected}" />
+										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SidebarViewItemBorderBrushSelected}" />
+										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource SidebarViewItemSelectionIndicatorBackground}" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="PointerOverUnselected">
 									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
-										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SubtleFillColorSecondaryBrush}" />
-										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SidebarViewItemBackgroundPointerOver}" />
+										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SidebarViewItemBorderBrushPointerOver}" />
+										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource SidebarViewItemSelectionIndicatorBackground}" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="PointerOverSelected">
 									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource ControlFillColorSecondaryBrush}" />
-										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrush}" />
-										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource AccentFillColorSecondaryBrush}" />
-										<!--<Setter Target="SelectionIndicatorScaleTransform.ScaleY" Value="1" />
-										<Setter Target="SelectionIndicator.Opacity" Value="1" />-->
+										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SidebarViewItemBackgroundSelectedPointerOver}" />
+										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SidebarViewItemBorderBrushSelectedPointerOver}" />
+										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource SidebarViewItemSelectionIndicatorBackgroundPointerOver}" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="PressedUnselected">
 									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
-										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SubtleFillColorTertiaryBrush}" />
-										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource AccentFillColorDefaultBrush}" />
+										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SidebarViewItemBackgroundPressed}" />
+										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SidebarViewItemBorderBrushPressed}" />
+										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource SidebarViewItemSelectionIndicatorBackground}" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="PressedSelected">
 									<VisualState.Setters>
-										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource ControlFillColorTertiaryBrush}" />
-										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource ButtonBorderBrush}" />
-										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource AccentFillColorTertiaryBrush}" />
-										<!--<Setter Target="SelectionIndicatorScaleTransform.ScaleY" Value="0.7" />
-										<Setter Target="SelectionIndicator.Opacity" Value="1" />-->
+										<Setter Target="PART_RootGrid.Background" Value="{ThemeResource SidebarViewItemBackgroundSelectedPressed}" />
+										<Setter Target="PART_RootGrid.BorderBrush" Value="{ThemeResource SidebarViewItemBorderBrushSelectedPressed}" />
+										<Setter Target="SelectionIndicator.Background" Value="{ThemeResource SidebarViewItemSelectionIndicatorBackgroundPressed}" />
 									</VisualState.Setters>
 								</VisualState>
 							</VisualStateGroup>
