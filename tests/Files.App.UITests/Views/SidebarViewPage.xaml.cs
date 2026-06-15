@@ -35,11 +35,12 @@ namespace Files.App.UITests.Views
 			new SidebarViewSampleItem("Settings", "\uE713"),
 		];
 
-		public Dictionary<SidebarDisplayMode, string> DisplayModes { get; } = new()
+		public Dictionary<SidebarViewDisplayMode, string> DisplayModes { get; } = new()
 		{
-			[SidebarDisplayMode.Compact] = "Compact",
-			[SidebarDisplayMode.Minimal] = "Minimal",
-			[SidebarDisplayMode.Expanded] = "Expanded",
+			[SidebarViewDisplayMode.Auto] = "Auto",
+			[SidebarViewDisplayMode.LeftCompact] = "LeftCompact",
+			[SidebarViewDisplayMode.LeftMinimal] = "LeftMinimal",
+			[SidebarViewDisplayMode.Left] = "Left",
 		};
 
 		public SidebarViewPage()
@@ -49,7 +50,7 @@ namespace Files.App.UITests.Views
 
 		private void DisplayModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
 		{
-			if (sender is not ComboBox comboBox || comboBox.SelectedValue is not SidebarDisplayMode displayMode)
+			if (sender is not ComboBox comboBox || comboBox.SelectedValue is not SidebarViewDisplayMode displayMode)
 				return;
 
 			SampleSidebarView.DisplayMode = displayMode;

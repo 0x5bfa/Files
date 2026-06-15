@@ -48,7 +48,7 @@ public sealed partial class SidebarViewItemAutomationPeer : FrameworkElementAuto
 
 	protected override string GetNameCore()
 	{
-		return Owner.Text ?? string.Empty;
+		return Owner.Text?.ToString() ?? string.Empty;
 	}
 
 	protected override string GetClassNameCore()

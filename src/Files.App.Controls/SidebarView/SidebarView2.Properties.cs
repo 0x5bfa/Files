@@ -23,26 +23,32 @@ public partial class SidebarView2
 	[GeneratedDependencyProperty(DefaultValue = 56d)]
 	public partial double CompactPaneLength { get; set; }
 
-	[GeneratedDependencyProperty(DefaultValue = SidebarDisplayMode.Expanded)]
-	public partial SidebarDisplayMode DisplayMode { get; set; }
+	[GeneratedDependencyProperty(DefaultValue = 641d)]
+	public partial double CompactModeThresholdWidth { get; set; }
+
+	[GeneratedDependencyProperty(DefaultValue = 1008d)]
+	public partial double ExpandedModeThresholdWidth { get; set; }
+
+	[GeneratedDependencyProperty(DefaultValue = SidebarViewDisplayMode.Auto)]
+	public partial SidebarViewDisplayMode DisplayMode { get; set; }
 
 	[GeneratedDependencyProperty(DefaultValue = true)]
 	public partial bool CanResizePane { get; set; }
+
+	[GeneratedDependencyProperty(DefaultValue = true)]
+	public partial bool IsPaneToggleButtonVisible { get; set; }
+
+	[GeneratedDependencyProperty(DefaultValue = SidebarViewBackButtonVisible.Auto)]
+	public partial SidebarViewBackButtonVisible IsBackButtonVisible { get; set; }
+
+	[GeneratedDependencyProperty(DefaultValue = false)]
+	public partial bool IsBackEnabled { get; set; }
 
 	[GeneratedDependencyProperty]
 	public partial Brush? PaneBackground { get; set; }
 
 	[GeneratedDependencyProperty]
-	public partial object? PaneHeader { get; set; }
-
-	[GeneratedDependencyProperty]
 	public partial AutoSuggestBox? AutoSuggestBox { get; set; }
-
-	[GeneratedDependencyProperty]
-	public partial object? PaneFooter { get; set; }
-
-	[GeneratedDependencyProperty]
-	public partial object? PaneContent { get; set; }
 
 	[GeneratedDependencyProperty]
 	public partial object? MenuItemsSource { get; set; }
@@ -99,17 +105,27 @@ public partial class SidebarView2
 	partial void OnOpenPaneLengthChanged(double newValue)
 	{
 		UpdateTemplateSettings();
-		UpdateOpenPaneLengthColumn();
+		UpdateSplitViewDisplayMode();
 	}
 
-	partial void OnDisplayModeChanged(SidebarDisplayMode newValue)
+	partial void OnDisplayModeChanged(SidebarViewDisplayMode newValue)
 	{
-		UpdateDisplayMode();
+		UpdateAdaptiveDisplayMode(ActualWidth, true);
 	}
 
 	partial void OnIsPaneOpenChanged(bool newValue)
 	{
-		UpdateMinimalMode();
+		UpdatePaneState();
+	}
+
+	partial void OnIsPaneToggleButtonVisibleChanged(bool newValue)
+	{
+		UpdatePaneButtons();
+	}
+
+	partial void OnIsBackButtonVisibleChanged(SidebarViewBackButtonVisible newValue)
+	{
+		UpdatePaneButtons();
 	}
 
 	partial void OnCanResizePaneChanged(bool newValue)
@@ -117,9 +133,24 @@ public partial class SidebarView2
 		UpdateResizerAvailability();
 	}
 
+	partial void OnAutoSuggestBoxChanged(AutoSuggestBox? newValue)
+	{
+		UpdatePaneButtons();
+	}
+
 	partial void OnCompactPaneLengthChanged(double newValue)
 	{
 		UpdateTemplateSettings();
 		UpdateDisplayMode();
+	}
+
+	partial void OnCompactModeThresholdWidthChanged(double newValue)
+	{
+		UpdateAdaptiveDisplayMode(ActualWidth);
+	}
+
+	partial void OnExpandedModeThresholdWidthChanged(double newValue)
+	{
+		UpdateAdaptiveDisplayMode(ActualWidth);
 	}
 }

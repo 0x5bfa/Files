@@ -11,7 +11,7 @@ public partial class SidebarViewItem
 	public partial object? Icon { get; set; }
 
 	[GeneratedDependencyProperty]
-	public partial string? Text { get; set; }
+	public partial object? Text { get; set; }
 
 	[GeneratedDependencyProperty]
 	public partial object? Decorator { get; set; }

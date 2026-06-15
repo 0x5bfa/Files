@@ -31,7 +31,7 @@
 			</DataTemplate>
 
 			<DataTemplate x:Key="SidebarViewHeaderItemTemplate" x:DataType="local:SidebarViewSampleHeaderItem">
-				<controls:SidebarViewItem Children="{x:Bind Children}" Text="{x:Bind Text}">
+				<controls:SidebarViewItem Children="{x:Bind Children}">
 					<controls:SidebarViewItem.Icon>
 						<FontIcon
 							Width="16"
@@ -39,6 +39,12 @@
 							FontSize="16"
 							Glyph="{x:Bind Glyph}" />
 					</controls:SidebarViewItem.Icon>
+					<controls:SidebarViewItem.Text>
+						<TextBlock
+							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
+							Style="{StaticResource BodyStrongTextBlockStyle}"
+							Text="{x:Bind Text}" />
+					</controls:SidebarViewItem.Text>
 				</controls:SidebarViewItem>
 			</DataTemplate>
 
@@ -60,7 +66,7 @@
 					<controls:SidebarView2
 						x:Name="SampleSidebarView"
 						CompactPaneLength="56"
-						DisplayMode="Compact"
+						DisplayMode="Auto"
 						FooterMenuItemTemplate="{StaticResource SidebarViewItemTemplate}"
 						FooterMenuItemsSource="{x:Bind FooterItems}"
 						IsPaneOpen="True"
@@ -68,16 +74,17 @@
 						MenuItemsSource="{x:Bind SampleItems}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>
-							<AutoSuggestBox Margin="12,8,12,4" PlaceholderText="Search sidebar" />
+							<AutoSuggestBox />
 						</controls:SidebarView2.AutoSuggestBox>
 
 						<Grid
-							Padding="24"
 							Background="{StaticResource CardBackgroundFillColorDefault}"
 							BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
 							BorderThickness="1,1,0,0"
 							CornerRadius="8,0,0,0">
-							<TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="{Binding SampleSidebarView.SelectedItem.Text, Mode=OneWay}" />
+							<TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Content" />
+
+							<Rectangle Fill="{ThemeResource AccentFillColorDefaultBrush}" />
 						</Grid>
 					</controls:SidebarView2>
 				</Grid>
@@ -102,6 +109,16 @@
 							</DataTemplate>
 						</ComboBox.ItemTemplate>
 					</ComboBox>
+
+					<NumberBox
+						x:Name="CompactPaneLengthNumberBox"
+						Header="Compact pane length"
+						Text="{x:Bind SampleSidebarView.CompactPaneLength, Mode=TwoWay}" />
+
+					<NumberBox
+						x:Name="OpenPaneLengthNumberBox"
+						Header="Open pane length"
+						Text="{x:Bind SampleSidebarView.OpenPaneLength, Mode=TwoWay}" />
 
 				</StackPanel>
 			</controls:SamplePanel.SideContent>
