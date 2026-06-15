@@ -63,10 +63,11 @@ public partial class SidebarView2
 	public partial DataTemplateSelector? FooterMenuItemTemplateSelector { get; set; }
 
 	[GeneratedDependencyProperty]
-	public partial SidebarViewItem? SelectedItem { get; set; }
+	public partial object? SelectedItem { get; set; }
 
-	partial void OnSelectedItemChanged(SidebarViewItem? newValue)
+	partial void OnSelectedItemChanged(object? newValue)
 	{
+		SelectedItemContainer = null;
 		UpdatePreparedMenuItems();
 	}
 

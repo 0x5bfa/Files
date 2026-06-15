@@ -6,7 +6,7 @@
 
 	<Style BasedOn="{StaticResource DefaultSidebarView2Style}" TargetType="local:SidebarView2" />
 
-	<Thickness x:Key="SidebarViewItemsControlMargin">4,8,4,8</Thickness>
+	<Thickness x:Key="SidebarViewItemsControlMargin">8,8,8,8</Thickness>
 	<x:Double x:Key="SidebarViewItemsControlSpacing">4</x:Double>
 
 	<Style x:Key="DefaultSidebarView2Style" TargetType="local:SidebarView2">

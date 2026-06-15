@@ -41,7 +41,7 @@ public sealed partial class SidebarView2AutomationPeer : FrameworkElementAutomat
 
 	public IRawElementProviderSimple[] GetSelection()
 	{
-		if (Owner.SelectedItem is UIElement selectedElement)
+		if (Owner.SelectedItemContainer is UIElement selectedElement)
 		{
 			var peer = CreatePeerForElement(selectedElement);
 			if (peer is not null)
