@@ -4,56 +4,8 @@
 	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
 	xmlns:controls="using:Files.App.Controls"
 	xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-	xmlns:data="using:Files.App.UITests.Data"
-	xmlns:local="using:Files.App.UITests.Views"
 	xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
 	mc:Ignorable="d">
-
-	<Page.Resources>
-		<ResourceDictionary>
-
-			<data:SidebarViewSampleMenuItemTemplateSelector
-				x:Key="SidebarViewSampleMenuItemTemplateSelector"
-				HeaderItemTemplate="{StaticResource SidebarViewHeaderItemTemplate}"
-				ItemTemplate="{StaticResource SidebarViewItemTemplate}"
-				SeparatorItemTemplate="{StaticResource SidebarViewSeparatorItemTemplate}" />
-
-			<DataTemplate x:Key="SidebarViewItemTemplate" x:DataType="local:SidebarViewSampleItem">
-				<controls:SidebarViewItem Children="{x:Bind Children}" Text="{x:Bind Text}">
-					<controls:SidebarViewItem.Icon>
-						<FontIcon
-							Width="16"
-							Height="16"
-							FontSize="16"
-							Glyph="{x:Bind Glyph}" />
-					</controls:SidebarViewItem.Icon>
-				</controls:SidebarViewItem>
-			</DataTemplate>
-
-			<DataTemplate x:Key="SidebarViewHeaderItemTemplate" x:DataType="local:SidebarViewSampleHeaderItem">
-				<controls:SidebarViewItem Children="{x:Bind Children}">
-					<controls:SidebarViewItem.Icon>
-						<FontIcon
-							Width="16"
-							Height="16"
-							FontSize="16"
-							Glyph="{x:Bind Glyph}" />
-					</controls:SidebarViewItem.Icon>
-					<controls:SidebarViewItem.Text>
-						<TextBlock
-							Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-							Style="{StaticResource BodyStrongTextBlockStyle}"
-							Text="{x:Bind Text}" />
-					</controls:SidebarViewItem.Text>
-				</controls:SidebarViewItem>
-			</DataTemplate>
-
-			<DataTemplate x:Key="SidebarViewSeparatorItemTemplate" x:DataType="local:SidebarViewSampleSeparatorItem">
-				<controls:SidebarViewSeparatorItem />
-			</DataTemplate>
-
-		</ResourceDictionary>
-	</Page.Resources>
 
 	<StackPanel Spacing="24">
 
@@ -67,25 +19,95 @@
 						x:Name="SampleSidebarView"
 						CompactPaneLength="56"
 						DisplayMode="Auto"
-						FooterMenuItemTemplate="{StaticResource SidebarViewItemTemplate}"
 						FooterMenuItemsSource="{x:Bind FooterItems}"
+						Header="Header"
 						IsPaneOpen="True"
-						MenuItemTemplateSelector="{StaticResource SidebarViewSampleMenuItemTemplateSelector}"
 						MenuItemsSource="{x:Bind SampleItems}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>
 							<AutoSuggestBox />
 						</controls:SidebarView2.AutoSuggestBox>
 
-						<Grid
-							Background="{StaticResource CardBackgroundFillColorDefault}"
-							BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
-							BorderThickness="1,1,0,0"
-							CornerRadius="8,0,0,0">
-							<TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Content" />
+						<ScrollViewer>
+							<StackPanel>
+								<Grid>
+									<Grid.Resources>
+										<x:Double x:Key="TileHeight">150</x:Double>
+									</Grid.Resources>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="2*" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="*" />
+									</Grid.ColumnDefinitions>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+									</Grid.RowDefinitions>
 
-							<Rectangle Fill="{ThemeResource AccentFillColorDefaultBrush}" />
-						</Grid>
+									<Grid
+										Grid.Row="1"
+										Grid.RowSpan="2"
+										Grid.Column="0"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="DarkSalmon" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="1"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="DarkRed" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="2"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="LightCoral" />
+
+								</Grid>
+								<Grid>
+									<Grid.Resources>
+										<x:Double x:Key="TileHeight">150</x:Double>
+									</Grid.Resources>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="2*" />
+									</Grid.ColumnDefinitions>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="*" />
+									</Grid.RowDefinitions>
+
+									<Grid
+										Grid.Row="1"
+										Grid.Column="1"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="DarkRed" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="0"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="LightCoral" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="2"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="IndianRed" />
+
+									<Grid
+										Grid.Row="2"
+										Grid.ColumnSpan="3"
+										Margin="4">
+										<TextBlock Text="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum." TextWrapping="WrapWholeWords" />
+									</Grid>
+
+								</Grid>
+							</StackPanel>
+						</ScrollViewer>
 					</controls:SidebarView2>
 				</Grid>
 			</controls:SamplePanel.MainContent>
@@ -101,6 +123,7 @@
 						x:Name="DisplayModeComboBox"
 						Header="Display Mode"
 						ItemsSource="{x:Bind DisplayModes}"
+						SelectedIndex="0"
 						SelectedValuePath="Key"
 						SelectionChanged="DisplayModeComboBox_SelectionChanged">
 						<ComboBox.ItemTemplate>

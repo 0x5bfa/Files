@@ -12,6 +12,21 @@
 	<x:Double x:Key="SidebarViewPaneButtonWidth">40</x:Double>
 	<x:Double x:Key="SidebarViewPaneButtonHeight">32</x:Double>
 
+	<DataTemplate x:Key="DefaultSidebarViewFlatItemTemplate">
+		<local:SidebarViewItem
+			Margin="{Binding SectionGapMargin}"
+			AutomationProperties.AutomationId="{Binding Item.Text}"
+			ContentOpacity="{Binding RowOpacity}"
+			Decorator="{Binding Item.ItemDecorator}"
+			Depth="{Binding Depth}"
+			Icon="{Binding Item.IconElement}"
+			IsExpanded="{Binding Item.IsExpanded, Mode=TwoWay}"
+			Item="{Binding Item}"
+			ItemValue="{Binding Item}"
+			Text="{Binding Item.Text}"
+			ToolTip="{Binding Item.ToolTip}" />
+	</DataTemplate>
+
 	<Style x:Key="DefaultSidebarView2Style" TargetType="local:SidebarView2">
 		<Setter Property="Background" Value="{ThemeResource ControlFillColorTransparentBrush}" />
 		<Setter Property="HorizontalAlignment" Value="Stretch" />
@@ -253,54 +268,56 @@
 										HorizontalScrollMode="Disabled"
 										VerticalScrollBarVisibility="Auto"
 										XYFocusKeyboardNavigation="Enabled">
-										<ItemsControl
+										<ItemsRepeater
 											x:Name="PART_MenuItemsHost"
 											Margin="{StaticResource SidebarViewItemsControlMargin}"
 											HorizontalAlignment="Stretch"
-											ItemTemplate="{TemplateBinding MenuItemTemplate}"
-											ItemTemplateSelector="{TemplateBinding MenuItemTemplateSelector}"
-											ItemsSource="{TemplateBinding MenuItemsSource}"
+											ItemTemplate="{StaticResource DefaultSidebarViewFlatItemTemplate}"
 											XYFocusKeyboardNavigation="Enabled">
-											<ItemsControl.ItemContainerStyle>
-												<Style TargetType="ContentPresenter">
-													<Setter Property="HorizontalAlignment" Value="Stretch" />
-												</Style>
-											</ItemsControl.ItemContainerStyle>
-											<ItemsControl.ItemsPanel>
-												<ItemsPanelTemplate>
-													<StackPanel Orientation="Vertical" Spacing="{StaticResource SidebarViewItemsControlSpacing}" />
-												</ItemsPanelTemplate>
-											</ItemsControl.ItemsPanel>
-										</ItemsControl>
+											<ItemsRepeater.Layout>
+												<StackLayout Spacing="{StaticResource SidebarViewItemsControlSpacing}" />
+											</ItemsRepeater.Layout>
+										</ItemsRepeater>
 									</ScrollViewer>
 
-									<ItemsControl
+									<ItemsRepeater
 										x:Name="PART_FooterMenuItemsHost"
 										Grid.Row="4"
 										Margin="{StaticResource SidebarViewItemsControlMargin}"
 										HorizontalAlignment="Stretch"
-										ItemTemplate="{TemplateBinding FooterMenuItemTemplate}"
-										ItemTemplateSelector="{TemplateBinding FooterMenuItemTemplateSelector}"
-										ItemsSource="{TemplateBinding FooterMenuItemsSource}"
+										ItemTemplate="{StaticResource DefaultSidebarViewFlatItemTemplate}"
 										XYFocusKeyboardNavigation="Enabled">
-										<ItemsControl.ItemContainerStyle>
-											<Style TargetType="ContentPresenter">
-												<Setter Property="HorizontalAlignment" Value="Stretch" />
-											</Style>
-										</ItemsControl.ItemContainerStyle>
-										<ItemsControl.ItemsPanel>
-											<ItemsPanelTemplate>
-												<StackPanel Orientation="Vertical" Spacing="{StaticResource SidebarViewItemsControlSpacing}" />
-											</ItemsPanelTemplate>
-										</ItemsControl.ItemsPanel>
-									</ItemsControl>
+										<ItemsRepeater.Layout>
+											<StackLayout Spacing="{StaticResource SidebarViewItemsControlSpacing}" />
+										</ItemsRepeater.Layout>
+									</ItemsRepeater>
 								</Grid>
 							</SplitView.Pane>
 
 							<SplitView.Content>
-								<Grid>
+								<Grid
+									x:Name="PART_ContentGrid"
+									Margin="{ThemeResource SidebarViewContentMargin}"
+									Background="{StaticResource CardBackgroundFillColorDefault}"
+									BorderBrush="{ThemeResource SidebarViewContentBorderBrush}"
+									BorderThickness="{ThemeResource SidebarViewContentBorderThickness}"
+									CornerRadius="{ThemeResource SidebarViewContentCornerRadius}">
+
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="*" />
+									</Grid.RowDefinitions>
+
+									<ContentPresenter
+										x:Name="HeaderContentPresenter"
+										Margin="56,44,0,0"
+										Content="{TemplateBinding Header}"
+										Style="{StaticResource SidebarViewTitleHeaderTextStyle}"
+										Visibility="Collapsed" />
+
 									<ContentPresenter
 										x:Name="ContentPresenter"
+										Grid.Row="1"
 										VerticalAlignment="Stretch"
 										HorizontalContentAlignment="{TemplateBinding HorizontalContentAlignment}"
 										VerticalContentAlignment="{TemplateBinding VerticalContentAlignment}"
@@ -310,6 +327,7 @@
 
 									<Grid
 										x:Name="PART_PaneLightDismissLayer"
+										Grid.RowSpan="2"
 										HorizontalAlignment="Stretch"
 										VerticalAlignment="Stretch"
 										Background="Transparent"
@@ -318,6 +336,7 @@
 
 									<Border
 										x:Name="PART_SidebarResizer"
+										Grid.RowSpan="2"
 										MinWidth="4"
 										Margin="0,60,0,40"
 										HorizontalAlignment="Left"
@@ -364,6 +383,8 @@
 										<Setter Target="PART_PaneColumnGrid.BorderThickness" Value="0,0,1,0" />
 										<Setter Target="PART_PaneLightDismissLayer.Visibility" Value="Collapsed" />
 										<Setter Target="PART_SidebarResizer.Visibility" Value="Collapsed" />
+										<Setter Target="PART_ContentGrid.BorderThickness" Value="{ThemeResource SidebarViewContentBorderThicknessClosedCompact}" />
+										<Setter Target="PART_ContentGrid.CornerRadius" Value="{ThemeResource SidebarViewContentCornerRadiusClosedCompact}" />
 									</VisualState.Setters>
 								</VisualState>
 								<VisualState x:Name="MinimalExpanded">
@@ -373,6 +394,8 @@
 										<Setter Target="PART_PaneColumnGrid.BorderThickness" Value="0,0,1,0" />
 										<Setter Target="PART_PaneLightDismissLayer.Visibility" Value="Visible" />
 										<Setter Target="PART_SidebarResizer.Visibility" Value="Collapsed" />
+										<Setter Target="PART_ContentGrid.BorderThickness" Value="{ThemeResource SidebarViewContentBorderThicknessClosedCompact}" />
+										<Setter Target="PART_ContentGrid.CornerRadius" Value="{ThemeResource SidebarViewContentCornerRadiusClosedCompact}" />
 									</VisualState.Setters>
 								</VisualState>
 							</VisualStateGroup>
@@ -428,11 +451,29 @@
 									</Storyboard>
 								</VisualState>
 							</VisualStateGroup>
+
+							<VisualStateGroup x:Name="HeaderStates">
+								<VisualState x:Name="HeaderCollapsed" />
+								<VisualState x:Name="HeaderVisible">
+									<VisualState.Setters>
+										<Setter Target="HeaderContentPresenter.Visibility" Value="Visible" />
+									</VisualState.Setters>
+								</VisualState>
+							</VisualStateGroup>
+
 						</VisualStateManager.VisualStateGroups>
 					</Grid>
 				</ControlTemplate>
 			</Setter.Value>
 		</Setter>
+	</Style>
+
+	<Style x:Key="SidebarViewTitleHeaderTextStyle" TargetType="ContentPresenter">
+		<Setter Property="FontWeight" Value="SemiBold" />
+		<Setter Property="FontSize" Value="28" />
+		<Setter Property="FontFamily" Value="XamlAutoFontFamily" />
+		<Setter Property="Margin" Value="{ThemeResource NavigationViewHeaderMargin}" />
+		<Setter Property="VerticalAlignment" Value="Stretch" />
 	</Style>
 
 </ResourceDictionary>

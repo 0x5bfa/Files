@@ -25,7 +25,7 @@ public sealed partial class SidebarViewItemAutomationPeer : FrameworkElementAuto
 	{
 		get
 		{
-			if (Owner.Children is IList { Count: > 0 })
+			if (Owner.HasChildren())
 				return Owner.IsExpanded ? ExpandCollapseState.Expanded : ExpandCollapseState.Collapsed;
 
 			return ExpandCollapseState.LeafNode;
@@ -66,7 +66,7 @@ public sealed partial class SidebarViewItemAutomationPeer : FrameworkElementAuto
 		if (patternInterface is PatternInterface.Invoke or PatternInterface.SelectionItem)
 			return this;
 
-		if (patternInterface == PatternInterface.ExpandCollapse && Owner.Children is IList { Count: > 0 })
+		if (patternInterface == PatternInterface.ExpandCollapse && Owner.HasChildren())
 			return this;
 
 		return base.GetPatternCore(patternInterface);
@@ -79,13 +79,13 @@ public sealed partial class SidebarViewItemAutomationPeer : FrameworkElementAuto
 
 	public void Collapse()
 	{
-		if (Owner.Children is IList { Count: > 0 })
+		if (Owner.HasChildren())
 			Owner.IsExpanded = false;
 	}
 
 	public void Expand()
 	{
-		if (Owner.Children is IList { Count: > 0 })
+		if (Owner.HasChildren())
 			Owner.IsExpanded = true;
 	}
 
@@ -123,18 +123,36 @@ public sealed partial class SidebarViewItemAutomationPeer : FrameworkElementAuto
 		if (collection.Count == 0)
 			return -1;
 
-		var itemValue = Owner.DataContext ?? Owner;
-		return collection.IndexOf(itemValue) + 1;
+		var flatItem = Owner.DataContext as FlatSidebarItem;
+		if (flatItem is null)
+			return -1;
+
+		var index = IndexOf(collection, flatItem);
+		return index < 0 ? -1 : index + 1;
 	}
 
-	private IList GetOwnerCollection()
+	private IReadOnlyList<FlatSidebarItem> GetOwnerCollection()
 	{
-		if (Owner.FindAscendant<SidebarViewItem>() is SidebarViewItem parent && parent.Children is IList children)
-			return children;
+		if (Owner.Owner is null)
+			return [];
 
-		if (Owner.Owner?.MenuItemsSource is IList rootItems)
-			return rootItems;
+		if (Owner.DataContext is FlatSidebarItem flatItem &&
+			IndexOf(Owner.Owner.FooterVisibleItems, flatItem) >= 0)
+		{
+			return Owner.Owner.FooterVisibleItems;
+		}
 
-		return new List<object>();
+		return Owner.Owner.MenuVisibleItems;
+	}
+
+	private static int IndexOf(IReadOnlyList<FlatSidebarItem> collection, FlatSidebarItem item)
+	{
+		for (var index = 0; index < collection.Count; index++)
+		{
+			if (ReferenceEquals(collection[index], item))
+				return index;
+		}
+
+		return -1;
 	}
 }
