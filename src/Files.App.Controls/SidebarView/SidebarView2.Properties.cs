@@ -12,6 +12,9 @@ public partial class SidebarView2
 	public partial object? Content { get; set; }
 
 	[GeneratedDependencyProperty]
+	public partial object? Header { get; set; }
+
+	[GeneratedDependencyProperty]
 	public partial DataTemplate? ContentTemplate { get; set; }
 
 	[GeneratedDependencyProperty(DefaultValue = true)]
@@ -79,11 +82,17 @@ public partial class SidebarView2
 
 	partial void OnMenuItemsSourceChanged(object? newValue)
 	{
-		QueueUpdatePreparedMenuItems();
+		SetMenuItemsSource(newValue);
+	}
+
+	partial void OnFooterMenuItemsSourceChanged(object? newValue)
+	{
+		SetFooterMenuItemsSource(newValue);
 	}
 
 	partial void OnMenuItemTemplateChanged(DataTemplate? newValue)
 	{
+		UpdateItemsHostTemplates();
 		QueueUpdatePreparedMenuItems();
 	}
 
@@ -94,6 +103,7 @@ public partial class SidebarView2
 
 	partial void OnFooterMenuItemTemplateChanged(DataTemplate? newValue)
 	{
+		UpdateItemsHostTemplates();
 		QueueUpdatePreparedMenuItems();
 	}
 
@@ -152,5 +162,10 @@ public partial class SidebarView2
 	partial void OnExpandedModeThresholdWidthChanged(double newValue)
 	{
 		UpdateAdaptiveDisplayMode(ActualWidth);
+	}
+
+	partial void OnHeaderChanged(object? newValue)
+	{
+		UpdateHeaderVisibility();
 	}
 }

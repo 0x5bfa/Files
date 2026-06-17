@@ -39,6 +39,8 @@ public partial class SidebarView2 : Control
 	private const string VisualStateNameListSizeFull = "ListSizeFull";
 	private const string VisualStateNamePaneOverlaying = "PaneOverlaying";
 	private const string VisualStateNamePaneNotOverlaying = "PaneNotOverlaying";
+	private const string VisualStateNameHeaderCollapsed = "HeaderCollapsed";
+	private const string VisualStateNameHeaderVisible = "HeaderVisible";
 
 	private bool _draggingSidebarResizer;
 	private bool _fromOnApplyTemplate;
@@ -56,8 +58,10 @@ public partial class SidebarView2 : Control
 	private Border? _sidebarResizer;
 	private Control? _sidebarResizerControl;
 	private Grid? _paneLightDismissLayer;
-	private ItemsControl? _menuItemsHost;
-	private ItemsControl? _footerMenuItemsHost;
+	private ItemsRepeater? _menuItemsHost;
+	private ItemsRepeater? _footerMenuItemsHost;
+	private object? _defaultMenuItemTemplate;
+	private object? _defaultFooterMenuItemTemplate;
 	private readonly SidebarViewItemFactory _itemFactory;
 
 	public event EventHandler<SidebarView2ItemInvokedEventArgs>? ItemInvoked;
@@ -119,10 +123,16 @@ public partial class SidebarView2 : Control
 			}
 
 			if (_menuItemsHost is not null)
+			{
 				_menuItemsHost.Loaded -= ItemsHost_Loaded;
+				_menuItemsHost.ElementPrepared -= ItemsHost_ElementPrepared;
+			}
 
 			if (_footerMenuItemsHost is not null)
+			{
 				_footerMenuItemsHost.Loaded -= ItemsHost_Loaded;
+				_footerMenuItemsHost.ElementPrepared -= ItemsHost_ElementPrepared;
+			}
 
 			if (_rootSplitView is not null)
 			{
@@ -149,8 +159,8 @@ public partial class SidebarView2 : Control
 			_sidebarResizer = GetTemplateChild(TemplatePartNameSidebarResizer) as Border;
 			_sidebarResizerControl = GetTemplateChild(TemplatePartNameSidebarResizerControl) as Control;
 			_paneLightDismissLayer = GetTemplateChild(TemplatePartNamePaneLightDismissLayer) as Grid;
-			_menuItemsHost = GetTemplateChild(TemplatePartNameMenuItemsHost) as ItemsControl;
-			_footerMenuItemsHost = GetTemplateChild(TemplatePartNameFooterMenuItemsHost) as ItemsControl;
+			_menuItemsHost = GetTemplateChild(TemplatePartNameMenuItemsHost) as ItemsRepeater;
+			_footerMenuItemsHost = GetTemplateChild(TemplatePartNameFooterMenuItemsHost) as ItemsRepeater;
 
 			if (_rootSplitView is not null)
 			{
@@ -189,14 +199,15 @@ public partial class SidebarView2 : Control
 				_paneLightDismissLayer.Tapped += PaneLightDismissLayer_Tapped;
 			}
 
-			if (_menuItemsHost is not null)
-				_menuItemsHost.Loaded += ItemsHost_Loaded;
-
-			if (_footerMenuItemsHost is not null)
-				_footerMenuItemsHost.Loaded += ItemsHost_Loaded;
+			ConfigureItemsHost(_menuItemsHost, _menuFlatTree.Items, false);
+			ConfigureItemsHost(_footerMenuItemsHost, _footerFlatTree.Items, true);
+			SetMenuItemsSource(MenuItemsSource);
+			SetFooterMenuItemsSource(FooterMenuItemsSource);
+			UpdateItemsHostTemplates();
 
 			UpdatePreparedMenuItems();
 			UpdateAdaptiveDisplayMode(ActualWidth, true);
+			UpdateHeaderVisibility();
 			UpdatePaneButtons();
 			UpdateResizerAvailability();
 		}
@@ -208,10 +219,11 @@ public partial class SidebarView2 : Control
 
 	internal void RaiseItemInvoked(SidebarViewItem item)
 	{
-		SelectedItem = item.ItemValue;
+		var itemValue = item.ResolvedItemValue;
+		SelectedItem = itemValue;
 		SelectedItemContainer = item;
 		UpdatePreparedMenuItems();
-		ItemInvoked?.Invoke(this, new(item.ItemValue));
+		ItemInvoked?.Invoke(this, new(itemValue));
 	}
 
 	internal void OnItemExpandedChanged(SidebarViewItem item)
@@ -222,6 +234,36 @@ public partial class SidebarView2 : Control
 	private void ItemsHost_Loaded(object sender, RoutedEventArgs e)
 	{
 		UpdatePreparedMenuItems();
+	}
+
+	private void ItemsHost_ElementPrepared(ItemsRepeater sender, ItemsRepeaterElementPreparedEventArgs args)
+	{
+		if (args.Element is SidebarViewItem item)
+			_itemFactory.Prepare(item);
+	}
+
+	private void ConfigureItemsHost(ItemsRepeater? host, object itemsSource, bool isFooter)
+	{
+		if (host is null)
+			return;
+
+		if (isFooter)
+			_defaultFooterMenuItemTemplate ??= host.ItemTemplate;
+		else
+			_defaultMenuItemTemplate ??= host.ItemTemplate;
+
+		host.ItemsSource = itemsSource;
+		host.Loaded += ItemsHost_Loaded;
+		host.ElementPrepared += ItemsHost_ElementPrepared;
+	}
+
+	private void UpdateItemsHostTemplates()
+	{
+		if (_menuItemsHost is not null)
+			_menuItemsHost.ItemTemplate = MenuItemTemplate ?? _defaultMenuItemTemplate;
+
+		if (_footerMenuItemsHost is not null)
+			_footerMenuItemsHost.ItemTemplate = FooterMenuItemTemplate ?? MenuItemTemplate ?? _defaultFooterMenuItemTemplate ?? _defaultMenuItemTemplate;
 	}
 
 	private void SidebarView2_Loaded(object sender, RoutedEventArgs e)
@@ -249,17 +291,17 @@ public partial class SidebarView2 : Control
 
 	internal void UpdateSelectedItemContainer(SidebarViewItem item)
 	{
-		if (Equals(SelectedItem, item.ItemValue) || ReferenceEquals(SelectedItem, item))
+		if (Equals(SelectedItem, item.ResolvedItemValue) || ReferenceEquals(SelectedItem, item))
 			SelectedItemContainer = item;
 	}
 
 	internal bool ContainsItemValue(SidebarViewItem item, object itemValue)
 	{
-		if (item.ParentItem?.Children is IEnumerable parentItems && ContainsItemValue(parentItems, itemValue))
-			return true;
+		if (itemValue is FlatSidebarItem flatSidebarItem)
+			itemValue = flatSidebarItem.Item;
 
-		return ContainsItemValue(MenuItemsSource, itemValue) ||
-			ContainsItemValue(FooterMenuItemsSource, itemValue);
+		return ContainsItemValue(_menuFlatTree, itemValue) ||
+			ContainsItemValue(_footerFlatTree, itemValue);
 	}
 
 	internal static void CreateAndAttachMoveAnimation(Microsoft.UI.Composition.Visual visual)
@@ -293,14 +335,11 @@ public partial class SidebarView2 : Control
 			_itemFactory.Prepare(item);
 	}
 
-	private static bool ContainsItemValue(object? itemsSource, object itemValue)
+	private static bool ContainsItemValue(SidebarViewFlatTree flatTree, object itemValue)
 	{
-		if (itemsSource is not IEnumerable items || itemsSource is string)
-			return false;
-
-		foreach (var item in items)
+		foreach (var item in flatTree.Items)
 		{
-			if (Equals(item, itemValue))
+			if (Equals(item.Item, itemValue))
 				return true;
 		}
 
@@ -351,6 +390,14 @@ public partial class SidebarView2 : Control
 
 		if (GetVisualStateDisplayMode() == SidebarViewVisualStateDisplayMode.Minimal)
 			VisualStateManager.GoToState(this, IsPaneOpen ? "MinimalExpanded" : "MinimalCollapsed", true);
+	}
+
+	private void UpdateHeaderVisibility()
+	{
+		VisualStateManager.GoToState(
+			this,
+			Header is null ? VisualStateNameHeaderCollapsed : VisualStateNameHeaderVisible,
+			true);
 	}
 
 	private void UpdateDisplayMode()
@@ -528,7 +575,7 @@ public partial class SidebarView2 : Control
 		VisualStateManager.GoToState(this, isClosedCompact ? VisualStateNameListSizeCompact : VisualStateNameListSizeFull, true);
 
 		if (closedCompactChanged)
-			UpdatePreparedMenuItems();
+			RebuildFlatTrees();
 
 		UpdatePaneButtons();
 	}
