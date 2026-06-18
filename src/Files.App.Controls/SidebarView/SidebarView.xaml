@@ -298,7 +298,7 @@
 								<Grid
 									x:Name="PART_ContentGrid"
 									Margin="{ThemeResource SidebarViewContentMargin}"
-									Background="{StaticResource CardBackgroundFillColorDefault}"
+									Background="{ThemeResource CardBackgroundFillColorDefault}"
 									BorderBrush="{ThemeResource SidebarViewContentBorderBrush}"
 									BorderThickness="{ThemeResource SidebarViewContentBorderThickness}"
 									CornerRadius="{ThemeResource SidebarViewContentCornerRadius}">

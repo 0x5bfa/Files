@@ -1,0 +1,9 @@
+{
+  "solution": {
+    "path": "Files.slnx",
+    "projects": [
+      "src\\Files.App.Controls\\Files.App.Controls.csproj",
+      "tests\\Files.App.UITests\\Files.App.UITests.csproj",
+    ]
+  }
+}
