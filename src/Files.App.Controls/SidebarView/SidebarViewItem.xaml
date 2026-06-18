@@ -122,16 +122,16 @@
 											<Setter Target="MinHeight" Value="20" />
 										</Style>
 									</Flyout.FlyoutPresenterStyle>
-									<ItemsRepeater
+									<local:ReorderableItemsRepeater
 										x:Name="PART_FlyoutChildrenPresenter"
 										Margin="{StaticResource SidebarViewItemsControlMargin}"
 										HorizontalAlignment="Stretch"
 										AutomationProperties.AccessibilityView="Content"
 										XYFocusKeyboardNavigation="Enabled">
-										<ItemsRepeater.Layout>
+										<local:ReorderableItemsRepeater.Layout>
 											<StackLayout Spacing="4" />
-										</ItemsRepeater.Layout>
-										<ItemsRepeater.ItemTemplate>
+										</local:ReorderableItemsRepeater.Layout>
+										<local:ReorderableItemsRepeater.ItemTemplate>
 											<DataTemplate>
 												<local:SidebarViewItem
 													AutomationProperties.AutomationId="{Binding Text}"
@@ -144,8 +144,8 @@
 													Text="{Binding Text}"
 													ToolTip="{Binding ToolTip}" />
 											</DataTemplate>
-										</ItemsRepeater.ItemTemplate>
-									</ItemsRepeater>
+										</local:ReorderableItemsRepeater.ItemTemplate>
+									</local:ReorderableItemsRepeater>
 								</Flyout>
 							</FlyoutBase.AttachedFlyout>
 						</Grid>
