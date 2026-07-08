@@ -11,45 +11,66 @@ namespace Files.App.UITests.Views
 {
 	public sealed partial class SidebarViewPage : Page
 	{
-		public ObservableCollection<ISidebarItemModel> SampleItems { get; } =
-		[
-			new SidebarViewSampleItem("Home", "\uE80F"),
-			new SidebarViewSampleHeaderItem("Pinned", "\uE838",
+		public ObservableCollection<ISidebarItemModel> SampleSidebarViewItemsForContentView { get; } =
 			[
-				new SidebarViewSampleItem("Desktop", "\uEDA2"),
-				new SidebarViewSampleItem("Downloads", "\uE968"),
-				new SidebarViewSampleItem("Documents", "\uE968",
+				new SidebarViewSampleItem("Home", "\uE80F"),
+				new SidebarViewSampleHeaderItem("Pinned", "\uE838",
 				[
-					new SidebarViewSampleItem("Work", "\uE8B7",
+					new SidebarViewSampleItem("Desktop", "\uEDA2"),
+					new SidebarViewSampleItem("Downloads", "\uE968"),
+					new SidebarViewSampleItem("Documents", "\uE968",
 					[
-						new SidebarViewSampleItem("Reports", "\uE8A5"),
-						new SidebarViewSampleItem("Invoices", "\uE8A5"),
+						new SidebarViewSampleItem("Work", "\uE8B7",
+						[
+							new SidebarViewSampleItem("Reports", "\uE8A5"),
+							new SidebarViewSampleItem("Invoices", "\uE8A5"),
+						])
+						{
+							IsExpanded = true,
+						},
+						new SidebarViewSampleItem("Personal", "\uE8B7",
+						[
+							new SidebarViewSampleItem("Scans", "\uE8A5"),
+						]),
 					])
 					{
 						IsExpanded = true,
 					},
-					new SidebarViewSampleItem("Personal", "\uE8B7",
-					[
-						new SidebarViewSampleItem("Scans", "\uE8A5"),
-					]),
+					new SidebarViewSampleItem("Pictures", "\uE968"),
+					new SidebarViewSampleItem("Music", "\uE968"),
+					new SidebarViewSampleItem("Videos", "\uE968"),
+					new SidebarViewSampleItem("Recycle Bin", "\uE968"),
 				])
 				{
 					IsExpanded = true,
 				},
-				new SidebarViewSampleItem("Pictures", "\uE968"),
-				new SidebarViewSampleItem("Music", "\uE968"),
-				new SidebarViewSampleItem("Videos", "\uE968"),
-				new SidebarViewSampleItem("Recycle Bin", "\uE968"),
-			])
-			{
-				IsExpanded = true,
-			},
-			new SidebarViewSampleHeaderItem("This PC", "\uE838",
+				new SidebarViewSampleHeaderItem("This PC", "\uE838",
+				[
+					new SidebarViewSampleItem("Local Disk (C:)", "\uEDA2"),
+					new SidebarViewSampleItem("Local Disk (D:)", "\uEDA2"),
+				]),
+			];
+
+		public ObservableCollection<ISidebarItemModel> SampleSidebarViewItemsForSettingsView { get; } =
 			[
-				new SidebarViewSampleItem("Local Disk (C:)", "\uEDA2"),
-				new SidebarViewSampleItem("Local Disk (D:)", "\uEDA2"),
-			]),
-		];
+				new SidebarViewSampleItem("General", "\uE713"),
+				new SidebarViewSampleItem("Appearance", "\uE713"),
+				new SidebarViewSampleItem("Layout", "\uE713"),
+				new SidebarViewSampleItem("Files & folders", "\uE713"),
+				new SidebarViewSampleItem("Actions", "\uE713"),
+				new SidebarViewSampleItem("Tags", "\uE713"),
+				new SidebarViewSampleItem("Developer tools", "\uE713"),
+				new SidebarViewSampleItem("Advanced", "\uE713"),
+				new SidebarViewSampleItem("About", "\uE713"),
+			];
+
+		public ObservableCollection<ISidebarItemModel> SampleSidebarViewItemsForPropertiesView { get; } =
+			[
+				new SidebarViewSampleItem("General", "\uE713"),
+				new SidebarViewSampleItem("Security", "\uE713"),
+				new SidebarViewSampleItem("Hashes", "\uE713"),
+				new SidebarViewSampleItem("Details", "\uE713"),
+			];
 
 		public ObservableCollection<ISidebarItemModel> FooterItems { get; } =
 		[
@@ -74,7 +95,7 @@ namespace Files.App.UITests.Views
 			if (sender is not ComboBox comboBox || comboBox.SelectedValue is not SidebarViewDisplayMode displayMode)
 				return;
 
-			SampleSidebarView.DisplayMode = displayMode;
+			SampleSidebarViewForContentView.DisplayMode = displayMode;
 		}
 	}
 

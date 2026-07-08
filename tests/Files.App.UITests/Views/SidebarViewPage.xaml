@@ -9,23 +9,23 @@
 
 	<StackPanel Spacing="24">
 
-		<controls:SamplePanel Header="Default usage">
+		<controls:SamplePanel Header="Scenario 1: content view (tree view mode)">
 			<controls:SamplePanel.MainContent>
 				<Grid
 					Height="500"
 					BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
 					BorderThickness="1">
 					<controls:SidebarView2
-						x:Name="SampleSidebarView"
+						x:Name="SampleSidebarViewForContentView"
 						CompactPaneLength="56"
 						DisplayMode="Auto"
 						FooterMenuItemsSource="{x:Bind FooterItems}"
 						Header="Header"
 						IsPaneOpen="True"
-						MenuItemsSource="{x:Bind SampleItems}"
+						MenuItemsSource="{x:Bind SampleSidebarViewItemsForContentView}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>
-							<AutoSuggestBox />
+							<AutoSuggestBox PlaceholderText="Search text..." />
 						</controls:SidebarView2.AutoSuggestBox>
 
 						<ScrollViewer>
@@ -117,7 +117,7 @@
 					<ToggleSwitch
 						x:Name="PaneToggleSwitch"
 						Header="IsPaneOpen"
-						IsOn="{x:Bind SampleSidebarView.IsPaneOpen, Mode=TwoWay}" />
+						IsOn="{x:Bind SampleSidebarViewForContentView.IsPaneOpen, Mode=TwoWay}" />
 
 					<ComboBox
 						x:Name="DisplayModeComboBox"
@@ -136,16 +136,164 @@
 					<NumberBox
 						x:Name="CompactPaneLengthNumberBox"
 						Header="Compact pane length"
-						Text="{x:Bind SampleSidebarView.CompactPaneLength, Mode=TwoWay}" />
+						Text="{x:Bind SampleSidebarViewForContentView.CompactPaneLength, Mode=TwoWay}" />
 
 					<NumberBox
 						x:Name="OpenPaneLengthNumberBox"
 						Header="Open pane length"
-						Text="{x:Bind SampleSidebarView.OpenPaneLength, Mode=TwoWay}" />
+						Text="{x:Bind SampleSidebarViewForContentView.OpenPaneLength, Mode=TwoWay}" />
 
 				</StackPanel>
 			</controls:SamplePanel.SideContent>
 
+		</controls:SamplePanel>
+
+		<controls:SamplePanel Header="Scenario 2: content view (navigation view mode)">
+			<controls:SamplePanel.MainContent>
+				<Grid
+					Height="500"
+					BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+					BorderThickness="1">
+					<controls:SidebarView2
+						x:Name="SampleSidebarViewForContentView2"
+						CompactPaneLength="56"
+						DisplayMode="Auto"
+						FooterMenuItemsSource="{x:Bind FooterItems}"
+						Header="Header"
+						IsPaneOpen="True"
+						MenuItemsSource="{x:Bind SampleSidebarViewItemsForSettingsView}"
+						OpenPaneLength="240">
+						<controls:SidebarView2.AutoSuggestBox>
+							<AutoSuggestBox PlaceholderText="Search text..." />
+						</controls:SidebarView2.AutoSuggestBox>
+
+						<ScrollViewer>
+							<StackPanel>
+								<Grid>
+									<Grid.Resources>
+										<x:Double x:Key="TileHeight">150</x:Double>
+									</Grid.Resources>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="2*" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="*" />
+									</Grid.ColumnDefinitions>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+									</Grid.RowDefinitions>
+
+									<Grid
+										Grid.Row="1"
+										Grid.RowSpan="2"
+										Grid.Column="0"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="DarkSalmon" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="1"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="DarkRed" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="2"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="LightCoral" />
+
+								</Grid>
+								<Grid>
+									<Grid.Resources>
+										<x:Double x:Key="TileHeight">150</x:Double>
+									</Grid.Resources>
+									<Grid.ColumnDefinitions>
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="*" />
+										<ColumnDefinition Width="2*" />
+									</Grid.ColumnDefinitions>
+									<Grid.RowDefinitions>
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="Auto" />
+										<RowDefinition Height="*" />
+									</Grid.RowDefinitions>
+
+									<Grid
+										Grid.Row="1"
+										Grid.Column="1"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="DarkRed" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="0"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="LightCoral" />
+									<Grid
+										Grid.Row="1"
+										Grid.Column="2"
+										MinHeight="{StaticResource TileHeight}"
+										Margin="4"
+										Background="IndianRed" />
+
+									<Grid
+										Grid.Row="2"
+										Grid.ColumnSpan="3"
+										Margin="4">
+										<TextBlock Text="Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum." TextWrapping="WrapWholeWords" />
+									</Grid>
+
+								</Grid>
+							</StackPanel>
+						</ScrollViewer>
+					</controls:SidebarView2>
+				</Grid>
+			</controls:SamplePanel.MainContent>
+		</controls:SamplePanel>
+
+		<controls:SamplePanel Header="Scenario 3: settings view (navigation view mode)">
+			<controls:SamplePanel.MainContent>
+				<Grid
+					Height="500"
+					BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+					BorderThickness="1">
+					<controls:SidebarView2
+						x:Name="SampleSidebarViewForSettingsView"
+						CompactPaneLength="56"
+						DisplayMode="Auto"
+						Header="Header"
+						IsPaneOpen="True"
+						MenuItemsSource="{x:Bind SampleSidebarViewItemsForSettingsView}"
+						OpenPaneLength="240">
+						<controls:SidebarView2.AutoSuggestBox>
+							<AutoSuggestBox PlaceholderText="Search text..." />
+						</controls:SidebarView2.AutoSuggestBox>
+					</controls:SidebarView2>
+				</Grid>
+			</controls:SamplePanel.MainContent>
+		</controls:SamplePanel>
+
+		<controls:SamplePanel Header="Scenario 4: properties view (navigation view mode)">
+			<controls:SamplePanel.MainContent>
+				<Grid
+					Height="500"
+					BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+					BorderThickness="1">
+					<controls:SidebarView2
+						x:Name="SampleSidebarViewForPropertiesView"
+						CompactPaneLength="56"
+						DisplayMode="Auto"
+						Header="Header"
+						IsPaneOpen="True"
+						MenuItemsSource="{x:Bind SampleSidebarViewItemsForPropertiesView}"
+						OpenPaneLength="240">
+						<controls:SidebarView2.AutoSuggestBox>
+							<AutoSuggestBox PlaceholderText="Search text..." />
+						</controls:SidebarView2.AutoSuggestBox>
+					</controls:SidebarView2>
+				</Grid>
+			</controls:SamplePanel.MainContent>
 		</controls:SamplePanel>
 
 	</StackPanel>
