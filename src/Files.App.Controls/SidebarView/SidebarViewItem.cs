@@ -15,7 +15,10 @@ namespace Files.App.Controls;
 public partial class SidebarViewItem : Control
 {
 	private const string TemplatePartNameRootGrid = "PART_RootGrid";
+	private const string TemplatePartNameIndentColumnDefinition = "PART_IndentColumnDefinition";
+	private const string TemplatePartNameChevronColumnDefinition = "PART_ChevronColumnDefinition";
 	private const string TemplatePartNameChevronContainer = "PART_ChevronContainer";
+	private const string TemplatePartNameItemIconPresenter = "PART_ItemIconPresenter";
 	private const string TemplatePartNameFlyoutChildrenPresenter = "PART_FlyoutChildrenPresenter";
 	private const string VisualStateNameSelected = "Selected";
 	private const string VisualStateNameUnselected = "Unselected";
@@ -39,7 +42,10 @@ public partial class SidebarViewItem : Control
 	private const string VisualStateNamePressedChevronVisibleClosed = "PressedChevronVisibleClosed";
 
 	private Grid? _rootGrid;
+	private ColumnDefinition? _indentColumnDefinition;
+	private ColumnDefinition? _chevronColumnDefinition;
 	private FrameworkElement? _chevronContainer;
+	private FrameworkElement? _itemIconPresenter;
 	private ItemsRepeater? _flyoutChildrenPresenter;
 	private FlyoutBase? _childrenFlyout;
 	private bool _isPointerOver;
@@ -96,7 +102,10 @@ public partial class SidebarViewItem : Control
 		base.OnApplyTemplate();
 
 		_rootGrid = GetTemplateChild(TemplatePartNameRootGrid) as Grid;
+		_indentColumnDefinition = GetTemplateChild(TemplatePartNameIndentColumnDefinition) as ColumnDefinition;
+		_chevronColumnDefinition = GetTemplateChild(TemplatePartNameChevronColumnDefinition) as ColumnDefinition;
 		_chevronContainer = GetTemplateChild(TemplatePartNameChevronContainer) as FrameworkElement;
+		_itemIconPresenter = GetTemplateChild(TemplatePartNameItemIconPresenter) as FrameworkElement;
 		_flyoutChildrenPresenter = GetTemplateChild(TemplatePartNameFlyoutChildrenPresenter) as ItemsRepeater;
 		_childrenFlyout = _rootGrid is null ? null : FlyoutBase.GetAttachedFlyout(_rootGrid);
 
@@ -180,12 +189,12 @@ public partial class SidebarViewItem : Control
 				e.Handled = true;
 				break;
 
-			case VirtualKey.Right when HasChildren() && !IsExpanded:
+			case VirtualKey.Right when IsTreeViewItemDisplayMode() && HasChildren() && !IsExpanded:
 				IsExpanded = true;
 				e.Handled = true;
 				break;
 
-			case VirtualKey.Left when HasChildren() && IsExpanded:
+			case VirtualKey.Left when IsTreeViewItemDisplayMode() && HasChildren() && IsExpanded:
 				IsExpanded = false;
 				e.Handled = true;
 				break;
@@ -307,7 +316,7 @@ public partial class SidebarViewItem : Control
 			return;
 		}
 
-		if (IsGroupHeader())
+		if (IsTreeViewItemDisplayMode() && IsGroupHeader())
 		{
 			ToggleExpansion();
 			return;
@@ -435,6 +444,9 @@ public partial class SidebarViewItem : Control
 			return true;
 		}
 
+		if (!IsTreeViewItemDisplayMode())
+			return false;
+
 		IsExpanded = !IsExpanded;
 		return true;
 	}
@@ -467,7 +479,10 @@ public partial class SidebarViewItem : Control
 
 		var selectedItem = Owner.SelectedItem;
 		var isSelected = IsSelectedItem(selectedItem);
-		isSelected |= (Owner.IsClosedCompact || !IsExpanded) && HasSelectedDescendant(selectedItem);
+
+		if (IsTreeViewItemDisplayMode())
+			isSelected |= (Owner.IsClosedCompact || !IsExpanded) && HasSelectedDescendant(selectedItem);
+
 		if (IsSelected != isSelected)
 			IsSelected = isSelected;
 
@@ -477,7 +492,7 @@ public partial class SidebarViewItem : Control
 
 	private void UpdateTemplateSettings()
 	{
-		TemplateSettings.IndentWidth = ShouldUseCompactLayout()
+		TemplateSettings.IndentWidth = ShouldUseCompactLayout() || !IsTreeViewItemDisplayMode()
 			? 0d
 			: Math.Max(0, Depth) * 16d;
 	}
@@ -485,11 +500,34 @@ public partial class SidebarViewItem : Control
 	private void UpdateDisplayModeState()
 	{
 		VisualStateManager.GoToState(this, ShouldUseCompactLayout() ? "Compact" : "NonCompact", true);
+		UpdateTreeColumnLayout();
+	}
+
+	private void UpdateTreeColumnLayout()
+	{
+		var hideTreeColumns = ShouldUseCompactLayout() || !IsTreeViewItemDisplayMode();
+
+		if (_indentColumnDefinition is not null)
+			_indentColumnDefinition.Width = hideTreeColumns ? new GridLength(0) : GridLength.Auto;
+
+		if (_chevronColumnDefinition is not null)
+			_chevronColumnDefinition.Width = hideTreeColumns ? new GridLength(0) : new GridLength(16);
+
+		if (_chevronContainer is not null)
+			_chevronContainer.Visibility = hideTreeColumns ? Visibility.Collapsed : Visibility.Visible;
+
+		if (_itemIconPresenter is not null)
+			_itemIconPresenter.Margin = hideTreeColumns ? new Thickness(8, 0, 0, 0) : new Thickness(4, 0, 0, 0);
 	}
 
 	private bool ShouldUseCompactLayout()
 	{
 		return Owner?.IsClosedCompact == true && !IsInFlyout;
+	}
+
+	private bool IsTreeViewItemDisplayMode()
+	{
+		return Owner?.ItemDisplayMode != SidebarViewItemDisplayMode.NavigationView;
 	}
 
 	private bool ShouldShowChildrenInFlyout()
@@ -632,7 +670,7 @@ public partial class SidebarViewItem : Control
 
 	private void UpdateChevronState()
 	{
-		var chevronState = HasChildren() && !ShouldUseCompactLayout()
+		var chevronState = IsTreeViewItemDisplayMode() && HasChildren() && !ShouldUseCompactLayout()
 			? IsExpanded ? ChevronState.VisibleOpen : ChevronState.VisibleClosed
 			: ChevronState.Hidden;
 

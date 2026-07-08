@@ -15,6 +15,7 @@ public partial class SidebarView2
 
 	internal IReadOnlyList<FlatSidebarItem> MenuVisibleItems => _menuFlatTree.Items;
 	internal IReadOnlyList<FlatSidebarItem> FooterVisibleItems => _footerFlatTree.Items;
+	internal bool IsTreeViewItemDisplayMode => ItemDisplayMode == SidebarViewItemDisplayMode.TreeView;
 
 	private void SetMenuItemsSource(object? source)
 	{
@@ -114,6 +115,9 @@ public partial class SidebarView2
 		if (!flatTree.VisibleItems.TryGetValue(item, out var flatItem))
 			return;
 
+		if (TryUpdateNavigationViewItem(flatTree, item, propertyName))
+			return;
+
 		if (string.IsNullOrEmpty(propertyName) || propertyName == nameof(ISidebarItemModel.Children))
 			RegisterChildCollection(flatTree, item);
 
@@ -128,6 +132,9 @@ public partial class SidebarView2
 
 	private void UpdateFlatTreeExpansion(SidebarViewFlatTree flatTree, FlatSidebarItem flatItem)
 	{
+		if (!IsTreeViewItemDisplayMode)
+			return;
+
 		var index = flatTree.Items.IndexOf(flatItem);
 		if (index < 0)
 			return;
@@ -149,6 +156,9 @@ public partial class SidebarView2
 
 	private void RefreshFlatTreeChildren(SidebarViewFlatTree flatTree, ISidebarItemModel item)
 	{
+		if (TryRefreshNavigationViewChildren(flatTree, item))
+			return;
+
 		RegisterChildCollection(flatTree, item);
 
 		if (!flatTree.VisibleItems.TryGetValue(item, out var flatItem))
@@ -169,6 +179,9 @@ public partial class SidebarView2
 
 	private void InsertVisibleChildren(SidebarViewFlatTree flatTree, ISidebarItemModel item, int depth, int insertIndex)
 	{
+		if (!IsTreeViewItemDisplayMode)
+			return;
+
 		var children = new List<FlatSidebarItem>();
 		foreach (var child in EnumerateModelItems(item.Children))
 			CollectVisibleSubtree(flatTree, child, depth, children);
@@ -201,6 +214,9 @@ public partial class SidebarView2
 		int depth,
 		IList<FlatSidebarItem> destination)
 	{
+		if (TryCollectNavigationViewItem(flatTree, item, destination))
+			return;
+
 		if (depth > 0 && IsClosedCompact)
 			return;
 

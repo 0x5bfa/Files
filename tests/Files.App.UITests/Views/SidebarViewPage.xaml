@@ -22,6 +22,7 @@
 						FooterMenuItemsSource="{x:Bind FooterItems}"
 						Header="Header"
 						IsPaneOpen="True"
+						ItemDisplayMode="TreeView"
 						MenuItemsSource="{x:Bind SampleSidebarViewItemsForContentView}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>
@@ -161,7 +162,8 @@
 						FooterMenuItemsSource="{x:Bind FooterItems}"
 						Header="Header"
 						IsPaneOpen="True"
-						MenuItemsSource="{x:Bind SampleSidebarViewItemsForSettingsView}"
+						ItemDisplayMode="NavigationView"
+						MenuItemsSource="{x:Bind SampleSidebarViewItemsForContentView}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>
 							<AutoSuggestBox PlaceholderText="Search text..." />
@@ -264,6 +266,7 @@
 						DisplayMode="Auto"
 						Header="Header"
 						IsPaneOpen="True"
+						ItemDisplayMode="NavigationView"
 						MenuItemsSource="{x:Bind SampleSidebarViewItemsForSettingsView}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>
@@ -286,6 +289,7 @@
 						DisplayMode="Auto"
 						Header="Header"
 						IsPaneOpen="True"
+						ItemDisplayMode="NavigationView"
 						MenuItemsSource="{x:Bind SampleSidebarViewItemsForPropertiesView}"
 						OpenPaneLength="240">
 						<controls:SidebarView2.AutoSuggestBox>

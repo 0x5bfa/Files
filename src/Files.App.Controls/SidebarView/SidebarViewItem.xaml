@@ -26,8 +26,8 @@
 							UseSystemFocusVisuals="True">
 							<Grid.ColumnDefinitions>
 								<ColumnDefinition Width="3" />
-								<ColumnDefinition x:Name="IndentColumnDefinition" Width="Auto" />
-								<ColumnDefinition x:Name="ChevronColumnDefinition" Width="16" />
+								<ColumnDefinition x:Name="PART_IndentColumnDefinition" Width="Auto" />
+								<ColumnDefinition x:Name="PART_ChevronColumnDefinition" Width="16" />
 								<ColumnDefinition Width="Auto" />
 								<ColumnDefinition Width="*" />
 								<ColumnDefinition Width="Auto" />
@@ -81,7 +81,7 @@
 							</Border>
 
 							<ContentPresenter
-								x:Name="ItemIconPresenter"
+								x:Name="PART_ItemIconPresenter"
 								Grid.Column="3"
 								Width="16"
 								Height="16"
@@ -247,14 +247,7 @@
 
 							<VisualStateGroup x:Name="DisplayModeStates">
 								<VisualState x:Name="NonCompact" />
-								<VisualState x:Name="Compact">
-									<VisualState.Setters>
-										<Setter Target="IndentColumnDefinition.Width" Value="0" />
-										<Setter Target="ChevronColumnDefinition.Width" Value="0" />
-										<Setter Target="PART_ChevronContainer.Visibility" Value="Collapsed" />
-										<Setter Target="ItemIconPresenter.Margin" Value="8,0,0,0" />
-									</VisualState.Setters>
-								</VisualState>
+								<VisualState x:Name="Compact" />
 							</VisualStateGroup>
 						</VisualStateManager.VisualStateGroups>
 					</Grid>

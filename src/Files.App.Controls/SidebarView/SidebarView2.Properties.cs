@@ -35,6 +35,9 @@ public partial class SidebarView2
 	[GeneratedDependencyProperty(DefaultValue = SidebarViewDisplayMode.Auto)]
 	public partial SidebarViewDisplayMode DisplayMode { get; set; }
 
+	[GeneratedDependencyProperty(DefaultValue = SidebarViewItemDisplayMode.TreeView)]
+	public partial SidebarViewItemDisplayMode ItemDisplayMode { get; set; }
+
 	[GeneratedDependencyProperty(DefaultValue = true)]
 	public partial bool CanResizePane { get; set; }
 
@@ -121,6 +124,12 @@ public partial class SidebarView2
 	partial void OnDisplayModeChanged(SidebarViewDisplayMode newValue)
 	{
 		UpdateAdaptiveDisplayMode(ActualWidth, true);
+	}
+
+	partial void OnItemDisplayModeChanged(SidebarViewItemDisplayMode newValue)
+	{
+		RebuildFlatTrees();
+		UpdatePreparedMenuItems();
 	}
 
 	partial void OnIsPaneOpenChanged(bool newValue)

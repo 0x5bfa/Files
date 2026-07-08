@@ -75,6 +75,11 @@ public partial class SidebarViewItem
 		UpdateExpansionState();
 	}
 
+	partial void OnOwnerChanged(SidebarView2? newValue)
+	{
+		UpdateStateFromOwner();
+	}
+
 	partial void OnIsSelectedChanged(bool newValue)
 	{
 		UpdateSelectionState();
