@@ -60,3 +60,5 @@ It allows the Windows provider to use existing source-generated interop without 
 - Prefer a vertical feature boundary over a repository-wide type replacement.
 - Keep WinUI out of `Files.Core`, even though `Files.Core` targets Windows.
 - Keep existing and new implementations side by side until a consumer is migrated and verified.
+- Keep capability contracts and Windows threading boundaries stable while files are still moving between assemblies.
+- Treat a later project merge as a mechanical dependency change, not as permission to collapse the logical layers.

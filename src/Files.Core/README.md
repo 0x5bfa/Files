@@ -4,22 +4,30 @@ This project prototypes the new UI-agnostic model graph alongside the existing i
 
 The implemented vertical slice is:
 
-1. `IStorageSource` owns provider-specific resolution and returns OwlCore.Storage core models.
-2. `IStorableModelFactory` wraps core models as Files application models.
-3. `IFilesDataRoot` composes configured sources and forms the root of the application model graph.
-4. `IBrowseLocationHandler` maps typed locations to items.
-5. `IBrowseSessionModel` owns the state of one browser pane.
+1. `IStorageSource` owns provider-specific resolution and returns OwlCore.Storage CoreModels.
+2. `IStorableModelFactory` wraps CoreModels as Files AppModels.
+3. `CapabilityPipeline` lazily composes item-bound capabilities from direct, provider, and plugin candidates.
+4. `IFilesDataRoot` composes configured sources and forms the root of the storage-backed graph.
+5. `IBrowseLocationHandler` maps typed locations to items.
+6. `IBrowseSessionModel` owns one browser pane's items and view settings.
 
-`IThumbnailSource` is an independent optional capability. It deliberately does not inherit from `IStorable`.
+The capability prototype includes:
 
-The prototype now includes a Windows Shell provider with file-system and virtual item resolution, streaming folder enumeration, file-system streams, and virtual read streams.
+- `model.Get<TCapability>()` over an owned `ICapabilitySet`;
+- explicit contributor origin, priority, and ownership;
+- contract-specific composers for thumbnail fallback, preview routing, and property merging;
+- decorators, including a bounded in-memory thumbnail cache;
+- a batch-oriented `IPropertyProvider` adapter for item-bound `IPropertySource` access.
+
+The Windows Shell provider supports file-system and virtual item resolution, snapshot-based files and folders, bounded streaming enumeration, file-system streams, and apartment-safe virtual read streams. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
 
 Architecture documents are available in [`docs/architecture`](../../docs/architecture/README.md).
 
 ## Prototype boundaries
 
 - The project targets Windows so it can eventually absorb `Files.App.CsWin32`, while the prototype code does not reference WinUI.
-- Existing storage implementations remain untouched. `Files.Core` temporarily references `Files.App.CsWin32`, and adds only the `BHID_Stream` generator input needed by the new provider.
+- Existing storage implementations remain untouched. `Files.Core` temporarily references `Files.App.CsWin32` for source-generated interop.
 - Existing projects do not reference this prototype yet.
 - Home, search, and tag locations are typed, but need separate handlers before they can be browsed.
-- Selection, history, operations, actions, and ViewModels are intentionally outside this first vertical slice.
+- Windows thumbnail/property extraction, selection, history, operations, actions, and ViewModels remain future vertical slices.
+- The eventual merge of `Files.Shared`, `Files.Core.Storage`, `Files.App.Storage`, and `Files.App.CsWin32` is intentionally separate from adopting this architecture.

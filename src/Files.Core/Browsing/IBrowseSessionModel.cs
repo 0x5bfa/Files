@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.Core.Models;
+using Files.Core.ViewSettings;
 
 namespace Files.Core.Browsing;
 
@@ -14,6 +15,8 @@ public interface IBrowseSessionModel : IDisposable
 
 	IReadOnlyList<IStorableModel> Items { get; }
 
+	BrowseViewSettings ViewSettings { get; }
+
 	bool IsLoading { get; }
 
 	Exception? Error { get; }
@@ -23,4 +26,8 @@ public interface IBrowseSessionModel : IDisposable
 	ValueTask NavigateAsync(BrowseLocation location, CancellationToken cancellationToken = default);
 
 	ValueTask RefreshAsync(CancellationToken cancellationToken = default);
+
+	ValueTask UpdateViewSettingsAsync(
+		BrowseViewSettings settings,
+		CancellationToken cancellationToken = default);
 }

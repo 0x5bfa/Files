@@ -19,12 +19,15 @@ public sealed class WindowsStorageSource : IStorageSource
 	public const string ShellAddressScheme = "shell";
 
 	private readonly IReadOnlyList<Guid> rootFolderIds;
+	private readonly WindowsStorableFactory storableFactory;
+	private readonly bool ownsScheduler;
 	private bool isDisposed;
 
 	public WindowsStorageSource(
 		StorageSourceId? sourceId = null,
 		string displayName = "Windows",
-		IEnumerable<Guid>? rootFolderIds = null)
+		IEnumerable<Guid>? rootFolderIds = null,
+		IWindowsShellScheduler? scheduler = null)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
@@ -32,6 +35,9 @@ public sealed class WindowsStorageSource : IStorageSource
 		DisplayName = displayName;
 		this.rootFolderIds = Array.AsReadOnly(
 			(rootFolderIds ?? [FOLDERID.FOLDERID_ComputerFolder]).ToArray());
+		Scheduler = scheduler ?? new WindowsShellScheduler();
+		ownsScheduler = scheduler is null;
+		storableFactory = new WindowsStorableFactory(Scheduler);
 	}
 
 	public StorageSourceId SourceId { get; }
@@ -40,26 +46,31 @@ public sealed class WindowsStorageSource : IStorageSource
 
 	public string DisplayName { get; }
 
+	/// <summary>
+	/// Gets the shared scheduler used by Windows-backed capability contributors.
+	/// </summary>
+	public IWindowsShellScheduler Scheduler { get; }
+
 	public async IAsyncEnumerable<IFolder> GetRootsAsync(
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(isDisposed, this);
-		await Task.CompletedTask.ConfigureAwait(false);
 
 		foreach (var rootFolderId in rootFolderIds)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
-			var root = WindowsStorable.Create(rootFolderId);
+			var root = await storableFactory
+				.CreateAsync(rootFolderId, cancellationToken)
+				.ConfigureAwait(false);
 
 			if (root is WindowsFolder folder)
 			{
 				yield return folder;
+				continue;
 			}
-			else
-			{
-				root.Dispose();
-				throw new InvalidOperationException($"Known folder '{rootFolderId}' did not resolve to a folder.");
-			}
+
+			throw new InvalidOperationException(
+				$"Known folder '{rootFolderId}' did not resolve to a folder.");
 		}
 	}
 
@@ -71,52 +82,73 @@ public sealed class WindowsStorageSource : IStorageSource
 			|| address.Scheme.Equals(FileAddressScheme, StringComparison.OrdinalIgnoreCase);
 	}
 
-	public ValueTask<IStorable> ResolveAsync(
+	public async ValueTask<IStorable> ResolveAsync(
 		StorageAddress address,
 		CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(isDisposed, this);
 		ArgumentNullException.ThrowIfNull(address);
-		cancellationToken.ThrowIfCancellationRequested();
 
 		if (!CanResolve(address))
 		{
-			throw new ArgumentException($"Address scheme '{address.Scheme}' is not supported.", nameof(address));
+			throw new ArgumentException(
+				$"Address scheme '{address.Scheme}' is not supported.",
+				nameof(address));
 		}
 
-		return ValueTask.FromResult<IStorable>(WindowsStorable.Create(address.Value));
+		return await storableFactory
+			.CreateAsync(address.Value, cancellationToken)
+			.ConfigureAwait(false);
 	}
 
-	public ValueTask<IStorable> ResolveAsync(
+	public async ValueTask<IStorable> ResolveAsync(
 		StorableReference reference,
 		CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(isDisposed, this);
 		ArgumentNullException.ThrowIfNull(reference);
-		cancellationToken.ThrowIfCancellationRequested();
 
 		if (reference.SourceId != SourceId)
 		{
-			throw new ArgumentException($"Reference belongs to storage source '{reference.SourceId}'.", nameof(reference));
+			throw new ArgumentException(
+				$"Reference belongs to storage source '{reference.SourceId}'.",
+				nameof(reference));
 		}
 
-		if (WindowsStorable.TryCreate(reference.ItemId, out var storable))
+		var storable = await storableFactory
+			.TryCreateAsync(reference.ItemId, cancellationToken)
+			.ConfigureAwait(false);
+
+		if (storable is not null)
 		{
-			return ValueTask.FromResult<IStorable>(storable);
+			return storable;
 		}
 
 		if (reference.LastKnownAddress is not null && CanResolve(reference.LastKnownAddress))
 		{
-			return ResolveAsync(reference.LastKnownAddress, cancellationToken);
+			return await ResolveAsync(reference.LastKnownAddress, cancellationToken)
+				.ConfigureAwait(false);
 		}
 
-		throw new FileNotFoundException("The Windows Shell item could not be resolved.", reference.ItemId);
+		throw new FileNotFoundException(
+			"The Windows Shell item could not be resolved.",
+			reference.ItemId);
 	}
 
-	public ValueTask DisposeAsync()
+	public async ValueTask DisposeAsync()
 	{
+		if (isDisposed)
+		{
+			return;
+		}
+
 		isDisposed = true;
+
+		if (ownsScheduler)
+		{
+			await Scheduler.DisposeAsync().ConfigureAwait(false);
+		}
+
 		GC.SuppressFinalize(this);
-		return ValueTask.CompletedTask;
 	}
 }

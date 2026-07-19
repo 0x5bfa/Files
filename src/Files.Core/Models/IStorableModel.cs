@@ -1,8 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.Core.Capabilities;
 using Files.Core.Storage;
-using Files.Core.Thumbnails;
 using OwlCore.Storage;
 
 namespace Files.Core.Models;
@@ -10,7 +10,7 @@ namespace Files.Core.Models;
 /// <summary>
 /// Files-specific application model for an OwlCore storage item.
 /// </summary>
-public interface IStorableModel : IDisposable
+public interface IStorableModel : ICapabilityHost, IDisposable
 {
 	IStorable CoreModel { get; }
 
@@ -18,5 +18,4 @@ public interface IStorableModel : IDisposable
 
 	string Name { get; }
 
-	IThumbnailSource? ThumbnailSource { get; }
 }

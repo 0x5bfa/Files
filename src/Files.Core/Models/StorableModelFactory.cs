@@ -1,19 +1,19 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.Core.Capabilities;
 using Files.Core.Storage;
-using Files.Core.Thumbnails;
 using OwlCore.Storage;
 
 namespace Files.Core.Models;
 
 public sealed class StorableModelFactory : IStorableModelFactory
 {
-	private readonly Func<IStorageSource, IStorable, IThumbnailSource?> resolveThumbnailSource;
+	private readonly CapabilityPipeline capabilityPipeline;
 
-	public StorableModelFactory(Func<IStorageSource, IStorable, IThumbnailSource?>? resolveThumbnailSource = null)
+	public StorableModelFactory(CapabilityPipeline? capabilityPipeline = null)
 	{
-		this.resolveThumbnailSource = resolveThumbnailSource ?? ResolveThumbnailSource;
+		this.capabilityPipeline = capabilityPipeline ?? CapabilityPipeline.Empty;
 	}
 
 	public IStorableModel Create(IStorageSource source, IStorable coreModel)
@@ -21,38 +21,39 @@ public sealed class StorableModelFactory : IStorableModelFactory
 		ArgumentNullException.ThrowIfNull(source);
 		ArgumentNullException.ThrowIfNull(coreModel);
 
-		IThumbnailSource? thumbnailSource = null;
+		ICapabilitySet? capabilities = null;
 
 		try
 		{
-			thumbnailSource = resolveThumbnailSource(source, coreModel);
+			var reference = new StorableReference(
+				source.SourceId,
+				coreModel.Id,
+				(coreModel as IStorageAddressSource)?.Address);
+			var context = new CapabilityContext(source, coreModel, reference);
+			capabilities = capabilityPipeline.CreateSet(context);
 
 			return coreModel switch
 			{
-				IFile file => new FileModel(source, file, thumbnailSource),
-				IFolder folder => new FolderModel(source, folder, this, thumbnailSource),
-				_ => new StorableModel(source, coreModel, thumbnailSource),
+				IFile file => new FileModel(file, reference, capabilities),
+				IFolder folder => new FolderModel(source, folder, this, reference, capabilities),
+				_ => new StorableModel(coreModel, reference, capabilities),
 			};
 		}
 		catch
 		{
-			if (thumbnailSource is IDisposable disposableThumbnail && !ReferenceEquals(thumbnailSource, coreModel))
+			try
 			{
-				disposableThumbnail.Dispose();
+				capabilities?.Dispose();
 			}
-
-			if (coreModel is IDisposable disposableCoreModel)
+			finally
 			{
-				disposableCoreModel.Dispose();
+				if (coreModel is IDisposable disposableCoreModel)
+				{
+					disposableCoreModel.Dispose();
+				}
 			}
 
 			throw;
 		}
-	}
-
-	private static IThumbnailSource? ResolveThumbnailSource(IStorageSource source, IStorable coreModel)
-	{
-		_ = source;
-		return coreModel as IThumbnailSource;
 	}
 }

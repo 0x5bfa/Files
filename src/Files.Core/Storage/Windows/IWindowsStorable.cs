@@ -8,7 +8,7 @@ namespace Files.Core.Storage.Windows;
 /// <summary>
 /// Describes an OwlCore item backed by the Windows Shell namespace.
 /// </summary>
-public interface IWindowsStorable : IStorableChild, IStorageAddressSource, IDisposable
+public interface IWindowsStorable : IStorableChild, IStorageAddressSource
 {
 	string ParsingName { get; }
 

@@ -1,34 +1,34 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using System.Diagnostics.CodeAnalysis;
 using OwlCore.Storage;
-using Windows.Win32.UI.Shell;
 
 namespace Files.Core.Storage.Windows;
 
+/// <summary>
+/// Represents an apartment-neutral snapshot of a Windows Shell item.
+/// </summary>
 public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStorable>
 {
-	private IShellItem? shellItem;
+	private readonly WindowsStorableSnapshot snapshot;
 
-	internal WindowsStorable(IShellItem shellItem)
+	internal WindowsStorable(
+		WindowsStorableSnapshot snapshot,
+		WindowsStorableFactory factory)
 	{
-		ArgumentNullException.ThrowIfNull(shellItem);
+		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(factory);
 
-		this.shellItem = shellItem;
-		ParsingName = ShellItemHelpers.GetRequiredDisplayName(shellItem, SIGDN.SIGDN_DESKTOPABSOLUTEPARSING);
-		Id = ParsingName;
-		Name = ShellItemHelpers.TryGetDisplayName(shellItem, SIGDN.SIGDN_PARENTRELATIVEFORUI)
-			?? ShellItemHelpers.TryGetDisplayName(shellItem, SIGDN.SIGDN_NORMALDISPLAY)
-			?? ParsingName;
-		FileSystemPath = ShellItemHelpers.TryGetFileSystemPath(shellItem);
-		Address = new StorageAddress(WindowsStorageSource.ShellAddressScheme, ParsingName);
+		this.snapshot = snapshot;
+		Factory = factory;
+		Id = snapshot.ParsingName;
+		Name = snapshot.Name;
+		Address = new StorageAddress(WindowsStorageSource.ShellAddressScheme, snapshot.ParsingName);
 	}
 
-	internal IShellItem ShellItem
-	{
-		get => shellItem ?? throw new ObjectDisposedException(nameof(WindowsStorable));
-	}
+	internal WindowsStorableFactory Factory { get; }
+
+	internal WindowsStorableSnapshot Snapshot => snapshot;
 
 	public string Id { get; }
 
@@ -36,42 +36,15 @@ public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStor
 
 	public StorageAddress Address { get; }
 
-	public string ParsingName { get; }
+	public string ParsingName => snapshot.ParsingName;
 
-	public string? FileSystemPath { get; }
+	public string? FileSystemPath => snapshot.FileSystemPath;
 
 	public bool IsFileSystem => FileSystemPath is not null;
 
-	public static WindowsStorable Create(string parsingName) => WindowsStorableFactory.Create(parsingName);
-
-	public static WindowsStorable Create(Guid knownFolderId) => WindowsStorableFactory.Create(knownFolderId);
-
-	public static bool TryCreate(string parsingName, [NotNullWhen(true)] out WindowsStorable? storable)
-		=> WindowsStorableFactory.TryCreate(parsingName, out storable);
-
-	public static bool TryCreate(Guid knownFolderId, [NotNullWhen(true)] out WindowsStorable? storable)
-		=> WindowsStorableFactory.TryCreate(knownFolderId, out storable);
-
-	public Task<IFolder?> GetParentAsync(CancellationToken cancellationToken = default)
+	public async Task<IFolder?> GetParentAsync(CancellationToken cancellationToken = default)
 	{
-		cancellationToken.ThrowIfCancellationRequested();
-
-		var result = ShellItem.GetParent(out var parent);
-
-		if (result.Failed)
-		{
-			return Task.FromResult<IFolder?>(null);
-		}
-
-		var parentItem = WindowsStorableFactory.Create(parent);
-
-		if (parentItem is IFolder parentFolder)
-		{
-			return Task.FromResult<IFolder?>(parentFolder);
-		}
-
-		parentItem.Dispose();
-		return Task.FromResult<IFolder?>(null);
+		return await Factory.GetParentAsync(snapshot, cancellationToken).ConfigureAwait(false);
 	}
 
 	public bool Equals(WindowsStorable? other)
@@ -84,15 +57,4 @@ public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStor
 	public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Id);
 
 	public override string ToString() => ParsingName;
-
-	public void Dispose()
-	{
-		Dispose(true);
-		GC.SuppressFinalize(this);
-	}
-
-	protected virtual void Dispose(bool disposing)
-	{
-		shellItem = null;
-	}
 }

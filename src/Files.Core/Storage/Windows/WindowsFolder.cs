@@ -3,15 +3,17 @@
 
 using System.Runtime.CompilerServices;
 using OwlCore.Storage;
-using Windows.Win32;
-using Windows.Win32.UI.Shell;
 
 namespace Files.Core.Storage.Windows;
 
 public sealed class WindowsFolder : WindowsStorable, IChildFolder
 {
-	internal WindowsFolder(IShellItem shellItem)
-		: base(shellItem)
+	private const int EnumerationBatchSize = 32;
+
+	internal WindowsFolder(
+		WindowsStorableSnapshot snapshot,
+		WindowsStorableFactory factory)
+		: base(snapshot, factory)
 	{
 	}
 
@@ -20,58 +22,40 @@ public sealed class WindowsFolder : WindowsStorable, IChildFolder
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
-		await Task.CompletedTask.ConfigureAwait(false);
 
 		if (type is StorableType.None)
 		{
 			yield break;
 		}
 
-		var result = ShellItem.BindToHandler(null, PInvoke.BHID_EnumItems, out IEnumShellItems? enumerator);
-		result.ThrowOnFailure();
+		await using var enumerator = await Factory
+			.CreateEnumeratorAsync(Snapshot, cancellationToken)
+			.ConfigureAwait(false);
 
-		if (enumerator is null)
+		while (true)
 		{
-			throw new InvalidOperationException("The Shell folder returned no item enumerator.");
-		}
+			var snapshots = await enumerator
+				.ReadNextAsync(EnumerationBatchSize, cancellationToken)
+				.ConfigureAwait(false);
 
-		var children = new IShellItem[1];
+			if (snapshots.Count is 0)
+			{
+				yield break;
+			}
 
-		try
-		{
-			while (true)
+			foreach (var snapshot in snapshots)
 			{
 				cancellationToken.ThrowIfCancellationRequested();
-				result = enumerator.Next(children);
 
-				if (result == global::Windows.Win32.Foundation.HRESULT.S_FALSE)
-				{
-					yield break;
-				}
-
-				result.ThrowOnFailure();
-
-				var child = WindowsStorableFactory.Create(children[0]);
-				var include = child switch
-				{
-					WindowsFile => type.HasFlag(StorableType.File),
-					WindowsFolder => type.HasFlag(StorableType.Folder),
-					_ => false,
-				};
+				var include = snapshot.IsFolder
+					? type.HasFlag(StorableType.Folder)
+					: type.HasFlag(StorableType.File);
 
 				if (include)
 				{
-					yield return child;
-				}
-				else
-				{
-					child.Dispose();
+					yield return Factory.Create(snapshot);
 				}
 			}
-		}
-		finally
-		{
-			enumerator = null;
 		}
 	}
 }

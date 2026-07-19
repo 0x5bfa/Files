@@ -10,8 +10,11 @@
   </Folder>
   <Folder Name="/docs/architecture/">
     <File Path="docs/architecture/README.md" />
+    <File Path="docs/architecture/capabilities.md" />
     <File Path="docs/architecture/migration.md" />
     <File Path="docs/architecture/storage-models.md" />
+    <File Path="docs/architecture/threading.md" />
+    <File Path="docs/architecture/view-settings.md" />
     <File Path="docs/architecture/windows-storage.md" />
   </Folder>
   <Folder Name="/src/" />

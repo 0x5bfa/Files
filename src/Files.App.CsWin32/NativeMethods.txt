@@ -237,6 +237,10 @@ GdipDisposeImage
 DeleteObject
 OleInitialize
 OleUninitialize
+MsgWaitForMultipleObjectsEx
+PeekMessage
+TranslateMessage
+DispatchMessage
 IShellIconOverlayManager
 SHGetFileInfo
 GetFileAttributes

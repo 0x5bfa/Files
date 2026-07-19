@@ -1,13 +1,17 @@
 # Windows storage provider
 
-The Windows provider maps the Windows Shell namespace to OwlCore.Storage without introducing WinUI dependencies.
+The Windows provider maps the Windows Shell namespace to OwlCore.Storage without introducing WinUI dependencies or leaking apartment-affine COM interfaces into ordinary models.
 
 ## Object model
 
 ```mermaid
 classDiagram
     class IStorageSource
-    class WindowsStorageSource
+    class WindowsStorageSource {
+        +Scheduler
+    }
+    class IWindowsShellScheduler
+    class WindowsStorableSnapshot
     class IWindowsStorable {
         +ParsingName
         +FileSystemPath
@@ -18,9 +22,11 @@ classDiagram
     class WindowsFolder
 
     IStorageSource <|.. WindowsStorageSource
+    WindowsStorageSource --> IWindowsShellScheduler : owns or receives
     IWindowsStorable <|.. WindowsStorable
     WindowsStorable <|-- WindowsFile
     WindowsStorable <|-- WindowsFolder
+    WindowsStorable --> WindowsStorableSnapshot : contains
     WindowsStorageSource --> WindowsStorable : creates
 ```
 
@@ -29,7 +35,7 @@ classDiagram
 ```csharp
 await using var dataRoot = new FilesDataRoot(
 	[new WindowsStorageSource()],
-	new StorableModelFactory());
+	new StorableModelFactory(capabilities));
 
 var windows = dataRoot.Sources.Single();
 
@@ -42,38 +48,70 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 }
 ```
 
-`WindowsStorable` keeps two different locations:
+`WindowsStorableSnapshot` copies these values while still on the ordered Shell STA:
 
 - `ParsingName` uses `SIGDN_DESKTOPABSOLUTEPARSING` and becomes `IStorable.Id`. It works for file-system and virtual Shell items.
+- `Name` uses a UI-friendly Shell display name with a normal-display fallback.
 - `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
+- `IsFolder` selects `WindowsFolder` or `WindowsFile` without retaining `IShellItem`.
 
 Using `SIGDN_FILESYSPATH` as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
+
+## Snapshot boundary
+
+```mermaid
+flowchart LR
+    Request["Resolve address"]
+    STA["Ordered Shell STA"]
+    Item["IShellItem"]
+    Copy["Copy identity and display data"]
+    Snapshot["WindowsStorableSnapshot"]
+    Model["WindowsFile / WindowsFolder"]
+
+    Request --> STA
+    STA --> Item
+    Item --> Copy
+    Copy --> Snapshot
+    Snapshot --> Model
+    Item -. never exposed .-> STA
+```
+
+Most CoreModels are therefore apartment-neutral and do not need disposal. The two exceptions are private wrappers around resources that must remain live:
+
+- `ShellFolderEnumerator` owns `IEnumShellItems` and routes each bounded batch to the same ordered STA.
+- `ShellReadStream` owns a virtual `IStream` and routes `Read`, `Seek`, `Stat`, and release to the same ordered STA.
+
+Neither wrapper exposes its COM interface.
 
 ## Browse flow
 
 ```mermaid
 sequenceDiagram
     participant Session as BrowseSession
-    participant Handler as Folder handler
-    participant Root as FilesDataRoot
-    participant Source as Windows source
+    participant Source as WindowsStorageSource
+    participant STA as Ordered Shell STA
     participant Shell as Windows Shell
+    participant Enum as ShellFolderEnumerator
 
-    Session->>Handler: FolderLocation
-    Handler->>Root: Resolve reference
-    Root->>Source: ResolveAsync
-    Source->>Shell: SHCreateItemFromParsingName
-    Shell-->>Source: IShellItem
-    Source-->>Root: WindowsFolder CoreModel
-    Root-->>Handler: IFolderModel
-    Handler->>Shell: BHID_EnumItems
-    loop One child at a time
-        Shell-->>Handler: IShellItem
-        Handler-->>Session: IStorableModel
+    Session->>Source: ResolveAsync(reference)
+    Source->>STA: create Shell item
+    STA->>Shell: SHCreateItemFromParsingName
+    Shell-->>STA: IShellItem
+    STA-->>Source: managed folder snapshot
+    Source-->>Session: WindowsFolder
+    Session->>STA: create enumerator
+    STA->>Shell: BHID_EnumItems
+    Shell-->>STA: IEnumShellItems
+    STA-->>Session: private affine wrapper
+    loop 32-item bounded batches
+        Session->>Enum: ReadNextAsync(32)
+        Enum->>STA: enumerate and copy snapshots
+        STA-->>Enum: managed snapshots
+        Enum-->>Session: Windows child models
     end
 ```
 
-`WindowsFolder.GetItemsAsync` yields each child as the Shell enumerator advances. It does not first buffer the entire folder.
+Enumeration does not buffer the entire folder. A bounded batch amortizes scheduler transitions while preserving streaming and cancellation between batches.
 
 ## File streams
 
@@ -83,25 +121,30 @@ flowchart TD
     HasPath{"FileSystemPath available?"}
     FileStream["System.IO.FileStream"]
     ReadOnly{"Read access?"}
-    ShellStream["BHID_Stream / IStream"]
+    Bind["Bind BHID_Stream on ordered STA"]
+    ShellStream["ShellReadStream affine wrapper"]
     Denied["UnauthorizedAccessException"]
 
     Open --> HasPath
     HasPath -->|Yes| FileStream
     HasPath -->|No| ReadOnly
-    ReadOnly -->|Yes| ShellStream
+    ReadOnly -->|Yes| Bind
+    Bind --> ShellStream
     ReadOnly -->|No| Denied
 ```
 
-File-system items use `FileStream` with read/write/delete sharing. Virtual items request `IStream` through `BHID_Stream`; the initial implementation exposes that stream as read-only.
+File-system items use `FileStream` with read/write/delete sharing. Virtual items request `IStream` through `BHID_Stream`; the prototype exposes that stream as read-only.
 
-## Lifetime and threading
+## Lifetime
 
-- `WindowsStorable` is disposable and owns its Shell projection.
-- AppModels own the CoreModels they wrap.
-- Folder enumeration keeps its Shell enumerator within the async-enumeration lifetime.
-- Callers must run Shell operations on a COM-initialized thread. The provider does not capture a dispatcher or silently marshal to the UI thread.
+- `FilesDataRoot` owns each `WindowsStorageSource`.
+- A source created without an injected scheduler owns and disposes its `WindowsShellScheduler`.
+- A source given an `IWindowsShellScheduler` borrows it; the composition root owns that shared scheduler.
+- `WindowsStorable` contains only a managed snapshot and is not disposable.
+- The affine enumerator and stream wrappers must finish before their source or shared scheduler is disposed.
 - Source-generated COM projections are used through `Files.App.CsWin32`; incompatible `Marshal.ReleaseComObject` APIs are not used.
+
+See [Windows Shell threading](threading.md) for lane selection, cancellation, reentrancy, and shutdown.
 
 ## Current scope
 
@@ -111,14 +154,8 @@ Implemented:
 - Resolving known folders, addresses, and persisted references.
 - Stable Shell parsing-name identity.
 - Parent lookup.
-- Streaming child enumeration with cancellation.
-- File-system and virtual read streams.
+- Streaming child enumeration in bounded batches.
+- File-system streams and apartment-safe virtual read streams.
+- Injectable message-pumped STA scheduling.
 
-Deferred as optional capabilities:
-
-- Thumbnails and icons.
-- Properties and visible columns.
-- Folder watchers.
-- Search.
-- Mutations and bulk file operations.
-- Context menus and Shell verbs.
+Generic capability composition now exists for thumbnails, previews, properties, and decorators. Windows-specific thumbnail extraction, property extraction, watchers, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.

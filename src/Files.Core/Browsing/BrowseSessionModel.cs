@@ -2,25 +2,34 @@
 // Licensed under the MIT License.
 
 using Files.Core.Models;
+using Files.Core.ViewSettings;
 
 namespace Files.Core.Browsing;
 
 public sealed class BrowseSessionModel : IBrowseSessionModel
 {
 	private readonly IBrowseLocationResolver locationResolver;
+	private readonly IViewSettingsStore? viewSettingsStore;
+	private readonly Dictionary<BrowseLocation, BrowseViewSettings> sessionViewSettings = [];
 	private readonly SemaphoreSlim navigationLock = new(1, 1);
 	private bool isDisposed;
 
-	public BrowseSessionModel(IBrowseLocationResolver locationResolver)
+	public BrowseSessionModel(
+		IBrowseLocationResolver locationResolver,
+		IViewSettingsStore? viewSettingsStore = null)
 	{
 		ArgumentNullException.ThrowIfNull(locationResolver);
 		this.locationResolver = locationResolver;
+		this.viewSettingsStore = viewSettingsStore;
 		Items = Array.Empty<IStorableModel>();
+		ViewSettings = BrowseViewSettings.Default;
 	}
 
 	public BrowseLocation? Location { get; private set; }
 
 	public IReadOnlyList<IStorableModel> Items { get; private set; }
+
+	public BrowseViewSettings ViewSettings { get; private set; }
 
 	public bool IsLoading { get; private set; }
 
@@ -44,6 +53,12 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			try
 			{
 				var nextItems = new List<IStorableModel>();
+				var nextViewSettings = viewSettingsStore is null
+					? sessionViewSettings.GetValueOrDefault(location, BrowseViewSettings.Default)
+					: await viewSettingsStore
+						.GetAsync(location, cancellationToken)
+						.ConfigureAwait(false)
+						?? BrowseViewSettings.Default;
 				var loaded = false;
 
 				try
@@ -66,6 +81,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				var previousItems = Items;
 				Location = location;
 				Items = nextItems.AsReadOnly();
+				ViewSettings = nextViewSettings;
 				DisposeItems(previousItems);
 			}
 			catch (Exception exception) when (exception is not OperationCanceledException)
@@ -94,6 +110,42 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			: NavigateAsync(Location, cancellationToken);
 	}
 
+	public async ValueTask UpdateViewSettingsAsync(
+		BrowseViewSettings settings,
+		CancellationToken cancellationToken = default)
+	{
+		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ArgumentNullException.ThrowIfNull(settings);
+
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+		try
+		{
+			if (Location is null)
+			{
+				throw new InvalidOperationException("View settings require an active browse location.");
+			}
+
+			if (viewSettingsStore is not null)
+			{
+				await viewSettingsStore
+					.SetAsync(Location, settings, cancellationToken)
+					.ConfigureAwait(false);
+			}
+			else
+			{
+				sessionViewSettings[Location] = settings;
+			}
+
+			ViewSettings = settings;
+			OnStateChanged();
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+	}
+
 	public void Dispose()
 	{
 		if (isDisposed)
@@ -104,6 +156,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		isDisposed = true;
 		DisposeItems(Items);
 		Items = Array.Empty<IStorableModel>();
+		sessionViewSettings.Clear();
 		navigationLock.Dispose();
 		GC.SuppressFinalize(this);
 	}

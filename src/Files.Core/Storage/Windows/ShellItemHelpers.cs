@@ -9,6 +9,32 @@ namespace Files.Core.Storage.Windows;
 
 internal static unsafe class ShellItemHelpers
 {
+	public static WindowsStorableSnapshot CreateSnapshot(IShellItem shellItem)
+	{
+		ArgumentNullException.ThrowIfNull(shellItem);
+
+		var result = shellItem.GetAttributes(
+			SFGAO_FLAGS.SFGAO_FOLDER | SFGAO_FLAGS.SFGAO_FILESYSTEM,
+			out var attributes);
+		result.ThrowOnFailure();
+
+		var parsingName = GetRequiredDisplayName(
+			shellItem,
+			SIGDN.SIGDN_DESKTOPABSOLUTEPARSING);
+		var name = TryGetDisplayName(shellItem, SIGDN.SIGDN_PARENTRELATIVEFORUI)
+			?? TryGetDisplayName(shellItem, SIGDN.SIGDN_NORMALDISPLAY)
+			?? parsingName;
+		var fileSystemPath = (attributes & SFGAO_FLAGS.SFGAO_FILESYSTEM) != 0
+			? TryGetDisplayName(shellItem, SIGDN.SIGDN_FILESYSPATH)
+			: null;
+
+		return new WindowsStorableSnapshot(
+			parsingName,
+			name,
+			fileSystemPath,
+			(attributes & SFGAO_FLAGS.SFGAO_FOLDER) != 0);
+	}
+
 	public static string GetRequiredDisplayName(IShellItem shellItem, SIGDN format)
 	{
 		return TryGetDisplayName(shellItem, format)
@@ -33,14 +59,5 @@ internal static unsafe class ShellItemHelpers
 		{
 			PInvoke.CoTaskMemFree(displayName.Value);
 		}
-	}
-
-	public static string? TryGetFileSystemPath(IShellItem shellItem)
-	{
-		var result = shellItem.GetAttributes(SFGAO_FLAGS.SFGAO_FILESYSTEM, out var attributes);
-
-		return result.Succeeded && (attributes & SFGAO_FLAGS.SFGAO_FILESYSTEM) != 0
-			? TryGetDisplayName(shellItem, SIGDN.SIGDN_FILESYSPATH)
-			: null;
 	}
 }

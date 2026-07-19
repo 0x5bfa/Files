@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 using System.Runtime.CompilerServices;
+using Files.Core.Capabilities;
 using Files.Core.Storage;
-using Files.Core.Thumbnails;
 using OwlCore.Storage;
 
 namespace Files.Core.Models;
@@ -17,8 +17,9 @@ public sealed class FolderModel : StorableModel, IFolderModel
 		IStorageSource source,
 		IFolder folder,
 		IStorableModelFactory modelFactory,
-		IThumbnailSource? thumbnailSource = null)
-		: base(source, folder, thumbnailSource)
+		StorableReference reference,
+		ICapabilitySet capabilities)
+		: base(folder, reference, capabilities)
 	{
 		ArgumentNullException.ThrowIfNull(modelFactory);
 

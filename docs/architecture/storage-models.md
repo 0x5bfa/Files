@@ -22,13 +22,18 @@ classDiagram
     class IStorableModel {
         +CoreModel
         +Reference
-        +ThumbnailSource
+        +Capabilities
+    }
+    class ICapabilitySet {
+        +Get~T~()
+        +TryGet~T~()
     }
 
     IStorable <|-- IFile
     IStorable <|-- IFolder
     IStorageSource --> IStorable : resolves
     IStorableModel --> IStorable : wraps
+    IStorableModel --> ICapabilitySet : owns
 ```
 
 `IStorageSource` is not an `IStorable`. It represents a configured connection or namespace capable of producing storage items. A Windows Shell namespace, an FTP account, and an opened archive are storage sources. Their child files and folders are storables.
@@ -59,7 +64,7 @@ flowchart LR
 
 ## Optional capabilities
 
-Capabilities remain independent interfaces. A concrete CoreModel may implement both `IStorable` and a capability, but the capability does not inherit from `IStorable`.
+Capabilities remain independent interfaces. A concrete CoreModel may directly implement both `IStorable` and a capability, but the capability does not inherit from `IStorable`.
 
 ```csharp
 public interface IThumbnailSource
@@ -70,10 +75,28 @@ public interface IThumbnailSource
 }
 ```
 
-This permits capabilities to come from the provider, an adapter, a cache, or a plugin without changing the storage hierarchy.
+An implementation may instead come from a source adapter, a cache decorator, or a plugin. The `CapabilityPipeline` composes those candidates once and stores the result in the AppModel's `ICapabilitySet`.
 
-The same rule should be used for properties, search, changes, and provider-specific actions. Mandatory OwlCore.Storage interfaces should be implemented only when their full contract can be honored.
+```mermaid
+flowchart LR
+    Source["IStorageSource"]
+    Core["IStorable CoreModel"]
+    Factory["StorableModelFactory"]
+    Pipeline["CapabilityPipeline"]
+    Model["IStorableModel"]
+
+    Source --> Core
+    Source --> Factory
+    Core --> Factory
+    Factory --> Pipeline
+    Pipeline --> Model
+    Factory --> Model
+```
+
+See [Capability composition](capabilities.md) for resolution, multiple providers, decorators, and ownership.
 
 ## Ownership
 
-`IStorableModelFactory` transfers ownership of a newly supplied CoreModel to the returned AppModel. Disposing the AppModel disposes its CoreModel and any separately owned capability. A browse session disposes replaced item models. This keeps native resources bounded by the model graph rather than the visual tree.
+`IStorableModelFactory` transfers ownership of a newly supplied CoreModel to the returned AppModel. The AppModel disposes its capability set before disposing the CoreModel. A browse session disposes replaced item models.
+
+Storage sources and shared services have a longer lifetime and are owned by `FilesDataRoot` or the application composition root. This keeps native resources bounded by the model graph rather than the visual tree.

@@ -1,8 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.Core.Capabilities;
 using Files.Core.Storage;
-using Files.Core.Thumbnails;
 using OwlCore.Storage;
 
 namespace Files.Core.Models;
@@ -11,18 +11,19 @@ public class StorableModel : IStorableModel
 {
 	private bool isDisposed;
 
-	public StorableModel(IStorageSource source, IStorable coreModel, IThumbnailSource? thumbnailSource = null)
+	public StorableModel(
+		IStorable coreModel,
+		StorableReference reference,
+		ICapabilitySet capabilities)
 	{
-		ArgumentNullException.ThrowIfNull(source);
 		ArgumentNullException.ThrowIfNull(coreModel);
+		ArgumentNullException.ThrowIfNull(reference);
+		ArgumentNullException.ThrowIfNull(capabilities);
 
 		CoreModel = coreModel;
-		Reference = new StorableReference(
-			source.SourceId,
-			coreModel.Id,
-			(coreModel as IStorageAddressSource)?.Address);
+		Reference = reference;
 		Name = coreModel.Name;
-		ThumbnailSource = thumbnailSource;
+		Capabilities = capabilities;
 	}
 
 	public IStorable CoreModel { get; }
@@ -31,7 +32,7 @@ public class StorableModel : IStorableModel
 
 	public string Name { get; }
 
-	public IThumbnailSource? ThumbnailSource { get; }
+	public ICapabilitySet Capabilities { get; }
 
 	public void Dispose()
 	{
@@ -48,14 +49,19 @@ public class StorableModel : IStorableModel
 
 		isDisposed = true;
 
-		if (disposing && ThumbnailSource is IDisposable thumbnailSource && !ReferenceEquals(thumbnailSource, CoreModel))
+		if (disposing)
 		{
-			thumbnailSource.Dispose();
-		}
-
-		if (disposing && CoreModel is IDisposable coreModel)
-		{
-			coreModel.Dispose();
+			try
+			{
+				Capabilities.Dispose();
+			}
+			finally
+			{
+				if (CoreModel is IDisposable coreModel)
+				{
+					coreModel.Dispose();
+				}
+			}
 		}
 	}
 }
