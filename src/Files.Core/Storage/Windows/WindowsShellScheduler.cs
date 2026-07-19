@@ -20,7 +20,7 @@ namespace Files.Core.Storage.Windows;
 /// interfaces must never escape a delegate unless a private wrapper routes every
 /// later access back through the same ordered lane.
 /// </remarks>
-[SupportedOSPlatform("windows")]
+[SupportedOSPlatform("windows5.1.2600")]
 public sealed class WindowsShellScheduler : IWindowsShellScheduler
 {
 	[ThreadStatic]
@@ -101,12 +101,9 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 		private readonly object stateLock = new();
 		private readonly ConcurrentQueue<WorkItem> workItems = [];
 		private readonly Semaphore workAvailable = new(0, int.MaxValue);
-		private readonly TaskCompletionSource<bool> initialized = new(
-			TaskCreationOptions.RunContinuationsAsynchronously);
 		private readonly TaskCompletionSource<bool> stopped = new(
 			TaskCreationOptions.RunContinuationsAsynchronously);
 		private readonly int workerCount;
-		private int pendingInitializers;
 		private int remainingWorkers;
 		private bool isStopping;
 		private Exception? terminalException;
@@ -118,7 +115,6 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(workerCount);
 
 			this.workerCount = workerCount;
-			pendingInitializers = workerCount;
 			remainingWorkers = workerCount;
 
 			for (var index = 0; index < workerCount; index++)
@@ -153,9 +149,7 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 				}
 			}
 
-			return initialized.Task.IsCompletedSuccessfully
-				? Enqueue(action, cancellationToken)
-				: InvokeWhenInitializedAsync(action, cancellationToken);
+			return Enqueue(action, cancellationToken);
 		}
 
 		public ValueTask DisposeAsync()
@@ -201,14 +195,6 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 			}
 		}
 
-		private async Task<T> InvokeWhenInitializedAsync<T>(
-			Func<T> action,
-			CancellationToken cancellationToken)
-		{
-			await initialized.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
-			return await Enqueue(action, cancellationToken).ConfigureAwait(false);
-		}
-
 		private Task<T> Enqueue<T>(
 			Func<T> action,
 			CancellationToken cancellationToken)
@@ -237,6 +223,7 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 			return workItem.Task;
 		}
 
+		[SupportedOSPlatform("windows5.1.2600")]
 		private unsafe void Run()
 		{
 			var oleInitialized = false;
@@ -260,8 +247,6 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 					0,
 					0,
 					PEEK_MESSAGE_REMOVE_TYPE.PM_NOREMOVE);
-
-				MarkInitialized();
 
 				while (!IsStopping())
 				{
@@ -295,22 +280,6 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 			}
 		}
 
-		private void MarkInitialized()
-		{
-			if (Interlocked.Decrement(ref pendingInitializers) != 0)
-			{
-				return;
-			}
-
-			lock (stateLock)
-			{
-				if (!isStopping)
-				{
-					initialized.TrySetResult(true);
-				}
-			}
-		}
-
 		private bool IsStopping()
 		{
 			lock (stateLock)
@@ -338,6 +307,7 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 			}
 		}
 
+		[SupportedOSPlatform("windows5.1.2600")]
 		private unsafe void WaitForWorkOrMessage()
 		{
 			var safeWaitHandle = workAvailable.SafeWaitHandle;
@@ -352,7 +322,7 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 
 				var result = PInvoke.MsgWaitForMultipleObjectsEx(
 					handles,
-					PInvoke.INFINITE,
+					uint.MaxValue,
 					QUEUE_STATUS_FLAGS.QS_ALLINPUT,
 					MSG_WAIT_FOR_MULTIPLE_OBJECTS_EX_FLAGS.MWMO_INPUTAVAILABLE);
 				var resultValue = (uint)result;
@@ -392,6 +362,7 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 			}
 		}
 
+		[SupportedOSPlatform("windows5.1.2600")]
 		private static void PumpMessages()
 		{
 			while (PInvoke.PeekMessage(
@@ -427,7 +398,6 @@ public sealed class WindowsShellScheduler : IWindowsShellScheduler
 		{
 			isStopping = true;
 			terminalException = exception;
-			initialized.TrySetException(exception);
 
 			var pendingWork = new List<WorkItem>();
 

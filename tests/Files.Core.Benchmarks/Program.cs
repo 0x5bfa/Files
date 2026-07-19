@@ -1,0 +1,42 @@
+// Copyright (c) Files Community
+// Licensed under the MIT License.
+
+using BenchmarkDotNet.Running;
+using BenchmarkDotNet.Columns;
+using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Exporters;
+using BenchmarkDotNet.Jobs;
+using BenchmarkDotNet.Loggers;
+using Files.Core.Benchmarks;
+
+var smoke = args.Contains("--smoke", StringComparer.OrdinalIgnoreCase);
+var benchmarkArgs = args
+	.Where(argument => !argument.Equals("--smoke", StringComparison.OrdinalIgnoreCase))
+	.ToArray();
+var baseJob = smoke
+	? Job.Dry
+	: Job.Default;
+var benchmarkJob = baseJob.WithMsBuildArguments(
+	"/p:MinimalWindowsVersion=10.0.19041.0",
+	"/p:TargetPlatformMinVersion=10.0.19041.0",
+	"/p:WindowsTargetFramework=net10.0-windows10.0.26100.0",
+	"/p:Platform=x64",
+	"/p:PlatformTarget=x64");
+
+var config = ManualConfig
+	.CreateEmpty()
+	.AddLogger(ConsoleLogger.Default)
+	.AddColumnProvider(DefaultColumnProviders.Instance)
+	.AddExporter(MarkdownExporter.GitHub)
+	.AddJob(benchmarkJob);
+
+if (smoke)
+{
+	BenchmarkRunner.Run<CapabilityResolutionBenchmarks>(config);
+}
+else
+{
+	BenchmarkSwitcher
+		.FromAssembly(typeof(Program).Assembly)
+		.Run(benchmarkArgs, config);
+}

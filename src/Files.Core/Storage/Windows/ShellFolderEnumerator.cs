@@ -26,7 +26,7 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 		this.enumerator = enumerator;
 	}
 
-	public Task<IReadOnlyList<WindowsStorableSnapshot>> ReadNextAsync(
+	public unsafe Task<IReadOnlyList<WindowsStorableSnapshot>> ReadNextAsync(
 		int maximumCount,
 		CancellationToken cancellationToken = default)
 	{
@@ -45,11 +45,12 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 					?? throw new ObjectDisposedException(nameof(ShellFolderEnumerator));
 				var snapshots = new List<WindowsStorableSnapshot>(maximumCount);
 				var children = new IShellItem[1];
+				uint fetched = 0;
 
 				while (snapshots.Count < maximumCount)
 				{
 					cancellationToken.ThrowIfCancellationRequested();
-					var result = nativeEnumerator.Next(children);
+					var result = nativeEnumerator.Next(1, children, &fetched);
 
 					if (result == global::Windows.Win32.Foundation.HRESULT.S_FALSE)
 					{

@@ -55,6 +55,7 @@
     <PackageVersion Include="MSTest.TestAdapter" Version="4.3.2" />
     <PackageVersion Include="MSTest.TestFramework" Version="4.3.2" />
     <PackageVersion Include="Microsoft.Testing.Extensions.TrxReport" Version="2.3.2" />
+    <PackageVersion Include="BenchmarkDotNet" Version="0.15.8" />
     <PackageVersion Include="Dongle.GuidRVAGen" Version="1.0.5" />
   </ItemGroup>
 </Project>
