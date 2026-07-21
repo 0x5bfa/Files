@@ -42,10 +42,13 @@ public sealed class PropertyProviderCapabilityContributor : ICapabilityContribut
 		}
 
 		public async ValueTask<IReadOnlyDictionary<string, object?>> GetPropertiesAsync(
+			PropertyRequest request,
 			CancellationToken cancellationToken = default)
 		{
+			ArgumentNullException.ThrowIfNull(request);
+
 			var result = await provider
-				.GetPropertiesAsync([context], cancellationToken)
+				.GetPropertiesAsync(request, [context], cancellationToken)
 				.ConfigureAwait(false);
 
 			return result.TryGetValue(context.Reference, out var properties)

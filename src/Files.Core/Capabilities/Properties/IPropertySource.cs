@@ -9,5 +9,6 @@ namespace Files.Core.Capabilities.Properties;
 public interface IPropertySource
 {
 	ValueTask<IReadOnlyDictionary<string, object?>> GetPropertiesAsync(
+		PropertyRequest request,
 		CancellationToken cancellationToken = default);
 }

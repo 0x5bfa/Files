@@ -41,15 +41,18 @@ public sealed class PropertySourceComposer : ICapabilityComposer<IPropertySource
 		}
 
 		public async ValueTask<IReadOnlyDictionary<string, object?>> GetPropertiesAsync(
+			PropertyRequest request,
 			CancellationToken cancellationToken = default)
 		{
+			ArgumentNullException.ThrowIfNull(request);
+
 			var merged = new Dictionary<string, object?>(StringComparer.Ordinal);
 
 			foreach (var source in sources)
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 				var properties = await source
-					.GetPropertiesAsync(cancellationToken)
+					.GetPropertiesAsync(request, cancellationToken)
 					.ConfigureAwait(false);
 
 				foreach (var property in properties)

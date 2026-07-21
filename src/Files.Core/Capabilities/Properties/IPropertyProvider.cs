@@ -14,6 +14,7 @@ public interface IPropertyProvider
 	bool CanProvide(CapabilityContext context);
 
 	ValueTask<IReadOnlyDictionary<StorableReference, IReadOnlyDictionary<string, object?>>> GetPropertiesAsync(
+		PropertyRequest request,
 		IReadOnlyList<CapabilityContext> contexts,
 		CancellationToken cancellationToken = default);
 }

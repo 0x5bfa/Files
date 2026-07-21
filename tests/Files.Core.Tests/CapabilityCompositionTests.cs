@@ -86,7 +86,8 @@ public sealed class CapabilityCompositionTests
 			new CapabilityCandidate<IPropertySource>(high, 20, "high", CapabilityOwnership.External),
 		])!;
 
-		var values = await source.GetPropertiesAsync();
+		var values = await source.GetPropertiesAsync(
+			new PropertyRequest(["name", "Name", "lowOnly"]));
 		Assert.AreEqual("high", values["name"]);
 		Assert.AreEqual("case-sensitive", values["Name"]);
 		Assert.AreEqual(true, values["lowOnly"]);
@@ -153,6 +154,7 @@ public sealed class CapabilityCompositionTests
 		public TestPropertySource(IReadOnlyDictionary<string, object?> values) => this.values = values;
 
 		public ValueTask<IReadOnlyDictionary<string, object?>> GetPropertiesAsync(
+			PropertyRequest request,
 			CancellationToken cancellationToken = default)
 			=> ValueTask.FromResult(values);
 	}

@@ -9,7 +9,9 @@ var properties = folderModel.Get<IPropertySource>();
 
 if (properties is not null)
 {
-	var values = await properties.GetPropertiesAsync(cancellationToken);
+	var values = await properties.GetPropertiesAsync(
+		new PropertyRequest(["System.Size", "System.DateModified"]),
+		cancellationToken);
 }
 ```
 
@@ -90,6 +92,7 @@ The thumbnail chain treats only `null` as “try the next provider.” Exception
 ```csharp
 var thumbnailCache = new MemoryThumbnailCache();
 var windowsThumbnailBackend = new WindowsShellThumbnailBackend();
+var windowsProperties = new WindowsPropertyProvider();
 
 var capabilities = new CapabilityPipelineBuilder()
 	.AddContributor<IThumbnailSource>(

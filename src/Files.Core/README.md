@@ -19,7 +19,7 @@ The capability prototype includes:
 - decorators, including a bounded in-memory thumbnail cache;
 - a batch-oriented `IPropertyProvider` adapter for item-bound `IPropertySource` access.
 
-The Windows Shell provider supports file-system and virtual item resolution, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, and PNG thumbnail extraction. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
+The Windows Shell provider supports file-system and virtual item resolution, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, requested typed property extraction, and PNG thumbnail extraction. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
 
 Architecture documents are available in [`docs/architecture`](../../docs/architecture/README.md).
 
@@ -29,5 +29,5 @@ Architecture documents are available in [`docs/architecture`](../../docs/archite
 - Existing storage implementations remain untouched. `Files.Core` temporarily references `Files.App.CsWin32` for source-generated interop.
 - Existing projects do not reference this prototype yet.
 - Home, search, and tag locations are typed, but need separate handlers before they can be browsed.
-- Windows property extraction, selection, history, operations, actions, and ViewModels remain future vertical slices.
+- Additional Windows property types, selection, history, operations, actions, and ViewModels remain future vertical slices.
 - The eventual merge of `Files.Shared`, `Files.Core.Storage`, `Files.App.Storage`, and `Files.App.CsWin32` is intentionally separate from adopting this architecture.

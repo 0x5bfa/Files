@@ -73,6 +73,13 @@ public interface IThumbnailSource
 		ThumbnailRequest request,
 		CancellationToken cancellationToken = default);
 }
+
+public interface IPropertySource
+{
+	ValueTask<IReadOnlyDictionary<string, object?>> GetPropertiesAsync(
+		PropertyRequest request,
+		CancellationToken cancellationToken = default);
+}
 ```
 
 An implementation may instead come from a source adapter, a cache decorator, or a plugin. The `CapabilityPipeline` composes those candidates once and stores the result in the AppModel's `ICapabilitySet`.
