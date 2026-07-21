@@ -219,6 +219,9 @@ FILE_FLAGS_AND_ATTRIBUTES
 GetLogicalDrives
 IShellItemImageFactory
 GdipCreateBitmapFromHBITMAP
+GdiplusStartup
+GdiplusShutdown
+GdiplusStartupInput
 GdipGetImageEncodersSize
 GdipGetImageEncoders
 ImageFormatPNG

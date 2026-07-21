@@ -157,5 +157,6 @@ Implemented:
 - Streaming child enumeration in bounded batches.
 - File-system streams and apartment-safe virtual read streams.
 - Injectable message-pumped STA scheduling.
+- Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
 
-Generic capability composition now exists for thumbnails, previews, properties, and decorators. Windows-specific thumbnail extraction, property extraction, watchers, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.
+Generic capability composition now exists for thumbnails, previews, properties, and decorators. Windows-specific property extraction, watchers, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.

@@ -89,8 +89,13 @@ The thumbnail chain treats only `null` as “try the next provider.” Exception
 
 ```csharp
 var thumbnailCache = new MemoryThumbnailCache();
+var windowsThumbnailBackend = new WindowsShellThumbnailBackend();
 
 var capabilities = new CapabilityPipelineBuilder()
+	.AddContributor<IThumbnailSource>(
+		new WindowsThumbnailCapabilityContributor(windowsThumbnailBackend),
+		priority: 0,
+		origin: "Windows Shell")
 	.AddContributor<IPropertySource>(
 		new PropertyProviderCapabilityContributor(windowsProperties),
 		priority: 100,
