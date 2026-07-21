@@ -1,11 +1,10 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using System.IO;
 using Files.Core.Capabilities;
 using Files.Core.Storage;
 
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
 /// Wraps a composed thumbnail source with a shared, composition-root-owned cache.
@@ -72,20 +71,12 @@ public sealed class ThumbnailCacheDecorator : ICapabilityDecorator<IThumbnailSou
 				return null;
 			}
 
-			await using (result.ConfigureAwait(false))
-			{
-				using var buffer = new MemoryStream();
-				await result.Content
-					.CopyToAsync(buffer, cancellationToken)
-					.ConfigureAwait(false);
-
-				var entry = new ThumbnailCacheEntry(
-					buffer.ToArray(),
-					result.ContentType,
-					result.IsFallback);
-				await cache.SetAsync(key, entry, cancellationToken).ConfigureAwait(false);
-				return entry.CreateResult();
-			}
+			var entry = new ThumbnailCacheEntry(
+				result.Content.ToArray(),
+				result.ContentType,
+				result.IsFallback);
+			await cache.SetAsync(key, entry, cancellationToken).ConfigureAwait(false);
+			return entry.CreateResult();
 		}
 	}
 }

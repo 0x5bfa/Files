@@ -5,7 +5,7 @@ using Files.Core.Capabilities;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.Storage.Windows;
-using Files.Core.Thumbnails;
+using Files.Core.Capabilities.Thumbnails;
 using OwlCore.Storage;
 
 namespace Files.Core.Tests;
@@ -42,32 +42,24 @@ public sealed class WindowsThumbnailTests
 			var thumbnailSource = model.Get<IThumbnailSource>();
 			Assert.IsNotNull(thumbnailSource);
 
-			await using var first = await thumbnailSource.GetThumbnailAsync(
+			var first = await thumbnailSource.GetThumbnailAsync(
 				new ThumbnailRequest(96, ThumbnailMode.Icon));
 			Assert.IsNotNull(first);
 			Assert.AreEqual("image/png", first.ContentType);
-			var firstContent = await ReadBytesAsync(first.Content);
-		CollectionAssert.AreEqual(PngSignature, firstContent[..PngSignature.Length]);
+			var firstContent = first.Content.ToArray();
+			CollectionAssert.AreEqual(PngSignature, firstContent[..PngSignature.Length]);
 
 			File.Delete(filePath);
 
-			await using var second = await thumbnailSource.GetThumbnailAsync(
+			var second = await thumbnailSource.GetThumbnailAsync(
 				new ThumbnailRequest(96, ThumbnailMode.Icon));
 			Assert.IsNotNull(second);
-			Assert.AreNotSame(first.Content, second.Content);
-			CollectionAssert.AreEqual(firstContent, await ReadBytesAsync(second.Content));
+			CollectionAssert.AreEqual(firstContent, second.Content.ToArray());
 		}
 		finally
 		{
 			Directory.Delete(directoryPath, recursive: true);
 		}
-	}
-
-	private static async Task<byte[]> ReadBytesAsync(Stream stream)
-	{
-		using var buffer = new MemoryStream();
-		await stream.CopyToAsync(buffer);
-		return buffer.ToArray();
 	}
 
 	private static readonly byte[] PngSignature = [

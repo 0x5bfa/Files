@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-namespace Files.Core.Properties;
+namespace Files.Core.Capabilities.Properties;
 
 /// <summary>
 /// Reads properties bound to one application model.

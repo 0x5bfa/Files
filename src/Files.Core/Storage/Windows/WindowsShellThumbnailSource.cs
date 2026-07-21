@@ -1,9 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using System.IO;
 using System.Runtime.Versioning;
-using Files.Core.Thumbnails;
+using Files.Core.Capabilities.Thumbnails;
 
 namespace Files.Core.Storage.Windows;
 
@@ -42,9 +41,6 @@ internal sealed class WindowsShellThumbnailSource : IThumbnailSource
 
 		return payload is null
 			? null
-			: new ThumbnailResult(
-				new MemoryStream(payload.Content, writable: false),
-				payload.ContentType,
-				payload.IsFallback);
+			: new ThumbnailResult(payload.Content, payload.ContentType, payload.IsFallback);
 	}
 }

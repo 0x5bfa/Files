@@ -3,7 +3,7 @@
 
 using System.Runtime.Versioning;
 using Files.Core.Capabilities;
-using Files.Core.Thumbnails;
+using Files.Core.Capabilities.Thumbnails;
 
 namespace Files.Core.Storage.Windows;
 

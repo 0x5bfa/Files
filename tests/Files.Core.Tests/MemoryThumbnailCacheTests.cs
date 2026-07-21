@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.Core.Storage;
-using Files.Core.Thumbnails;
+using Files.Core.Capabilities.Thumbnails;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Files.Core.Tests;

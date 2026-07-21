@@ -4,7 +4,7 @@
 using System.Collections.ObjectModel;
 using Files.Core.Capabilities;
 
-namespace Files.Core.Properties;
+namespace Files.Core.Capabilities.Properties;
 
 /// <summary>
 /// Merges properties from all candidates, with higher-priority candidates winning duplicate keys.

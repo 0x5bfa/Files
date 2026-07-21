@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
 /// Supplies thumbnails without also claiming to be a storage item.

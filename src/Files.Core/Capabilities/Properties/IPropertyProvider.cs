@@ -4,7 +4,7 @@
 using Files.Core.Capabilities;
 using Files.Core.Storage;
 
-namespace Files.Core.Properties;
+namespace Files.Core.Capabilities.Properties;
 
 /// <summary>
 /// Reads properties for a batch of items owned by a provider or plugin.

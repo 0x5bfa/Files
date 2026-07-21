@@ -4,9 +4,9 @@
 using System.IO;
 using System.Text;
 using Files.Core.Capabilities;
-using Files.Core.Previews;
-using Files.Core.Properties;
-using Files.Core.Thumbnails;
+using Files.Core.Capabilities.Previews;
+using Files.Core.Capabilities.Properties;
+using Files.Core.Capabilities.Thumbnails;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Files.Core.Tests;
@@ -26,9 +26,9 @@ public sealed class CapabilityCompositionTests
 			new CapabilityCandidate<IThumbnailSource>(higher, 20, "higher", CapabilityOwnership.External),
 		])!;
 
-		await using var result = await source.GetThumbnailAsync(new ThumbnailRequest(64));
+		var result = await source.GetThumbnailAsync(new ThumbnailRequest(64));
 		Assert.IsNotNull(result);
-		Assert.AreEqual("higher", await ReadTextAsync(result.Content));
+		Assert.AreEqual("higher", Encoding.UTF8.GetString(result.Content.Span));
 		Assert.AreEqual(1, higher.CallCount);
 		Assert.AreEqual(0, lower.CallCount);
 	}
@@ -44,9 +44,9 @@ public sealed class CapabilityCompositionTests
 			new CapabilityCandidate<IThumbnailSource>(second, 10, "second", CapabilityOwnership.External),
 		])!;
 
-		await using var result = await source.GetThumbnailAsync(new ThumbnailRequest(64));
+		var result = await source.GetThumbnailAsync(new ThumbnailRequest(64));
 		Assert.IsNotNull(result);
-		Assert.AreEqual("fallback", await ReadTextAsync(result.Content));
+		Assert.AreEqual("fallback", Encoding.UTF8.GetString(result.Content.Span));
 		Assert.AreEqual(1, first.CallCount);
 		Assert.AreEqual(1, second.CallCount);
 	}
@@ -124,8 +124,9 @@ public sealed class CapabilityCompositionTests
 			return ValueTask.FromResult<ThumbnailResult?>(value is null
 				? null
 				: new ThumbnailResult(
-					new MemoryStream(Encoding.UTF8.GetBytes(value), writable: false),
-					"text/plain"));
+					Encoding.UTF8.GetBytes(value),
+					"text/plain",
+					false));
 		}
 	}
 

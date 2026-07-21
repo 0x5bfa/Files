@@ -1,9 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using System.IO;
-
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
 /// Contains an immutable thumbnail payload suitable for a shared cache.
@@ -14,10 +12,11 @@ public sealed class ThumbnailCacheEntry
 
 	public ThumbnailCacheEntry(
 		byte[] content,
-		string? contentType = null,
+		string contentType,
 		bool isFallback = false)
 	{
 		ArgumentNullException.ThrowIfNull(content);
+		ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
 
 		this.content = (byte[])content.Clone();
 		ContentType = contentType;
@@ -26,15 +25,12 @@ public sealed class ThumbnailCacheEntry
 
 	public ReadOnlyMemory<byte> Content => content;
 
-	public string? ContentType { get; }
+	public string ContentType { get; }
 
 	public bool IsFallback { get; }
 
 	internal ThumbnailResult CreateResult()
 	{
-		return new ThumbnailResult(
-			new MemoryStream(content, writable: false),
-			ContentType,
-			IsFallback);
+		return new ThumbnailResult(Content, ContentType, IsFallback);
 	}
 }

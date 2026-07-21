@@ -3,7 +3,7 @@
 
 using Files.Core.Storage;
 
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
 /// Provides a bounded process-memory LRU cache for thumbnail decorators.

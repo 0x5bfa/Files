@@ -3,7 +3,7 @@
 
 using Files.Core.Storage;
 
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
 /// Stores materialized thumbnail payloads independently of item model lifetimes.

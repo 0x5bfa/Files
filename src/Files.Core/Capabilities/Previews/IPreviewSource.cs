@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-namespace Files.Core.Previews;
+namespace Files.Core.Capabilities.Previews;
 
 /// <summary>
 /// Produces UI-neutral preview content for one item.

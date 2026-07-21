@@ -3,7 +3,7 @@
 
 using Files.Core.Storage;
 
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
 /// Identifies cached content without treating a last-known address as item identity.

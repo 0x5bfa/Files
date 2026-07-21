@@ -4,7 +4,7 @@
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
-using Files.Core.Thumbnails;
+using Files.Core.Capabilities.Thumbnails;
 using Windows.Win32;
 using Windows.Win32.Foundation;
 using Windows.Win32.Graphics.Gdi;

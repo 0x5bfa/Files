@@ -3,16 +3,16 @@
 
 using Files.Core.Capabilities;
 
-namespace Files.Core.Previews;
+namespace Files.Core.Capabilities.Thumbnails;
 
 /// <summary>
-/// Builds a priority-ordered preview router from all preview candidates.
+/// Builds a priority-ordered fallback chain from all thumbnail candidates.
 /// </summary>
-public sealed class PreviewSourceComposer : ICapabilityComposer<IPreviewSource>
+public sealed class ThumbnailSourceComposer : ICapabilityComposer<IThumbnailSource>
 {
-	public IPreviewSource? Compose(
+	public IThumbnailSource? Compose(
 		CapabilityContext context,
-		IReadOnlyList<CapabilityCandidate<IPreviewSource>> candidates)
+		IReadOnlyList<CapabilityCandidate<IThumbnailSource>> candidates)
 	{
 		ArgumentNullException.ThrowIfNull(context);
 		ArgumentNullException.ThrowIfNull(candidates);
@@ -26,21 +26,21 @@ public sealed class PreviewSourceComposer : ICapabilityComposer<IPreviewSource>
 		{
 			0 => null,
 			1 => sources[0],
-			_ => new RoutedPreviewSource(sources),
+			_ => new FallbackThumbnailSource(sources),
 		};
 	}
 
-	private sealed class RoutedPreviewSource : IPreviewSource
+	private sealed class FallbackThumbnailSource : IThumbnailSource
 	{
-		private readonly IReadOnlyList<IPreviewSource> sources;
+		private readonly IReadOnlyList<IThumbnailSource> sources;
 
-		public RoutedPreviewSource(IReadOnlyList<IPreviewSource> sources)
+		public FallbackThumbnailSource(IReadOnlyList<IThumbnailSource> sources)
 		{
 			this.sources = sources;
 		}
 
-		public async ValueTask<PreviewResult?> GetPreviewAsync(
-			PreviewRequest request,
+		public async ValueTask<ThumbnailResult?> GetThumbnailAsync(
+			ThumbnailRequest request,
 			CancellationToken cancellationToken = default)
 		{
 			ArgumentNullException.ThrowIfNull(request);
@@ -49,7 +49,7 @@ public sealed class PreviewSourceComposer : ICapabilityComposer<IPreviewSource>
 			{
 				cancellationToken.ThrowIfCancellationRequested();
 				var result = await source
-					.GetPreviewAsync(request, cancellationToken)
+					.GetThumbnailAsync(request, cancellationToken)
 					.ConfigureAwait(false);
 
 				if (result is not null)

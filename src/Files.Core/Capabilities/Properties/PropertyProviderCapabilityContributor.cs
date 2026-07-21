@@ -4,7 +4,7 @@
 using System.Collections.ObjectModel;
 using Files.Core.Capabilities;
 
-namespace Files.Core.Properties;
+namespace Files.Core.Capabilities.Properties;
 
 /// <summary>
 /// Binds a source-scoped or plugin-scoped property provider to one model.

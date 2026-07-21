@@ -3,27 +3,24 @@
 
 using System.IO;
 
-namespace Files.Core.Thumbnails;
+namespace Files.Core.Capabilities.Previews;
 
 /// <summary>
-/// Owns the stream returned for a thumbnail request.
+/// Owns the stream returned for a preview request.
 /// </summary>
-public sealed class ThumbnailResult : IDisposable, IAsyncDisposable
+public sealed class PreviewResult : IDisposable, IAsyncDisposable
 {
-	public ThumbnailResult(Stream content, string? contentType = null, bool isFallback = false)
+	public PreviewResult(Stream content, string? contentType = null)
 	{
 		ArgumentNullException.ThrowIfNull(content);
 
 		Content = content;
 		ContentType = contentType;
-		IsFallback = isFallback;
 	}
 
 	public Stream Content { get; }
 
 	public string? ContentType { get; }
-
-	public bool IsFallback { get; }
 
 	public void Dispose()
 	{
