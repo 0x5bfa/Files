@@ -24,28 +24,13 @@ public sealed class WindowsShellThumbnailBackend
 	private static readonly Lazy<Guid?> pngEncoder = new(FindPngEncoder);
 
 	internal unsafe WindowsThumbnailPayload? GetThumbnail(
-		string parsingName,
+		IShellItemImageFactory imageFactory,
 		ThumbnailRequest request,
 		CancellationToken cancellationToken)
 	{
-		ArgumentException.ThrowIfNullOrWhiteSpace(parsingName);
+		ArgumentNullException.ThrowIfNull(imageFactory);
 		ArgumentNullException.ThrowIfNull(request);
 		cancellationToken.ThrowIfCancellationRequested();
-
-		var createResult = PInvoke.SHCreateItemFromParsingName(
-			parsingName,
-			null,
-			out IShellItem shellItem);
-
-		if (createResult.Failed)
-		{
-			return null;
-		}
-
-		if (shellItem is not IShellItemImageFactory imageFactory)
-		{
-			return null;
-		}
 
 		return request.Mode switch
 		{

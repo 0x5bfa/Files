@@ -26,14 +26,14 @@ public sealed class WindowsThumbnailCapabilityContributor : ICapabilityContribut
 		ArgumentNullException.ThrowIfNull(context);
 
 		if (context.Source is not WindowsStorageSource source
-			|| context.CoreModel is not IWindowsStorable storable)
+			|| context.CoreModel is not WindowsStorable storable)
 		{
 			return null;
 		}
 
 		return new WindowsShellThumbnailSource(
-			source.Scheduler,
+			source.ShellItemResolver,
 			backend,
-			storable.ParsingName);
+			storable.Locator);
 	}
 }

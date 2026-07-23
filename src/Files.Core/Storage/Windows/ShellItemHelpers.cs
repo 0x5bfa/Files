@@ -1,15 +1,19 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using System.Runtime.InteropServices;
+using OwlCore.Storage;
 using Windows.Win32;
+using Windows.Win32.System.Com;
 using Windows.Win32.System.SystemServices;
 using Windows.Win32.UI.Shell;
+using Windows.Win32.UI.Shell.Common;
 
 namespace Files.Core.Storage.Windows;
 
 internal static unsafe class ShellItemHelpers
 {
-	public static WindowsStorableSnapshot CreateSnapshot(
+	public static WindowsStorableDescriptor CreateDescriptor(
 		IShellItem shellItem,
 		IWindowsItemIdentityProvider identityProvider)
 	{
@@ -35,12 +39,68 @@ internal static unsafe class ShellItemHelpers
 			parsingName,
 			fileSystemPath);
 
-		return new WindowsStorableSnapshot(
+		var snapshot = new WindowsStorableSnapshot(
 			itemId,
-			parsingName,
 			name,
 			fileSystemPath,
 			(attributes & SFGAO_FLAGS.SFGAO_FOLDER) != 0);
+
+		return new WindowsStorableDescriptor(
+			itemId,
+			new StorageAddress(WindowsStorageSource.ShellAddressScheme, parsingName),
+			new WindowsItemLocator(CopyAbsolutePidl(shellItem), parsingName),
+			snapshot);
+	}
+
+	private static unsafe ReadOnlyMemory<byte> CopyAbsolutePidl(IShellItem shellItem)
+	{
+		ITEMIDLIST* pidl = null;
+		var result = PInvoke.SHGetIDListFromObject(shellItem, out pidl);
+
+		if (result.Failed || pidl is null)
+		{
+			return ReadOnlyMemory<byte>.Empty;
+		}
+
+		try
+		{
+			var size = GetPidlSize(pidl);
+			if (size is 0)
+			{
+				return ReadOnlyMemory<byte>.Empty;
+			}
+
+			var bytes = GC.AllocateUninitializedArray<byte>(size);
+			Marshal.Copy((IntPtr)pidl, bytes, 0, size);
+			return bytes;
+		}
+		finally
+		{
+			PInvoke.CoTaskMemFree(pidl);
+		}
+	}
+
+	private static unsafe int GetPidlSize(ITEMIDLIST* pidl)
+	{
+		var offset = 0;
+
+		while (offset <= int.MaxValue - sizeof(ushort))
+		{
+			var itemSize = *(ushort*)((byte*)pidl + offset);
+			if (itemSize is 0)
+			{
+				return offset + sizeof(ushort);
+			}
+
+			if (itemSize < sizeof(ushort) || offset > int.MaxValue - itemSize)
+			{
+				return 0;
+			}
+
+			offset += itemSize;
+		}
+
+		return 0;
 	}
 
 	public static string GetRequiredDisplayName(IShellItem shellItem, SIGDN format)

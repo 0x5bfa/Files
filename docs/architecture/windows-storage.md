@@ -11,8 +11,14 @@ classDiagram
         +Scheduler
     }
     class IWindowsShellScheduler
-    class WindowsStorableSnapshot {
+    class WindowsStorableDescriptor {
         +ItemId
+        +Address
+        +Locator
+        +Snapshot
+    }
+    class WindowsItemLocator {
+        +AbsolutePidl
         +ParsingName
     }
     class IWindowsStorable {
@@ -29,7 +35,8 @@ classDiagram
     IWindowsStorable <|.. WindowsStorable
     WindowsStorable <|-- WindowsFile
     WindowsStorable <|-- WindowsFolder
-    WindowsStorable --> WindowsStorableSnapshot : contains
+    WindowsStorable --> WindowsStorableDescriptor : contains
+    WindowsStorableDescriptor --> WindowsItemLocator : contains
     WindowsStorageSource --> WindowsStorable : creates
 ```
 
@@ -51,15 +58,15 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 }
 ```
 
-`WindowsStorableSnapshot` copies these values while still on the ordered Shell STA:
+`WindowsStorableDescriptor` copies these values while still on the ordered Shell STA:
 
-- `ItemId` is created by one `IWindowsItemIdentityProvider`. File-system items use the volume serial and file index; virtual or inaccessible items use an explicit `address:` fallback.
-- `ParsingName` uses `SIGDN_DESKTOPABSOLUTEPARSING` as the Shell locator and is kept separate from `IStorable.Id`.
+- `ItemId` is created by one `IWindowsItemIdentityProvider`. File-system items use the versioned `winfs:v1:<volume>:<file-index>` identity; virtual or inaccessible items use the versioned, encoded `winshell-address:v1:<address>` fallback.
+- `WindowsItemLocator` contains a managed copy of the absolute PIDL and the `SIGDN_DESKTOPABSOLUTEPARSING` fallback locator. The PIDL is copied before the Shell STA operation returns.
 - `Name` uses a UI-friendly Shell display name with a normal-display fallback.
 - `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
 - `IsFolder` selects `WindowsFolder` or `WindowsFile` without retaining `IShellItem`.
 
-Windows file IDs are stable across rename, but reverse lookup from a file ID is not implemented yet. Keep `LastKnownAddress` with references so the source can recover through the current address when identity lookup cannot resolve an opaque ID.
+Windows file IDs are stable across rename. The provider uses the known path and the saved address to locate the same file, including a bounded same-directory scan when the old name no longer exists. A reference is accepted only when the resolved candidate has exactly the requested `ItemId`; a recreated file at the old address is rejected.
 
 Using a filesystem path or parsing name as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
 
@@ -70,15 +77,15 @@ flowchart LR
     Request["Resolve address"]
     STA["Ordered Shell STA"]
     Item["IShellItem"]
-    Copy["Copy identity and display data"]
-    Snapshot["WindowsStorableSnapshot"]
+    Copy["Copy identity, PIDL, and display data"]
+    Descriptor["WindowsStorableDescriptor"]
     Model["WindowsFile / WindowsFolder"]
 
     Request --> STA
     STA --> Item
     Item --> Copy
-    Copy --> Snapshot
-    Snapshot --> Model
+    Copy --> Descriptor
+    Descriptor --> Model
     Item -. never exposed .-> STA
 ```
 
@@ -88,6 +95,23 @@ Most CoreModels are therefore apartment-neutral and do not need disposal. The tw
 - `ShellReadStream` owns a virtual `IStream` and routes `Read`, `Seek`, `Stat`, and release to the same ordered STA.
 
 Neither wrapper exposes its COM interface.
+
+## Shared Shell resolver
+
+All Shell item materialization is routed through `WindowsShellItemResolver`. It first attempts `SHCreateItemFromIDList` using the managed PIDL, then falls back to `SHCreateItemFromParsingName` using the locator. The resolver invokes the caller's operation inside the selected STA and returns only managed data or a private affine wrapper.
+
+```mermaid
+flowchart LR
+    Capability["Thumbnail / property capability"] --> Resolver["WindowsShellItemResolver"]
+    Resolver --> Pidl{"Managed absolute PIDL available?"}
+    Pidl -->|Yes| FromPidl["SHCreateItemFromIDList"]
+    Pidl -->|No or failed| FromName["SHCreateItemFromParsingName"]
+    FromPidl --> STA["Shell STA delegate"]
+    FromName --> STA
+    STA --> Managed["PNG bytes / property dictionary"]
+```
+
+Capability sources receive the locator, never an `IShellItem` or a raw PIDL pointer. This keeps COM affinity inside the resolver and gives filesystem, virtual Shell, thumbnail, and property paths one materialization boundary.
 
 ## Browse flow
 
@@ -111,8 +135,8 @@ sequenceDiagram
     STA-->>Session: private affine wrapper
     loop 32-item bounded batches
         Session->>Enum: ReadNextAsync(32)
-        Enum->>STA: enumerate and copy snapshots
-        STA-->>Enum: managed snapshots
+        Enum->>STA: enumerate and copy descriptors
+        STA-->>Enum: managed descriptors
         Enum-->>Session: Windows child models
     end
 ```
@@ -158,7 +182,9 @@ Implemented:
 
 - Parsing file-system and virtual Shell items.
 - Resolving known folders, addresses, and persisted references.
-- Centralized filesystem identity from volume serial and file index, with an explicit address fallback for items that cannot expose a stable filesystem ID.
+- Versioned provider-defined identity from volume serial and file index, with an encoded address fallback for items that cannot expose a stable filesystem ID.
+- Strict reference resolution that refuses to return a different item occupying a stale address.
+- Managed PIDL descriptors and one shared Shell item resolver for storage and capabilities.
 - Parent lookup.
 - Streaming child enumeration in bounded batches.
 - File-system streams and apartment-safe virtual read streams.

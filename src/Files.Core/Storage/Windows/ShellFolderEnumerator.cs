@@ -30,28 +30,28 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 		this.identityProvider = identityProvider;
 	}
 
-	public unsafe Task<IReadOnlyList<WindowsStorableSnapshot>> ReadNextAsync(
+	public unsafe Task<IReadOnlyList<WindowsStorableDescriptor>> ReadNextAsync(
 		int maximumCount,
 		CancellationToken cancellationToken = default)
 	{
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumCount);
 		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed) != 0, this);
 
-		return scheduler.InvokeAsync<IReadOnlyList<WindowsStorableSnapshot>>(
+		return scheduler.InvokeAsync<IReadOnlyList<WindowsStorableDescriptor>>(
 			() =>
 			{
 				if (isCompleted)
 				{
-					return Array.Empty<WindowsStorableSnapshot>();
+					return Array.Empty<WindowsStorableDescriptor>();
 				}
 
 				var nativeEnumerator = enumerator
 					?? throw new ObjectDisposedException(nameof(ShellFolderEnumerator));
-				var snapshots = new List<WindowsStorableSnapshot>(maximumCount);
+				var descriptors = new List<WindowsStorableDescriptor>(maximumCount);
 				var children = new IShellItem[1];
 				uint fetched = 0;
 
-				while (snapshots.Count < maximumCount)
+				while (descriptors.Count < maximumCount)
 				{
 					cancellationToken.ThrowIfCancellationRequested();
 					var result = nativeEnumerator.Next(1, children, &fetched);
@@ -63,10 +63,10 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 					}
 
 					result.ThrowOnFailure();
-					snapshots.Add(ShellItemHelpers.CreateSnapshot(children[0], identityProvider));
+					descriptors.Add(ShellItemHelpers.CreateDescriptor(children[0], identityProvider));
 				}
 
-				return snapshots;
+				return descriptors;
 			},
 			cancellationToken);
 	}

@@ -8,7 +8,6 @@ namespace Files.Core.Storage.Windows;
 /// </summary>
 internal sealed record WindowsStorableSnapshot(
 	string ItemId,
-	string ParsingName,
 	string Name,
 	string? FileSystemPath,
 	bool IsFolder);

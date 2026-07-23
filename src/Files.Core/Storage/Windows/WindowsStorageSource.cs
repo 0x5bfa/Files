@@ -51,6 +51,8 @@ public sealed class WindowsStorageSource : IStorageSource
 	/// </summary>
 	public IWindowsShellScheduler Scheduler { get; }
 
+	internal WindowsShellItemResolver ShellItemResolver => storableFactory.Resolver;
+
 	public async IAsyncEnumerable<IFolder> GetRootsAsync(
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
 	{
@@ -116,7 +118,10 @@ public sealed class WindowsStorageSource : IStorageSource
 		}
 
 		var storable = await storableFactory
-			.TryCreateFromItemIdAsync(reference.ItemId, cancellationToken)
+			.TryCreateFromItemIdAsync(
+				reference.ItemId,
+				reference.LastKnownAddress,
+				cancellationToken)
 			.ConfigureAwait(false);
 
 		if (storable is not null)
@@ -126,8 +131,13 @@ public sealed class WindowsStorageSource : IStorageSource
 
 		if (reference.LastKnownAddress is not null && CanResolve(reference.LastKnownAddress))
 		{
-			return await ResolveAsync(reference.LastKnownAddress, cancellationToken)
+			var candidate = await ResolveAsync(reference.LastKnownAddress, cancellationToken)
 				.ConfigureAwait(false);
+
+			if (StringComparer.Ordinal.Equals(candidate.Id, reference.ItemId))
+			{
+				return candidate;
+			}
 		}
 
 		throw new FileNotFoundException(

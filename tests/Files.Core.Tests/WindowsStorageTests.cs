@@ -89,5 +89,65 @@ public sealed class WindowsStorageTests
 
 		var result = await scheduler.InvokeAsync(static () => true);
 		Assert.IsTrue(result);
-}
+	}
+
+	[TestMethod]
+	public async Task DirectResolutionAndEnumerationShareTheSameIdentity()
+	{
+		var directoryPath = Path.Combine(Path.GetTempPath(), $"Files.Core.IdentityTests-{Guid.NewGuid():N}");
+		Directory.CreateDirectory(directoryPath);
+		var filePath = Path.Combine(directoryPath, "item.txt");
+		File.WriteAllText(filePath, "content");
+
+		try
+		{
+			await using var scheduler = new WindowsShellScheduler();
+			await using var source = new WindowsStorageSource(scheduler: scheduler);
+			var folder = (IFolder)await source.ResolveAsync(
+				new Files.Core.Storage.StorageAddress(WindowsStorageSource.FileAddressScheme, directoryPath));
+			var enumerated = await FindItemAsync(folder, "item.txt");
+			var direct = (IWindowsStorable)await source.ResolveAsync(
+				new Files.Core.Storage.StorageAddress(WindowsStorageSource.FileAddressScheme, filePath));
+
+			Assert.IsNotNull(enumerated);
+			Assert.AreEqual(direct.Id, enumerated!.Id);
+		}
+		finally
+		{
+			Directory.Delete(directoryPath, recursive: true);
+		}
+	}
+
+	[TestMethod]
+	public async Task VirtualShellItemUsesVersionedAddressIdentity()
+	{
+		await using var scheduler = new WindowsShellScheduler();
+		await using var source = new WindowsStorageSource(scheduler: scheduler);
+		IWindowsStorable? root = null;
+		await foreach (var candidate in source.GetRootsAsync())
+		{
+			root = (IWindowsStorable)candidate;
+			break;
+		}
+
+		Assert.IsNotNull(root);
+		var resolved = (IWindowsStorable)await source.ResolveAsync(root!.Address);
+
+		Assert.IsFalse(root.IsFileSystem);
+		StringAssert.StartsWith(root.Id, "winshell-address:v1:");
+		Assert.AreEqual(root.Id, resolved.Id);
+	}
+
+	private static async Task<IStorableChild?> FindItemAsync(IFolder folder, string name)
+	{
+		await foreach (var item in folder.GetItemsAsync(StorableType.File))
+		{
+			if (StringComparer.Ordinal.Equals(item.Name, name))
+			{
+				return item;
+			}
+		}
+
+		return null;
+	}
 }

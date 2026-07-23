@@ -38,9 +38,10 @@ public sealed class WindowsIdentityTests
 			Assert.AreNotSame(original, renamed);
 			Assert.AreEqual(originalReference.ItemId, renamed.Id);
 			Assert.AreNotEqual(originalReference.LastKnownAddress, renamed.Address);
+			StringAssert.StartsWith(original.Id, "winfs:v1:");
 
 			var resolvedByReference = (IWindowsStorable)await source.ResolveAsync(
-				new StorableReference(source.SourceId, original.Id, renamed.Address));
+				originalReference);
 			Assert.AreEqual(original.Id, resolvedByReference.Id);
 
 			File.Delete(newPath);
@@ -49,6 +50,17 @@ public sealed class WindowsIdentityTests
 			var recreated = (IWindowsStorable)await source.ResolveAsync(
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, newPath));
 			Assert.AreNotEqual(renamed.Id, recreated.Id);
+			var rejected = false;
+			try
+			{
+				await source.ResolveAsync(originalReference);
+			}
+			catch (FileNotFoundException)
+			{
+				rejected = true;
+			}
+
+			Assert.IsTrue(rejected);
 		}
 		finally
 		{

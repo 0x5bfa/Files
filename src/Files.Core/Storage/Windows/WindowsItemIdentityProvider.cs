@@ -1,6 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using System.Collections.Concurrent;
+using System.Text;
 using System.IO;
 using System.Runtime.Versioning;
 using Windows.Win32;
@@ -14,8 +16,10 @@ namespace Files.Core.Storage.Windows;
 [SupportedOSPlatform("windows6.0.6000")]
 internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 {
-	private const string AddressPrefix = "address:";
+	private const string FileIdentityPrefix = "winfs:v1:";
+	private const string AddressPrefix = "winshell-address:v1:";
 	private const FileOptions BackupSemantics = (FileOptions)0x02000000;
+	private readonly ConcurrentDictionary<string, string> knownFileSystemPaths = new(StringComparer.Ordinal);
 
 	public string GetItemId(
 		IShellItem shellItem,
@@ -27,10 +31,12 @@ internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 
 		if (fileSystemPath is not null && TryGetFileId(fileSystemPath, out var fileId))
 		{
-			return $"file:{fileId.VolumeSerialNumber:X8}:{fileId.FileIndex:X16}";
+			var itemId = $"{FileIdentityPrefix}{fileId.VolumeSerialNumber:X8}:{fileId.FileIndex:X16}";
+			knownFileSystemPaths[itemId] = fileSystemPath;
+			return itemId;
 		}
 
-		return $"{AddressPrefix}{parsingName}";
+		return $"{AddressPrefix}{EncodeAddress(parsingName)}";
 	}
 
 	public bool TryGetParsingName(
@@ -44,8 +50,21 @@ internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 			return false;
 		}
 
-		parsingName = itemId[AddressPrefix.Length..];
-		return !string.IsNullOrWhiteSpace(parsingName);
+		return TryDecodeAddress(itemId[AddressPrefix.Length..], out parsingName);
+	}
+
+	public bool IsFileSystemIdentity(string itemId)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+		return itemId.StartsWith(FileIdentityPrefix, StringComparison.Ordinal);
+	}
+
+	public bool TryGetKnownFileSystemPath(
+		string itemId,
+		out string fileSystemPath)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+		return knownFileSystemPaths.TryGetValue(itemId, out fileSystemPath!);
 	}
 
 	private static bool TryGetFileId(
@@ -79,6 +98,42 @@ internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 			return false;
 		}
 		catch (UnauthorizedAccessException)
+		{
+			return false;
+		}
+	}
+
+	private static string EncodeAddress(string parsingName)
+	{
+		return Convert.ToBase64String(Encoding.UTF8.GetBytes(parsingName))
+			.TrimEnd('=')
+			.Replace('+', '-')
+			.Replace('/', '_');
+	}
+
+	private static bool TryDecodeAddress(
+		string encodedAddress,
+		out string parsingName)
+	{
+		parsingName = string.Empty;
+
+		if (string.IsNullOrWhiteSpace(encodedAddress))
+		{
+			return false;
+		}
+
+		try
+		{
+			var paddedAddress = encodedAddress
+				.Replace('-', '+')
+				.Replace('_', '/');
+			paddedAddress = paddedAddress.PadRight(
+				paddedAddress.Length + ((4 - paddedAddress.Length % 4) % 4),
+				'=');
+			parsingName = Encoding.UTF8.GetString(Convert.FromBase64String(paddedAddress));
+			return !string.IsNullOrWhiteSpace(parsingName);
+		}
+		catch (FormatException)
 		{
 			return false;
 		}

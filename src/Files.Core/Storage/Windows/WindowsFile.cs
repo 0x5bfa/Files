@@ -9,9 +9,9 @@ namespace Files.Core.Storage.Windows;
 public sealed class WindowsFile : WindowsStorable, IChildFile
 {
 	internal WindowsFile(
-		WindowsStorableSnapshot snapshot,
+		WindowsStorableDescriptor descriptor,
 		WindowsStorableFactory factory)
-		: base(snapshot, factory)
+		: base(descriptor, factory)
 	{
 	}
 
@@ -38,6 +38,6 @@ public sealed class WindowsFile : WindowsStorable, IChildFile
 				"The virtual Shell item does not expose a writable file-system path.");
 		}
 
-		return await Factory.OpenReadStreamAsync(Snapshot, cancellationToken).ConfigureAwait(false);
+		return await Factory.OpenReadStreamAsync(Descriptor, cancellationToken).ConfigureAwait(false);
 	}
 }

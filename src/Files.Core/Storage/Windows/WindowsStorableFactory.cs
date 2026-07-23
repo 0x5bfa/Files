@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using System.IO;
+using OwlCore.Storage;
 using Windows.Win32;
 using Windows.Win32.System.Com;
 using Windows.Win32.System.SystemServices;
@@ -12,10 +13,11 @@ namespace Files.Core.Storage.Windows;
 /// <summary>
 /// Resolves Shell interfaces on the ordered STA lane and returns managed models or affine wrappers.
 /// </summary>
-internal sealed unsafe class WindowsStorableFactory
+internal sealed class WindowsStorableFactory
 {
 	private readonly IWindowsShellScheduler scheduler;
 	private readonly IWindowsItemIdentityProvider identityProvider;
+	private readonly WindowsShellItemResolver resolver;
 
 	public WindowsStorableFactory(
 		IWindowsShellScheduler scheduler,
@@ -24,7 +26,10 @@ internal sealed unsafe class WindowsStorableFactory
 		ArgumentNullException.ThrowIfNull(scheduler);
 		this.scheduler = scheduler;
 		this.identityProvider = identityProvider ?? new WindowsItemIdentityProvider();
+		resolver = new WindowsShellItemResolver(scheduler);
 	}
+
+	internal WindowsShellItemResolver Resolver => resolver;
 
 	public Task<WindowsStorable> CreateAsync(
 		string parsingName,
@@ -32,16 +37,9 @@ internal sealed unsafe class WindowsStorableFactory
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(parsingName);
 
-		return scheduler.InvokeAsync<WindowsStorable>(
-			() =>
-			{
-				var result = PInvoke.SHCreateItemFromParsingName(
-					parsingName,
-					null,
-					out IShellItem shellItem);
-				result.ThrowOnFailure();
-				return Create(ShellItemHelpers.CreateSnapshot(shellItem, identityProvider));
-			},
+		return resolver.InvokeAsync<WindowsStorable>(
+			parsingName,
+			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider)),
 			cancellationToken);
 	}
 
@@ -58,7 +56,7 @@ internal sealed unsafe class WindowsStorableFactory
 					null,
 					out IShellItem shellItem);
 				result.ThrowOnFailure();
-				return Create(ShellItemHelpers.CreateSnapshot(shellItem, identityProvider));
+				return Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider));
 			},
 			cancellationToken);
 	}
@@ -72,47 +70,97 @@ internal sealed unsafe class WindowsStorableFactory
 			return Task.FromResult<WindowsStorable?>(null);
 		}
 
-		return scheduler.InvokeAsync<WindowsStorable?>(
-			() =>
-			{
-				var result = PInvoke.SHCreateItemFromParsingName(
-					parsingName,
-					null,
-					out IShellItem shellItem);
-
-				return result.Failed
-					? null
-					: Create(ShellItemHelpers.CreateSnapshot(shellItem, identityProvider));
-			},
+		return resolver.InvokeConcurrentAsync<WindowsStorable?>(
+			parsingName,
+			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider)),
 			cancellationToken);
 	}
 
 	public Task<WindowsStorable?> TryCreateFromItemIdAsync(
 		string itemId,
+		StorageAddress? lastKnownAddress = null,
 		CancellationToken cancellationToken = default)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
 
-		return identityProvider.TryGetParsingName(itemId, out var parsingName)
-			? TryCreateAsync(parsingName, cancellationToken)
-			: Task.FromResult<WindowsStorable?>(null);
+		return TryCreateFromItemIdCoreAsync(itemId, lastKnownAddress, cancellationToken);
+	}
+
+	private async Task<WindowsStorable?> TryCreateFromItemIdCoreAsync(
+		string itemId,
+		StorageAddress? lastKnownAddress,
+		CancellationToken cancellationToken)
+	{
+		if (identityProvider.TryGetParsingName(itemId, out var parsingName))
+		{
+			var addressCandidate = await TryCreateAsync(parsingName, cancellationToken)
+				.ConfigureAwait(false);
+			return IsMatchingItem(addressCandidate, itemId) ? addressCandidate : null;
+		}
+
+		if (!identityProvider.IsFileSystemIdentity(itemId))
+		{
+			return null;
+		}
+
+		if (identityProvider.TryGetKnownFileSystemPath(itemId, out var knownPath))
+		{
+			var knownCandidate = await TryCreateAsync(knownPath, cancellationToken)
+				.ConfigureAwait(false);
+			if (IsMatchingItem(knownCandidate, itemId))
+			{
+				return knownCandidate;
+			}
+		}
+
+		if (lastKnownAddress is null
+			|| !lastKnownAddress.Scheme.Equals(
+				WindowsStorageSource.FileAddressScheme,
+				StringComparison.OrdinalIgnoreCase))
+		{
+			return null;
+		}
+
+		var lastKnownPath = lastKnownAddress.Value;
+		var directCandidate = await TryCreateAsync(lastKnownPath, cancellationToken)
+			.ConfigureAwait(false);
+		if (IsMatchingItem(directCandidate, itemId))
+		{
+			return directCandidate;
+		}
+
+		var parentPath = Path.GetDirectoryName(lastKnownPath);
+		if (string.IsNullOrWhiteSpace(parentPath)
+			|| !Directory.Exists(parentPath))
+		{
+			return null;
+		}
+
+		foreach (var candidatePath in Directory.EnumerateFileSystemEntries(parentPath))
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+
+			var candidate = await TryCreateAsync(candidatePath, cancellationToken)
+				.ConfigureAwait(false);
+			if (IsMatchingItem(candidate, itemId))
+			{
+				return candidate;
+			}
+		}
+
+		return null;
 	}
 
 	public Task<WindowsFolder?> GetParentAsync(
-		WindowsStorableSnapshot snapshot,
+		WindowsStorableDescriptor descriptor,
 		CancellationToken cancellationToken = default)
 	{
-		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(descriptor);
 
-		return scheduler.InvokeAsync<WindowsFolder?>(
-			() =>
+		return resolver.InvokeAsync<WindowsFolder?>(
+			descriptor.Locator,
+			shellItem =>
 			{
-				var createResult = PInvoke.SHCreateItemFromParsingName(
-					snapshot.ParsingName,
-					null,
-					out IShellItem shellItem);
-				createResult.ThrowOnFailure();
-
 				var parentResult = shellItem.GetParent(out var parent);
 
 				if (parentResult.Failed)
@@ -120,26 +168,21 @@ internal sealed unsafe class WindowsStorableFactory
 					return null;
 				}
 
-				return Create(ShellItemHelpers.CreateSnapshot(parent, identityProvider)) as WindowsFolder;
+				return Create(ShellItemHelpers.CreateDescriptor(parent, identityProvider)) as WindowsFolder;
 			},
 			cancellationToken);
 	}
 
 	public Task<ShellFolderEnumerator> CreateEnumeratorAsync(
-		WindowsStorableSnapshot snapshot,
+		WindowsStorableDescriptor descriptor,
 		CancellationToken cancellationToken = default)
 	{
-		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(descriptor);
 
-		return scheduler.InvokeAsync(
-			() =>
+		return resolver.InvokeAsync<ShellFolderEnumerator>(
+			descriptor.Locator,
+			shellItem =>
 			{
-				var createResult = PInvoke.SHCreateItemFromParsingName(
-					snapshot.ParsingName,
-					null,
-					out IShellItem shellItem);
-				createResult.ThrowOnFailure();
-
 				var bindResult = shellItem.BindToHandler(
 					null,
 					PInvoke.BHID_EnumItems,
@@ -160,20 +203,15 @@ internal sealed unsafe class WindowsStorableFactory
 	}
 
 	public Task<Stream> OpenReadStreamAsync(
-		WindowsStorableSnapshot snapshot,
+		WindowsStorableDescriptor descriptor,
 		CancellationToken cancellationToken = default)
 	{
-		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(descriptor);
 
-		return scheduler.InvokeAsync<Stream>(
-			() =>
+		return resolver.InvokeAsync<Stream>(
+			descriptor.Locator,
+			shellItem =>
 			{
-				var createResult = PInvoke.SHCreateItemFromParsingName(
-					snapshot.ParsingName,
-					null,
-					out IShellItem shellItem);
-				createResult.ThrowOnFailure();
-
 				var bindResult = shellItem.BindToHandler(
 					null,
 					PInvoke.BHID_Stream,
@@ -190,12 +228,20 @@ internal sealed unsafe class WindowsStorableFactory
 			cancellationToken);
 	}
 
-	internal WindowsStorable Create(WindowsStorableSnapshot snapshot)
+	internal WindowsStorable Create(WindowsStorableDescriptor descriptor)
 	{
-		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(descriptor);
 
-		return snapshot.IsFolder
-			? new WindowsFolder(snapshot, this)
-			: new WindowsFile(snapshot, this);
+		return descriptor.Snapshot.IsFolder
+			? new WindowsFolder(descriptor, this)
+			: new WindowsFile(descriptor, this);
+	}
+
+	private static bool IsMatchingItem(
+		WindowsStorable? storable,
+		string itemId)
+	{
+		return storable is not null
+			&& StringComparer.Ordinal.Equals(storable.Id, itemId);
 	}
 }

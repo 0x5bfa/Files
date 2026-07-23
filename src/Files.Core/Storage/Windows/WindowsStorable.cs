@@ -10,25 +10,29 @@ namespace Files.Core.Storage.Windows;
 /// </summary>
 public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStorable>
 {
-	private readonly WindowsStorableSnapshot snapshot;
+	private readonly WindowsStorableDescriptor descriptor;
 
 	internal WindowsStorable(
-		WindowsStorableSnapshot snapshot,
+		WindowsStorableDescriptor descriptor,
 		WindowsStorableFactory factory)
 	{
-		ArgumentNullException.ThrowIfNull(snapshot);
+		ArgumentNullException.ThrowIfNull(descriptor);
 		ArgumentNullException.ThrowIfNull(factory);
 
-		this.snapshot = snapshot;
+		this.descriptor = descriptor;
 		Factory = factory;
-		Id = snapshot.ItemId;
-		Name = snapshot.Name;
-		Address = new StorageAddress(WindowsStorageSource.ShellAddressScheme, snapshot.ParsingName);
+		Id = descriptor.ItemId;
+		Name = descriptor.Snapshot.Name;
+		Address = descriptor.Address;
 	}
 
 	internal WindowsStorableFactory Factory { get; }
 
-	internal WindowsStorableSnapshot Snapshot => snapshot;
+	internal WindowsStorableDescriptor Descriptor => descriptor;
+
+	internal WindowsStorableSnapshot Snapshot => descriptor.Snapshot;
+
+	internal WindowsItemLocator Locator => descriptor.Locator;
 
 	public string Id { get; }
 
@@ -36,15 +40,15 @@ public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStor
 
 	public StorageAddress Address { get; }
 
-	public string ParsingName => snapshot.ParsingName;
+	public string ParsingName => descriptor.Locator.ParsingName;
 
-	public string? FileSystemPath => snapshot.FileSystemPath;
+	public string? FileSystemPath => descriptor.Snapshot.FileSystemPath;
 
 	public bool IsFileSystem => FileSystemPath is not null;
 
 	public async Task<IFolder?> GetParentAsync(CancellationToken cancellationToken = default)
 	{
-		return await Factory.GetParentAsync(snapshot, cancellationToken).ConfigureAwait(false);
+		return await Factory.GetParentAsync(Descriptor, cancellationToken).ConfigureAwait(false);
 	}
 
 	public bool Equals(WindowsStorable? other)

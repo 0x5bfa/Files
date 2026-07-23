@@ -3,28 +3,29 @@
 
 using System.Runtime.Versioning;
 using Files.Core.Capabilities.Thumbnails;
+using Windows.Win32.UI.Shell;
 
 namespace Files.Core.Storage.Windows;
 
 [SupportedOSPlatform("windows6.0.6000")]
 internal sealed class WindowsShellThumbnailSource : IThumbnailSource
 {
-	private readonly IWindowsShellScheduler scheduler;
+	private readonly WindowsShellItemResolver resolver;
 	private readonly WindowsShellThumbnailBackend backend;
-	private readonly string parsingName;
+	private readonly WindowsItemLocator locator;
 
 	public WindowsShellThumbnailSource(
-		IWindowsShellScheduler scheduler,
+		WindowsShellItemResolver resolver,
 		WindowsShellThumbnailBackend backend,
-		string parsingName)
+		WindowsItemLocator locator)
 	{
-		ArgumentNullException.ThrowIfNull(scheduler);
+		ArgumentNullException.ThrowIfNull(resolver);
 		ArgumentNullException.ThrowIfNull(backend);
-		ArgumentException.ThrowIfNullOrWhiteSpace(parsingName);
+		ArgumentNullException.ThrowIfNull(locator);
 
-		this.scheduler = scheduler;
+		this.resolver = resolver;
 		this.backend = backend;
-		this.parsingName = parsingName;
+		this.locator = locator;
 	}
 
 	public async ValueTask<ThumbnailResult?> GetThumbnailAsync(
@@ -33,9 +34,12 @@ internal sealed class WindowsShellThumbnailSource : IThumbnailSource
 	{
 		ArgumentNullException.ThrowIfNull(request);
 
-		var payload = await scheduler
+		var payload = await resolver
 			.InvokeConcurrentAsync(
-				() => backend.GetThumbnail(parsingName, request, cancellationToken),
+				locator,
+				shellItem => shellItem is IShellItemImageFactory imageFactory
+					? backend.GetThumbnail(imageFactory, request, cancellationToken)
+					: null,
 				cancellationToken)
 			.ConfigureAwait(false);
 

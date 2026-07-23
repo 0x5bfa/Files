@@ -50,7 +50,7 @@ Three values have different jobs:
 
 `StorableReference` combines the source ID and item ID. `LastKnownAddress` is an optional recovery hint, not the primary identity.
 
-Windows filesystem items use an opaque identity derived from the volume serial and file index when available. Their Shell parsing name remains a separate locator; virtual or inaccessible items use a documented address fallback. Reverse lookup of opaque file IDs is not implemented yet, so `LastKnownAddress` remains required for recovery.
+Windows filesystem items use the versioned `winfs:v1:<volume>:<file-index>` identity when available. Their Shell parsing name and managed absolute PIDL remain separate locators; virtual or inaccessible items use the encoded `winshell-address:v1:<address>` fallback. `LastKnownAddress` is a recovery hint. Resolution validates the resulting identity and rejects a different file that has replaced a stale address.
 
 ```mermaid
 flowchart LR

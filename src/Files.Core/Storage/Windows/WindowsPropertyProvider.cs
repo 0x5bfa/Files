@@ -33,7 +33,7 @@ public sealed class WindowsPropertyProvider : IPropertyProvider
 		ArgumentNullException.ThrowIfNull(context);
 
 		return context.Source is WindowsStorageSource
-			&& context.CoreModel is IWindowsStorable;
+			&& context.CoreModel is WindowsStorable;
 	}
 
 	public async ValueTask<IReadOnlyDictionary<StorableReference, IReadOnlyDictionary<string, object?>>> GetPropertiesAsync(
@@ -72,28 +72,24 @@ public sealed class WindowsPropertyProvider : IPropertyProvider
 		CancellationToken cancellationToken)
 	{
 		var source = (WindowsStorageSource)context.Source;
-		var item = (IWindowsStorable)context.CoreModel;
+		var item = (WindowsStorable)context.CoreModel;
 
-		return source.Scheduler.InvokeConcurrentAsync(
-			() => new PropertyEntry(
+		return source.ShellItemResolver.InvokeConcurrentAsync(
+			((WindowsStorable)item).Locator,
+			shellItem => new PropertyEntry(
 				context.Reference,
-				ReadPropertiesCore(item.ParsingName, request, cancellationToken)),
+				ReadPropertiesCore(shellItem, request, cancellationToken)),
 			cancellationToken);
 	}
 
 	private static IReadOnlyDictionary<string, object?> ReadPropertiesCore(
-		string parsingName,
+		IShellItem shellItem,
 		PropertyRequest request,
 		CancellationToken cancellationToken)
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 
-		var createResult = PInvoke.SHCreateItemFromParsingName(
-			parsingName,
-			null,
-			out IShellItem shellItem);
-
-		if (createResult.Failed || shellItem is not IShellItem2 shellItem2)
+		if (shellItem is not IShellItem2 shellItem2)
 		{
 			return EmptyProperties.Instance;
 		}
