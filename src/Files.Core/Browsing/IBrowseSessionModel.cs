@@ -9,9 +9,11 @@ namespace Files.Core.Browsing;
 /// <summary>
 /// UI-agnostic state for one browser pane.
 /// </summary>
-public interface IBrowseSessionModel : IDisposable
+public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 {
 	BrowseLocation? Location { get; }
+
+	IBrowseLocationContext? Context { get; }
 
 	IReadOnlyList<IStorableModel> Items { get; }
 

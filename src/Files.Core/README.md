@@ -8,8 +8,8 @@ The implemented vertical slice is:
 2. `IStorableModelFactory` wraps CoreModels as Files AppModels.
 3. `CapabilityPipeline` lazily composes item-bound capabilities from direct, provider, and plugin candidates.
 4. `IFilesDataRoot` composes configured sources and forms the root of the storage-backed graph.
-5. `IBrowseLocationHandler` maps typed locations to items.
-6. `IBrowseSessionModel` owns one browser pane's items and view settings.
+5. `IBrowseLocationHandler` opens an owned context for each typed location.
+6. `IBrowseSessionModel` owns one browser pane's context, items, and view settings.
 
 The capability prototype includes:
 

@@ -21,12 +21,16 @@ public sealed class BrowseSessionModelTests
 
 		await session.NavigateAsync(new FolderLocation(first.Reference));
 		Assert.AreSame(first, session.Items.Single());
+		var firstContext = resolver.OpenedContexts.Single();
+		Assert.AreSame(firstContext, session.Context);
 
 		resolver.Items.Clear();
 		resolver.Items.Add(second);
 		await session.NavigateAsync(new FolderLocation(second.Reference));
 		Assert.IsTrue(firstCore.IsDisposed);
 		Assert.IsFalse(secondCore.IsDisposed);
+		Assert.IsTrue(firstContext.IsDisposed);
+		Assert.IsFalse(resolver.OpenedContexts.Last().IsDisposed);
 	}
 
 	[TestMethod]
@@ -47,7 +51,59 @@ public sealed class BrowseSessionModelTests
 
 		Assert.IsFalse(currentCore.IsDisposed);
 		Assert.IsTrue(partialCore.IsDisposed);
+		Assert.AreSame(resolver.OpenedContexts[0], session.Context);
+		Assert.IsTrue(resolver.OpenedContexts[1].IsDisposed);
 		Assert.IsNotNull(session.Error);
+	}
+
+	[TestMethod]
+	public async Task CancelledNavigationDisposesNewContextAndPreservesCurrentState()
+	{
+		var factory = new TestModelFactory();
+		var current = factory.CreateModel("current", "Current", out var currentCore);
+		var next = factory.CreateModel("next", "Next", out var nextCore);
+		var enumerationStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var resolver = new TestBrowseLocationResolver([current]);
+		using var session = new BrowseSessionModel(resolver);
+		await session.NavigateAsync(new FolderLocation(current.Reference));
+
+		resolver.Items.Clear();
+		resolver.Items.Add(next);
+		resolver.EnumerationStarted = enumerationStarted;
+		resolver.BlockEnumeration = true;
+		using var cancellation = new CancellationTokenSource();
+		var navigation = session.NavigateAsync(
+			new FolderLocation(next.Reference),
+			cancellation.Token);
+		await enumerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+		cancellation.Cancel();
+
+		await Assert.ThrowsAsync<OperationCanceledException>(
+			async () => await navigation);
+
+		Assert.IsFalse(currentCore.IsDisposed);
+		Assert.IsFalse(nextCore.IsDisposed);
+		Assert.AreSame(current, session.Items.Single());
+		Assert.AreSame(resolver.OpenedContexts[0], session.Context);
+		Assert.IsTrue(resolver.OpenedContexts[1].IsDisposed);
+	}
+
+	[TestMethod]
+	public async Task DisposingSessionDisposesActiveContextAndItems()
+	{
+		var factory = new TestModelFactory();
+		var item = factory.CreateModel("item", "Item", out var itemCore);
+		var resolver = new TestBrowseLocationResolver([item]);
+		var session = new BrowseSessionModel(resolver);
+		await session.NavigateAsync(new FolderLocation(item.Reference));
+		var context = resolver.OpenedContexts.Single();
+
+		await session.DisposeAsync();
+
+		Assert.IsTrue(itemCore.IsDisposed);
+		Assert.IsTrue(context.IsDisposed);
+		Assert.IsEmpty(session.Items);
+		Assert.IsNull(session.Context);
 	}
 
 	[TestMethod]

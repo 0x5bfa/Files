@@ -45,17 +45,19 @@ sequenceDiagram
     participant Resolver as BrowseLocationResolver
 
     VM->>Session: NavigateAsync(location)
-    Session->>Store: GetAsync(location)
-    Store-->>Session: saved settings or null
-    Session->>Resolver: GetItemsAsync(location)
-    Resolver-->>Session: item models
-    Session-->>VM: StateChanged with items + settings
+    Session->>Resolver: OpenAsync(location)
+    Resolver-->>Session: owned location context
+    Session->>Context: GetItemsAsync()
+    Context-->>Session: item models
+    Session-->>VM: StateChanged with context, items + settings
     VM->>Session: UpdateViewSettingsAsync(new settings)
     Session->>Store: SetAsync(location, settings)
     Session-->>VM: StateChanged
 ```
 
 If no store is supplied, the session keeps an in-memory value per `BrowseLocation`. A real composition root can inject a persisted store backed by the Files settings database.
+
+The session replaces the active context and item list only after the new context has finished loading. A failed or cancelled navigation disposes the new context and partial items while preserving the current context and items. Replacing or disposing the session disposes both the item models and the context that owns the location model.
 
 ## Why this is not `FolderModel.Get<IViewSettings>()`
 

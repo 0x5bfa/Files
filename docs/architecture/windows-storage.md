@@ -179,12 +179,13 @@ sequenceDiagram
     participant Shell as Windows Shell
     participant Enum as ShellFolderEnumerator
 
-    Session->>Source: ResolveAsync(reference)
+    Session->>Source: OpenAsync(FolderLocation)
+    Source->>Source: ResolveAsync(reference)
     Source->>STA: create Shell item
     STA->>Shell: SHCreateItemFromParsingName
     Shell-->>STA: IShellItem
     STA-->>Source: managed folder snapshot
-    Source-->>Session: WindowsFolder
+    Source-->>Session: FolderBrowseLocationContext
     Session->>STA: create enumerator
     STA->>Shell: BHID_EnumItems
     Shell-->>STA: IEnumShellItems
@@ -195,6 +196,7 @@ sequenceDiagram
         STA-->>Enum: managed descriptors
         Enum-->>Session: Windows child models
     end
+    Session->>Source: DisposeAsync() on replacement or close
 ```
 
 Enumeration does not buffer the entire folder. A bounded batch amortizes scheduler transitions while preserving streaming and cancellation between batches.

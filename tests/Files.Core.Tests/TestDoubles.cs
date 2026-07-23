@@ -125,24 +125,86 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 
 	public Exception? Exception { get; set; }
 
-	public async IAsyncEnumerable<IStorableModel> GetItemsAsync(
+	public IList<TestBrowseLocationContext> OpenedContexts { get; } = [];
+
+	public TaskCompletionSource<bool>? EnumerationStarted { get; set; }
+
+	public bool BlockEnumeration { get; set; }
+
+	public ValueTask<IBrowseLocationContext> OpenAsync(
 		BrowseLocation location,
-		[EnumeratorCancellation] CancellationToken cancellationToken = default)
+		CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(location);
 		cancellationToken.ThrowIfCancellationRequested();
 
-		foreach (var item in Items)
+		var context = new TestBrowseLocationContext(
+			location,
+			Items.ToArray(),
+			Exception,
+			EnumerationStarted,
+			BlockEnumeration);
+		OpenedContexts.Add(context);
+		return ValueTask.FromResult<IBrowseLocationContext>(context);
+	}
+}
+
+internal sealed class TestBrowseLocationContext : IBrowseLocationContext
+{
+	private readonly IReadOnlyList<IStorableModel> items;
+	private readonly Exception? exception;
+	private readonly TaskCompletionSource<bool>? enumerationStarted;
+	private readonly bool blockEnumeration;
+	private int isDisposed;
+
+	public TestBrowseLocationContext(
+		BrowseLocation location,
+		IReadOnlyList<IStorableModel> items,
+		Exception? exception,
+		TaskCompletionSource<bool>? enumerationStarted,
+		bool blockEnumeration)
+	{
+		Location = location;
+		this.items = items;
+		this.exception = exception;
+		this.enumerationStarted = enumerationStarted;
+		this.blockEnumeration = blockEnumeration;
+	}
+
+	public BrowseLocation Location { get; }
+
+	public IStorableModel? LocationModel => null;
+
+	public bool IsDisposed => Volatile.Read(ref isDisposed) != 0;
+
+	public async IAsyncEnumerable<IStorableModel> GetItemsAsync(
+		[EnumeratorCancellation] CancellationToken cancellationToken = default)
+	{
+		ObjectDisposedException.ThrowIf(IsDisposed, this);
+		enumerationStarted?.TrySetResult(true);
+
+		if (blockEnumeration)
+		{
+			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+		}
+
+		foreach (var item in items)
 		{
 			cancellationToken.ThrowIfCancellationRequested();
 			yield return item;
 			await Task.Yield();
 		}
 
-		if (Exception is not null)
+		if (exception is not null)
 		{
-			throw Exception;
+			throw exception;
 		}
+	}
+
+	public ValueTask DisposeAsync()
+	{
+		Interlocked.Exchange(ref isDisposed, 1);
+		return ValueTask.CompletedTask;
 	}
 }
 
