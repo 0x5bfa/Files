@@ -1,10 +1,9 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using System.Collections.Concurrent;
-using System.Text;
 using System.IO;
 using System.Runtime.Versioning;
+using System.Text;
 using Windows.Win32;
 using Windows.Win32.UI.Shell;
 
@@ -19,7 +18,6 @@ internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 	private const string FileIdentityPrefix = "winfs:v1:";
 	private const string AddressPrefix = "winshell-address:v1:";
 	private const FileOptions BackupSemantics = (FileOptions)0x02000000;
-	private readonly ConcurrentDictionary<string, string> knownFileSystemPaths = new(StringComparer.Ordinal);
 
 	public string GetItemId(
 		IShellItem shellItem,
@@ -31,9 +29,7 @@ internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 
 		if (fileSystemPath is not null && TryGetFileId(fileSystemPath, out var fileId))
 		{
-			var itemId = $"{FileIdentityPrefix}{fileId.VolumeSerialNumber:X8}:{fileId.FileIndex:X16}";
-			knownFileSystemPaths[itemId] = fileSystemPath;
-			return itemId;
+			return $"{FileIdentityPrefix}{fileId.VolumeSerialNumber:X8}:{fileId.FileIndex:X16}";
 		}
 
 		return $"{AddressPrefix}{EncodeAddress(parsingName)}";
@@ -57,14 +53,6 @@ internal sealed class WindowsItemIdentityProvider : IWindowsItemIdentityProvider
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
 		return itemId.StartsWith(FileIdentityPrefix, StringComparison.Ordinal);
-	}
-
-	public bool TryGetKnownFileSystemPath(
-		string itemId,
-		out string fileSystemPath)
-	{
-		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
-		return knownFileSystemPaths.TryGetValue(itemId, out fileSystemPath!);
 	}
 
 	private static bool TryGetFileId(

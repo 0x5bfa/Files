@@ -7,5 +7,4 @@ namespace Files.Core.Capabilities.Properties;
 /// Describes the property values required by a consumer.
 /// </summary>
 public sealed record PropertyRequest(
-	IReadOnlyList<string> PropertyIds,
-	bool FastOnly = true);
+	IReadOnlyList<string> PropertyIds);

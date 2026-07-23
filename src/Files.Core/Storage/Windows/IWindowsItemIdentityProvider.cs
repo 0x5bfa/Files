@@ -20,8 +20,4 @@ internal interface IWindowsItemIdentityProvider
 		out string parsingName);
 
 	bool IsFileSystemIdentity(string itemId);
-
-	bool TryGetKnownFileSystemPath(
-		string itemId,
-		out string fileSystemPath);
 }

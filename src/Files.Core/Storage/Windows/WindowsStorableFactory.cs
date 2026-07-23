@@ -103,16 +103,6 @@ internal sealed class WindowsStorableFactory
 			return null;
 		}
 
-		if (identityProvider.TryGetKnownFileSystemPath(itemId, out var knownPath))
-		{
-			var knownCandidate = await TryCreateAsync(knownPath, cancellationToken)
-				.ConfigureAwait(false);
-			if (IsMatchingItem(knownCandidate, itemId))
-			{
-				return knownCandidate;
-			}
-		}
-
 		if (lastKnownAddress is null
 			|| !lastKnownAddress.Scheme.Equals(
 				WindowsStorageSource.FileAddressScheme,
@@ -136,16 +126,27 @@ internal sealed class WindowsStorableFactory
 			return null;
 		}
 
-		foreach (var candidatePath in Directory.EnumerateFileSystemEntries(parentPath))
+		try
 		{
-			cancellationToken.ThrowIfCancellationRequested();
-
-			var candidate = await TryCreateAsync(candidatePath, cancellationToken)
-				.ConfigureAwait(false);
-			if (IsMatchingItem(candidate, itemId))
+			foreach (var candidatePath in Directory.EnumerateFileSystemEntries(parentPath))
 			{
-				return candidate;
+				cancellationToken.ThrowIfCancellationRequested();
+
+				var candidate = await TryCreateAsync(candidatePath, cancellationToken)
+					.ConfigureAwait(false);
+				if (IsMatchingItem(candidate, itemId))
+				{
+					return candidate;
+				}
 			}
+		}
+		catch (IOException)
+		{
+			return null;
+		}
+		catch (UnauthorizedAccessException)
+		{
+			return null;
 		}
 
 		return null;

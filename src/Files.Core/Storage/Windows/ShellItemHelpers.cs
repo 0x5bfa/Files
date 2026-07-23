@@ -44,10 +44,13 @@ internal static unsafe class ShellItemHelpers
 			name,
 			fileSystemPath,
 			(attributes & SFGAO_FLAGS.SFGAO_FOLDER) != 0);
+		var address = fileSystemPath is null
+			? new StorageAddress(WindowsStorageSource.ShellAddressScheme, parsingName)
+			: new StorageAddress(WindowsStorageSource.FileAddressScheme, fileSystemPath);
 
 		return new WindowsStorableDescriptor(
 			itemId,
-			new StorageAddress(WindowsStorageSource.ShellAddressScheme, parsingName),
+			address,
 			new WindowsItemLocator(CopyAbsolutePidl(shellItem), parsingName),
 			snapshot);
 	}

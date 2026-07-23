@@ -11,7 +11,7 @@ namespace Files.Core.Tests;
 public sealed class WindowsIdentityTests
 {
 	[TestMethod]
-	public async Task FileIdentitySurvivesRenameButChangesAfterRecreate()
+	public async Task FileIdentitySurvivesColdSameDirectoryRenameAndRejectsReplacement()
 	{
 		var directoryPath = Path.Combine(Path.GetTempPath(), $"Files.Core.IdentityTests-{Guid.NewGuid():N}");
 		Directory.CreateDirectory(directoryPath);
@@ -21,46 +21,41 @@ public sealed class WindowsIdentityTests
 
 		try
 		{
-			await using var scheduler = new WindowsShellScheduler();
-			await using var source = new WindowsStorageSource(scheduler: scheduler);
+			StorableReference originalReference;
+			string originalId;
 
-			var original = (IWindowsStorable)await source.ResolveAsync(
-				new StorageAddress(WindowsStorageSource.FileAddressScheme, oldPath));
-			var originalReference = new StorableReference(
-				source.SourceId,
-				 original.Id,
-				 original.Address);
+			await using (var originalSource = new WindowsStorageSource())
+			{
+				var original = (IWindowsStorable)await originalSource.ResolveAsync(
+					new StorageAddress(WindowsStorageSource.FileAddressScheme, oldPath));
+				originalId = original.Id;
+				originalReference = new StorableReference(
+					originalSource.SourceId,
+					original.Id,
+					original.Address);
+
+				StringAssert.StartsWith(original.Id, "winfs:v1:");
+				Assert.AreEqual(WindowsStorageSource.FileAddressScheme, original.Address.Scheme);
+				Assert.AreEqual(oldPath, original.Address.Value);
+			}
 
 			File.Move(oldPath, newPath);
 
-			var renamed = (IWindowsStorable)await source.ResolveAsync(
-				new StorageAddress(WindowsStorageSource.FileAddressScheme, newPath));
-			Assert.AreNotSame(original, renamed);
-			Assert.AreEqual(originalReference.ItemId, renamed.Id);
-			Assert.AreNotEqual(originalReference.LastKnownAddress, renamed.Address);
-			StringAssert.StartsWith(original.Id, "winfs:v1:");
-
-			var resolvedByReference = (IWindowsStorable)await source.ResolveAsync(
-				originalReference);
-			Assert.AreEqual(original.Id, resolvedByReference.Id);
+			await using var restoredSource = new WindowsStorageSource();
+			var renamed = (IWindowsStorable)await restoredSource.ResolveAsync(originalReference);
+			Assert.AreEqual(originalId, renamed.Id);
+			Assert.AreEqual(WindowsStorageSource.FileAddressScheme, renamed.Address.Scheme);
+			Assert.AreEqual(newPath, renamed.Address.Value);
+			Assert.AreEqual(newPath, renamed.FileSystemPath);
 
 			File.Delete(newPath);
 			File.WriteAllText(newPath, "recreated");
 
-			var recreated = (IWindowsStorable)await source.ResolveAsync(
+			var recreated = (IWindowsStorable)await restoredSource.ResolveAsync(
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, newPath));
 			Assert.AreNotEqual(renamed.Id, recreated.Id);
-			var rejected = false;
-			try
-			{
-				await source.ResolveAsync(originalReference);
-			}
-			catch (FileNotFoundException)
-			{
-				rejected = true;
-			}
-
-			Assert.IsTrue(rejected);
+			await Assert.ThrowsAsync<FileNotFoundException>(
+				async () => await restoredSource.ResolveAsync(originalReference));
 		}
 		finally
 		{

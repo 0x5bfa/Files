@@ -142,6 +142,8 @@ flowchart LR
 - `PropertyProviderCapabilityContributor` creates the small adapter between the two.
 - A future list prefetch coordinator can call the same provider in batches rather than resolving every row independently.
 
+`PropertyRequest` currently carries only the requested property IDs. A fast-only option is intentionally not exposed until providers can enforce the same latency contract; the current Windows provider reads its small supported typed set directly from `IShellItem2`.
+
 This split also applies to other expensive capabilities: item-bound access is convenient, while a shared provider can batch, cache, throttle, and schedule the actual work.
 
 ## Ownership

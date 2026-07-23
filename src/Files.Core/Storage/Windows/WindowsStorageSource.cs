@@ -129,12 +129,15 @@ public sealed class WindowsStorageSource : IStorageSource
 			return storable;
 		}
 
-		if (reference.LastKnownAddress is not null && CanResolve(reference.LastKnownAddress))
+		var lastKnownAddress = reference.LastKnownAddress;
+		if (lastKnownAddress is not null && CanResolve(lastKnownAddress))
 		{
-			var candidate = await ResolveAsync(reference.LastKnownAddress, cancellationToken)
+			var candidate = await storableFactory
+				.TryCreateAsync(lastKnownAddress.Value, cancellationToken)
 				.ConfigureAwait(false);
 
-			if (StringComparer.Ordinal.Equals(candidate.Id, reference.ItemId))
+			if (candidate is not null
+				&& StringComparer.Ordinal.Equals(candidate.Id, reference.ItemId))
 			{
 				return candidate;
 			}

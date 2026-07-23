@@ -66,9 +66,39 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 - `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
 - `IsFolder` selects `WindowsFolder` or `WindowsFile` without retaining `IShellItem`.
 
-Windows file IDs are stable across rename. The provider uses the known path and the saved address to locate the same file, including a bounded same-directory scan when the old name no longer exists. A reference is accepted only when the resolved candidate has exactly the requested `ItemId`; a recreated file at the old address is rejected.
+Addresses and identities are intentionally independent. A filesystem model exposes a `file:` address containing its current filesystem path. An item without a filesystem path exposes a `shell:` address containing its desktop-absolute parsing name. Either kind may still use a provider-defined identity.
+
+Windows file IDs are stable across rename. A persisted filesystem reference keeps its previous `file:` address as a recovery hint. Resolution tries that path and, when the path is missing or now identifies a different item, scans the previous parent directory for the requested file ID. A reference is accepted only when the resolved candidate has exactly the requested `ItemId`; a recreated file at a stale address is rejected.
+
+This scan is a prototype fallback for a rename within the same directory. A cold reference cannot yet recover a move to a different directory. That requires a volume-relative reverse lookup such as `OpenFileById`, or an external watcher/index that persists the item's new address.
 
 Using a filesystem path or parsing name as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
+
+## Persisted reference recovery
+
+```mermaid
+flowchart TD
+    Reference["StorableReference"]
+    Kind{"ItemId kind"}
+    Shell["Decode Shell fallback"]
+    Address["Try LastKnownAddress"]
+    Scan["Scan previous parent"]
+    Match{"ItemId matches?"}
+    Model["Return new model"]
+    Missing["FileNotFoundException"]
+
+    Reference --> Kind
+    Kind -->|Shell fallback| Shell
+    Kind -->|Filesystem ID| Address
+    Shell --> Match
+    Address --> Match
+    Address -->|Missing or mismatch| Scan
+    Scan --> Match
+    Match -->|Yes| Model
+    Match -->|No| Missing
+```
+
+The identity provider is stateless. Recovery works after the original `WindowsStorageSource` has been disposed and recreated; it does not rely on a process-local item-ID-to-path dictionary.
 
 ## Snapshot boundary
 
@@ -184,6 +214,7 @@ Implemented:
 - Resolving known folders, addresses, and persisted references.
 - Versioned provider-defined identity from volume serial and file index, with an encoded address fallback for items that cannot expose a stable filesystem ID.
 - Strict reference resolution that refuses to return a different item occupying a stale address.
+- Cold same-directory rename recovery from a filesystem reference.
 - Managed PIDL descriptors and one shared Shell item resolver for storage and capabilities.
 - Parent lookup.
 - Streaming child enumeration in bounded batches.
@@ -191,4 +222,4 @@ Implemented:
 - Injectable message-pumped STA scheduling.
 - Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
 
-Generic capability composition now exists for thumbnails, previews, properties, and decorators. Windows-specific property extraction, watchers, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.
+Generic capability composition now exists for thumbnails, previews, properties, and decorators. Cross-directory move recovery, Windows-specific property extraction beyond the initial typed set, watchers, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.
