@@ -3,24 +3,32 @@
 
 using Files.Core.Models;
 using Files.Core.ViewSettings;
+using System.Globalization;
 
 namespace Files.Core.Browsing;
 
 internal sealed class BrowseItemProjection
 {
+	private const string ItemNamePropertyId = "System.ItemNameDisplay";
+
 	private readonly Dictionary<StorableKey, IStorableModel> modelsByKey = [];
 	private readonly List<IStorableModel> orderedItems = [];
+	private readonly Func<IStorableModel, string, object?>? propertyValueProvider;
 	private IReadOnlyList<IStorableModel> orderedItemsSnapshot =
 		Array.Empty<IStorableModel>();
 	private IComparer<IStorableModel> comparer;
 
-	public BrowseItemProjection(BrowseViewSettings settings)
+	public BrowseItemProjection(
+		BrowseViewSettings settings,
+		Func<IStorableModel, string, object?>? propertyValueProvider = null)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
-		comparer = CreateComparer(settings);
+		this.propertyValueProvider = propertyValueProvider;
+		comparer = CreateComparer(settings, propertyValueProvider);
 	}
 
-	public IReadOnlyList<IStorableModel> Items => orderedItemsSnapshot;
+	public IReadOnlyList<IStorableModel> Items =>
+		Volatile.Read(ref orderedItemsSnapshot);
 
 	public bool TryGet(
 		StorableKey key,
@@ -172,30 +180,17 @@ internal sealed class BrowseItemProjection
 		var previousKeys = orderedItems
 			.Select(static item => item.Reference.GetKey())
 			.ToArray();
-		comparer = CreateComparer(settings);
+		comparer = CreateComparer(settings, propertyValueProvider);
 		orderedItems.Sort(comparer);
-		var changes = new List<BrowseItemChange>();
-		for (var index = 0; index < orderedItems.Count; index++)
-		{
-			var previousIndex = Array.IndexOf(
-				previousKeys,
-				orderedItems[index].Reference.GetKey());
-			if (previousIndex != index)
-			{
-				changes.Add(new BrowseItemMoved(
-					previousIndex,
-					index,
-					orderedItems[index].Reference.GetKey()));
-			}
-		}
-
-		if (changes.Count is 0)
+		if (previousKeys.SequenceEqual(
+			orderedItems.Select(static item => item.Reference.GetKey())))
 		{
 			return BrowseItemChangeSet.Empty;
 		}
 
 		UpdateSnapshot();
-		return new BrowseItemChangeSet(changes);
+		return new BrowseItemChangeSet([
+			new BrowseItemsReset(Items)]);
 	}
 
 	private int FindInsertionIndex(IStorableModel model)
@@ -233,21 +228,36 @@ internal sealed class BrowseItemProjection
 
 	private void UpdateSnapshot()
 	{
-		orderedItemsSnapshot = Array.AsReadOnly(orderedItems.ToArray());
+		Volatile.Write(
+			ref orderedItemsSnapshot,
+			Array.AsReadOnly(orderedItems.ToArray()));
 	}
 
-	private static IComparer<IStorableModel> CreateComparer(BrowseViewSettings settings)
+	private static IComparer<IStorableModel> CreateComparer(
+		BrowseViewSettings settings,
+		Func<IStorableModel, string, object?>? propertyValueProvider)
 	{
-		var nameComparer = NameBrowseItemComparer.Instance;
-		return settings.SortDirection is ViewSortDirection.Ascending
-			? nameComparer
-			: Comparer<IStorableModel>.Create(
-				(x, y) => nameComparer.Compare(y, x));
+		return new BrowseItemComparer(
+			settings.SortPropertyId,
+			settings.SortDirection,
+			propertyValueProvider);
 	}
 
-	private sealed class NameBrowseItemComparer : IComparer<IStorableModel>
+	private sealed class BrowseItemComparer : IComparer<IStorableModel>
 	{
-		public static NameBrowseItemComparer Instance { get; } = new();
+		private readonly string? propertyId;
+		private readonly int direction;
+		private readonly Func<IStorableModel, string, object?>? propertyValueProvider;
+
+		public BrowseItemComparer(
+			string? propertyId,
+			ViewSortDirection sortDirection,
+			Func<IStorableModel, string, object?>? propertyValueProvider)
+		{
+			this.propertyId = propertyId;
+			direction = sortDirection is ViewSortDirection.Ascending ? 1 : -1;
+			this.propertyValueProvider = propertyValueProvider;
+		}
 
 		public int Compare(IStorableModel? x, IStorableModel? y)
 		{
@@ -266,7 +276,15 @@ internal sealed class BrowseItemProjection
 				return 1;
 			}
 
-			var result = StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
+			var result = IsNameProperty(propertyId)
+				? CompareNames(x, y)
+				: ComparePropertyValues(x, y);
+			if (result is not 0)
+			{
+				return direction * result;
+			}
+
+			result = CompareNames(x, y);
 			if (result is not 0)
 			{
 				return result;
@@ -280,6 +298,89 @@ internal sealed class BrowseItemProjection
 				: StringComparer.Ordinal.Compare(
 					x.Reference.ItemId,
 					y.Reference.ItemId);
+		}
+
+		private int ComparePropertyValues(
+			IStorableModel x,
+			IStorableModel y)
+		{
+			var xValue = propertyValueProvider?.Invoke(x, propertyId!);
+			var yValue = propertyValueProvider?.Invoke(y, propertyId!);
+			if (xValue is null || yValue is null)
+			{
+				if (xValue is null && yValue is null)
+				{
+					return 0;
+				}
+
+				// Unavailable values stay at the end in both directions.
+				return xValue is null ? direction : -direction;
+			}
+
+			if (xValue is string xText && yValue is string yText)
+			{
+				return StringComparer.OrdinalIgnoreCase.Compare(xText, yText);
+			}
+
+			if (IsNumber(xValue) && IsNumber(yValue))
+			{
+				try
+				{
+					return decimal.Compare(
+						Convert.ToDecimal(xValue, CultureInfo.InvariantCulture),
+						Convert.ToDecimal(yValue, CultureInfo.InvariantCulture));
+				}
+				catch (OverflowException)
+				{
+					// Fall through to the invariant string representation.
+				}
+			}
+
+			if (xValue.GetType() == yValue.GetType()
+				&& xValue is IComparable comparable)
+			{
+				try
+				{
+					return comparable.CompareTo(yValue);
+				}
+				catch (ArgumentException)
+				{
+					// Fall through to the invariant string representation.
+				}
+			}
+
+			return StringComparer.OrdinalIgnoreCase.Compare(
+				Convert.ToString(xValue, CultureInfo.InvariantCulture),
+				Convert.ToString(yValue, CultureInfo.InvariantCulture));
+		}
+
+		private static int CompareNames(
+			IStorableModel x,
+			IStorableModel y)
+		{
+			return StringComparer.OrdinalIgnoreCase.Compare(x.Name, y.Name);
+		}
+
+		private static bool IsNameProperty(string? candidate)
+		{
+			return string.IsNullOrWhiteSpace(candidate)
+				|| candidate.Equals("name", StringComparison.OrdinalIgnoreCase)
+				|| candidate.Equals(ItemNamePropertyId, StringComparison.Ordinal);
+		}
+
+		private static bool IsNumber(object value)
+		{
+			return value is byte
+				or sbyte
+				or short
+				or ushort
+				or int
+				or uint
+				or long
+				or ulong
+				or float
+				or double
+				or decimal;
 		}
 	}
 }

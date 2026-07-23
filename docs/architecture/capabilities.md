@@ -140,7 +140,8 @@ flowchart LR
 - `IPropertyProvider` is source-scoped or plugin-scoped. It can query several `CapabilityContext` instances in one request and is owned by the composition root.
 - `IPropertySource` is the convenient item-bound contract returned by `model.Get<IPropertySource>()`.
 - `PropertyProviderCapabilityContributor` creates the small adapter between the two.
-- A future list prefetch coordinator can call the same provider in batches rather than resolving every row independently.
+- `BrowsePrefetchCoordinator` currently uses the item-bound source and publishes accepted values into the session's snapshot-scoped presentation store.
+- A later batch optimization can group compatible item contexts and call the same provider directly without changing the item-bound contract or the UI-facing result flow.
 
 `PropertyRequest` currently carries only the requested property IDs. A fast-only option is intentionally not exposed until providers can enforce the same latency contract; the current Windows provider reads its small supported typed set directly from `IShellItem2`.
 
@@ -209,4 +210,4 @@ flowchart TB
 
 Direct capabilities implemented by the CoreModel are always externally owned by the pipeline because the AppModel already owns the CoreModel itself.
 
-Thumbnail cache keys use source ID plus item ID, not `LastKnownAddress`. Watchers and successful mutations should call `IThumbnailCache.InvalidateAsync` for affected references so cache lifetime never substitutes for content-version tracking.
+Thumbnail cache keys use source ID plus item ID, not `LastKnownAddress`. Watchers and successful mutations call `IThumbnailCache.InvalidateAsync` for affected references. A decorator captures the cache's invalidation version before extraction and uses `TrySetAsync` afterward; the cache stores the result atomically only if that version is still current. An old extraction therefore cannot repopulate an entry after an update invalidates it.

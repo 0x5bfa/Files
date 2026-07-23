@@ -69,15 +69,15 @@ public sealed class WindowsStorageOperationProvider : IStorageOperationProvider
 					"The item does not have a resolvable parent directory."));
 			}
 
-			var newAddress = new StorageAddress(
-				WindowsStorageSource.FileAddressScheme,
-				Path.Combine(parentPath, rename.NewName));
 			progress?.Report(new StorageOperationProgress(0, 1, rename.Item));
 
 			var outcome = await source.ShellItemResolver
 				.InvokeOperationAsync(
 					item.ParsingName,
-					shellItem => ExecuteRename(shellItem, rename.NewName),
+					shellItem => ExecuteRename(
+						shellItem,
+						item.Id,
+						rename.NewName),
 					cancellationToken)
 				.ConfigureAwait(false);
 
@@ -86,14 +86,29 @@ public sealed class WindowsStorageOperationProvider : IStorageOperationProvider
 				return Failed(outcome.Error!);
 			}
 
-			cancellationToken.ThrowIfCancellationRequested();
+			// Once PerformOperations has returned successfully, cancellation must not
+			// turn a committed side effect into an apparent cancellation. Resolve by
+			// stable identity so the result reflects the item the Shell actually
+			// renamed rather than an unrelated item already present at a guessed path.
 			var renamed = await source
-				.ResolveAsync(newAddress, cancellationToken)
+				.ResolveAsync(rename.Item, CancellationToken.None)
 				.ConfigureAwait(false);
 			if (renamed is not IWindowsStorable renamedWindows)
 			{
 				return Failed(new InvalidOperationException(
 					"The renamed Windows Shell item could not be materialized."));
+			}
+
+			if (!StringComparer.Ordinal.Equals(
+					renamedWindows.Id,
+					rename.Item.ItemId)
+				|| renamedWindows.FileSystemPath is null
+				|| !StringComparer.Ordinal.Equals(
+					Path.GetFileName(renamedWindows.FileSystemPath),
+					rename.NewName))
+			{
+				return Failed(new IOException(
+					"The Windows Shell did not apply the requested rename to the expected item."));
 			}
 
 			var resultItem = new StorableReference(
@@ -116,8 +131,22 @@ public sealed class WindowsStorageOperationProvider : IStorageOperationProvider
 	[SupportedOSPlatform("windows6.0.6000")]
 	private static ShellOperationOutcome ExecuteRename(
 		IShellItem shellItem,
+		string expectedItemId,
 		string newName)
 	{
+		var currentDescriptor = ShellItemHelpers.CreateDescriptor(
+			shellItem,
+			new WindowsItemIdentityProvider());
+		if (!StringComparer.Ordinal.Equals(
+				currentDescriptor.ItemId,
+				expectedItemId))
+		{
+			return new ShellOperationOutcome(
+				false,
+				new IOException(
+					"The Windows Shell rename target no longer identifies the requested item."));
+		}
+
 		var createResult = PInvoke.CoCreateInstance(
 			typeof(FileOperation).GUID,
 			null,
@@ -168,14 +197,41 @@ public sealed class WindowsStorageOperationProvider : IStorageOperationProvider
 		ArgumentException.ThrowIfNullOrWhiteSpace(newName);
 
 		if (newName is "." or ".."
+			|| newName.Length > 255
+			|| newName.EndsWith(' ')
+			|| newName.EndsWith('.')
 			|| newName.Contains(Path.DirectorySeparatorChar)
 			|| newName.Contains(Path.AltDirectorySeparatorChar)
-			|| newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0)
+			|| newName.IndexOfAny(Path.GetInvalidFileNameChars()) >= 0
+			|| IsReservedDosDeviceName(newName))
 		{
 			throw new ArgumentException(
 				"The new name must be a single valid Windows file-system name.",
 				nameof(newName));
 		}
+	}
+
+	private static bool IsReservedDosDeviceName(string newName)
+	{
+		var extensionIndex = newName.IndexOf('.');
+		var stem = extensionIndex < 0
+			? newName
+			: newName[..extensionIndex];
+		return stem.Equals("CON", StringComparison.OrdinalIgnoreCase)
+			|| stem.Equals("PRN", StringComparison.OrdinalIgnoreCase)
+			|| stem.Equals("AUX", StringComparison.OrdinalIgnoreCase)
+			|| stem.Equals("NUL", StringComparison.OrdinalIgnoreCase)
+			|| IsNumberedDosDeviceName(stem, "COM")
+			|| IsNumberedDosDeviceName(stem, "LPT");
+	}
+
+	private static bool IsNumberedDosDeviceName(
+		string candidate,
+		string prefix)
+	{
+		return candidate.Length is 4
+			&& candidate.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)
+			&& candidate[3] is >= '1' and <= '9';
 	}
 
 	private static ShellOperationOutcome Failure(

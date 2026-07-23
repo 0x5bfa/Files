@@ -55,6 +55,9 @@ public sealed class ThumbnailCacheDecorator : ICapabilityDecorator<IThumbnailSou
 				reference,
 				request.RequestedSize,
 				request.Mode);
+			var invalidationVersion = await cache
+				.GetInvalidationVersionAsync(reference, cancellationToken)
+				.ConfigureAwait(false);
 			var cached = await cache.GetAsync(key, cancellationToken).ConfigureAwait(false);
 
 			if (cached is not null)
@@ -75,7 +78,13 @@ public sealed class ThumbnailCacheDecorator : ICapabilityDecorator<IThumbnailSou
 				result.Content.ToArray(),
 				result.ContentType,
 				result.IsFallback);
-			await cache.SetAsync(key, entry, cancellationToken).ConfigureAwait(false);
+			await cache
+				.TrySetAsync(
+					key,
+					entry,
+					invalidationVersion,
+					cancellationToken)
+				.ConfigureAwait(false);
 			return entry.CreateResult();
 		}
 	}

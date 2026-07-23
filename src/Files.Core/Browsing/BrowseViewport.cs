@@ -4,7 +4,7 @@
 namespace Files.Core.Browsing;
 
 /// <summary>
-/// Describes the visible item range and the number of items to prefetch after it.
+/// Describes the visible item range and the number of surrounding items to prefetch.
 /// </summary>
 public sealed record BrowseViewport
 {
@@ -26,5 +26,8 @@ public sealed record BrowseViewport
 
 	public int VisibleCount { get; }
 
+	/// <summary>
+	/// Gets the maximum number of items prefetched on each side of the visible range.
+	/// </summary>
 	public int LookAheadCount { get; }
 }

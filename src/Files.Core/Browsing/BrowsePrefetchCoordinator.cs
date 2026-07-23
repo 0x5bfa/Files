@@ -1,27 +1,29 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.Core.Capabilities;
 using Files.Core.Capabilities.Properties;
 using Files.Core.Capabilities.Thumbnails;
-using Files.Core.Capabilities;
 using Files.Core.Models;
 using Files.Core.ViewSettings;
 
 namespace Files.Core.Browsing;
 
 /// <summary>
-/// Performs cancellable, generation-bound property and thumbnail prefetching.
+/// Performs cancellable, snapshot-bound property and thumbnail prefetching.
 /// </summary>
 public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 {
 	private const int DefaultThumbnailSize = 96;
+	private const string ItemNamePropertyId = "System.ItemNameDisplay";
 
 	private readonly IBrowseSessionModel session;
+	private readonly IBrowsePrefetchTarget? target;
 	private readonly object syncRoot = new();
 	private readonly int thumbnailSize;
-	private readonly HashSet<Task> activeTasks = [];
-	private CancellationTokenSource? currentPrefetch;
-	private long currentGeneration;
+	private readonly HashSet<PrefetchWork> activeWork = [];
+	private PrefetchWork? currentWork;
+	private long workIdCounter;
 	private bool isDisposed;
 
 	public BrowsePrefetchCoordinator(
@@ -32,6 +34,7 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(thumbnailSize);
 
 		this.session = session;
+		target = session as IBrowsePrefetchTarget;
 		this.thumbnailSize = thumbnailSize;
 		session.ItemsChanged += OnSessionItemsChanged;
 	}
@@ -45,36 +48,47 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		ArgumentNullException.ThrowIfNull(settings);
 		ArgumentOutOfRangeException.ThrowIfNegative(browseGeneration);
 
-		var nextCancellation = new CancellationTokenSource();
-		CancellationTokenSource? previousCancellation;
+		CancellationTokenSource cancellation;
+		PrefetchWork nextWork;
+		PrefetchWork? previousWork;
 		lock (syncRoot)
 		{
 			ObjectDisposedException.ThrowIf(isDisposed, this);
-			previousCancellation = currentPrefetch;
-			currentPrefetch = nextCancellation;
-			currentGeneration = browseGeneration;
+
+			cancellation = new CancellationTokenSource();
+			var workId = checked(++workIdCounter);
+			var contentVersion = GetContentVersion();
 			var task = Task.Run(
 				() => PrefetchAsync(
 					viewport,
 					settings,
+					workId,
 					browseGeneration,
-					nextCancellation.Token),
+					contentVersion,
+					cancellation.Token),
 				CancellationToken.None);
-			activeTasks.Add(task);
+			nextWork = new PrefetchWork(
+				workId,
+				browseGeneration,
+				contentVersion,
+				cancellation,
+				task);
+			previousWork = currentWork;
+			currentWork = nextWork;
+			activeWork.Add(nextWork);
 			_ = task.ContinueWith(
-				RemoveCompletedTask,
+				_ => RemoveCompletedWork(nextWork),
 				CancellationToken.None,
 				TaskContinuationOptions.DenyChildAttach,
 				TaskScheduler.Default);
 		}
 
-		CancelAndDispose(previousCancellation);
+		previousWork?.Cancel();
 	}
 
 	public async ValueTask DisposeAsync()
 	{
-		CancellationTokenSource? cancellation;
-		Task[] tasks;
+		PrefetchWork[] work;
 		lock (syncRoot)
 		{
 			if (isDisposed)
@@ -83,24 +97,35 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 			}
 
 			isDisposed = true;
-			cancellation = currentPrefetch;
-			currentPrefetch = null;
-			tasks = activeTasks.ToArray();
+			currentWork = null;
+			work = activeWork.ToArray();
 		}
 
 		session.ItemsChanged -= OnSessionItemsChanged;
-		CancelAndDispose(cancellation);
-
-		if (tasks.Length is not 0)
+		foreach (var item in work)
 		{
-			await Task.WhenAll(tasks).ConfigureAwait(false);
+			item.Cancel();
+		}
+
+		if (work.Length is not 0)
+		{
+			await Task
+				.WhenAll(work.Select(static item => item.Task))
+				.ConfigureAwait(false);
+		}
+
+		foreach (var item in work)
+		{
+			item.Dispose();
 		}
 	}
 
 	private async Task PrefetchAsync(
 		BrowseViewport viewport,
 		BrowseViewSettings settings,
+		long workId,
 		long generation,
+		long contentVersion,
 		CancellationToken cancellationToken)
 	{
 		try
@@ -110,7 +135,11 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 			foreach (var index in EnumerateIndices(items.Count, viewport))
 			{
 				cancellationToken.ThrowIfCancellationRequested();
-				if (!IsCurrent(generation, cancellationToken))
+				if (!IsCurrent(
+					workId,
+					generation,
+					contentVersion,
+					cancellationToken))
 				{
 					return;
 				}
@@ -118,7 +147,9 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 				await PrefetchItemAsync(
 					items[index],
 					propertyIds,
+					workId,
 					generation,
+					contentVersion,
 					cancellationToken).ConfigureAwait(false);
 			}
 		}
@@ -134,7 +165,9 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 	private async ValueTask PrefetchItemAsync(
 		IStorableModel item,
 		IReadOnlyList<string> propertyIds,
+		long workId,
 		long generation,
+		long contentVersion,
 		CancellationToken cancellationToken)
 	{
 		if (propertyIds.Count is not 0
@@ -142,11 +175,30 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		{
 			try
 			{
-				await propertySource
+				var properties = await propertySource
 					.GetPropertiesAsync(
 						new PropertyRequest(propertyIds),
 						cancellationToken)
 					.ConfigureAwait(false);
+				if (!IsCurrent(
+					workId,
+					generation,
+					contentVersion,
+					cancellationToken))
+				{
+					return;
+				}
+
+				if (target is not null
+					&& !await target.PublishPropertiesAsync(
+						generation,
+						contentVersion,
+						item,
+						properties,
+						cancellationToken).ConfigureAwait(false))
+				{
+					return;
+				}
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
@@ -158,7 +210,11 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 			}
 		}
 
-		if (!IsCurrent(generation, cancellationToken))
+		if (!IsCurrent(
+			workId,
+			generation,
+			contentVersion,
+			cancellationToken))
 		{
 			return;
 		}
@@ -167,13 +223,32 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		{
 			try
 			{
-				await thumbnailSource
+				var thumbnail = await thumbnailSource
 					.GetThumbnailAsync(
 						new ThumbnailRequest(
 							thumbnailSize,
 							ThumbnailMode.PreferContent),
 						cancellationToken)
 					.ConfigureAwait(false);
+				if (thumbnail is null
+					|| !IsCurrent(
+						workId,
+						generation,
+						contentVersion,
+						cancellationToken))
+				{
+					return;
+				}
+
+				if (target is not null)
+				{
+					await target.PublishThumbnailAsync(
+						generation,
+						contentVersion,
+						item,
+						thumbnail,
+						cancellationToken).ConfigureAwait(false);
+				}
 			}
 			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 			{
@@ -186,10 +261,15 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		}
 	}
 
-	private bool IsCurrent(long generation, CancellationToken cancellationToken)
+	private bool IsCurrent(
+		long workId,
+		long generation,
+		long contentVersion,
+		CancellationToken cancellationToken)
 	{
 		if (cancellationToken.IsCancellationRequested
-			|| session.Generation != generation)
+			|| session.Generation != generation
+			|| GetContentVersion() != contentVersion)
 		{
 			return false;
 		}
@@ -197,8 +277,15 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		lock (syncRoot)
 		{
 			return !isDisposed
+				&& currentWork is
+				{
+					Id: var currentId,
+					Generation: var currentGeneration,
+					ContentVersion: var currentContentVersion,
+				}
+				&& currentId == workId
 				&& currentGeneration == generation
-				&& currentPrefetch is not null;
+				&& currentContentVersion == contentVersion;
 		}
 	}
 
@@ -206,51 +293,78 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		object? sender,
 		BrowseItemsChangedEventArgs args)
 	{
-		CancellationTokenSource? cancellation = null;
+		PrefetchWork? work = null;
 		lock (syncRoot)
 		{
-			if (currentPrefetch is not null
-				&& currentGeneration != session.Generation)
+			if (currentWork is { } current
+				&& (current.Generation != session.Generation
+					|| current.ContentVersion != GetContentVersion()))
 			{
-				cancellation = currentPrefetch;
-				currentPrefetch = null;
+				work = current;
+				currentWork = null;
 			}
 		}
 
-		CancelAndDispose(cancellation);
+		work?.Cancel();
+	}
+
+	private long GetContentVersion()
+	{
+		return target?.ContentVersion ?? session.ItemsVersion;
 	}
 
 	private static IReadOnlyList<string> GetPropertyIds(BrowseViewSettings settings)
 	{
-		var propertyIds = new HashSet<string>(StringComparer.Ordinal);
+		var seen = new HashSet<string>(StringComparer.Ordinal);
+		var propertyIds = new List<string>();
 		foreach (var column in settings.Columns)
 		{
 			if (column.IsVisible
-				&& !string.IsNullOrWhiteSpace(column.PropertyId))
+				&& !string.IsNullOrWhiteSpace(column.PropertyId)
+				&& !IsModelProperty(column.PropertyId)
+				&& seen.Add(column.PropertyId))
 			{
 				propertyIds.Add(column.PropertyId);
 			}
 		}
 
-		if (!string.IsNullOrWhiteSpace(settings.SortPropertyId))
+		if (!string.IsNullOrWhiteSpace(settings.SortPropertyId)
+			&& !IsModelProperty(settings.SortPropertyId)
+			&& seen.Add(settings.SortPropertyId))
 		{
 			propertyIds.Add(settings.SortPropertyId);
 		}
 
-		return propertyIds.ToArray();
+		return Array.AsReadOnly(propertyIds.ToArray());
+	}
+
+	private static bool IsModelProperty(string propertyId)
+	{
+		return propertyId.Equals("name", StringComparison.OrdinalIgnoreCase)
+			|| propertyId.Equals(ItemNamePropertyId, StringComparison.Ordinal);
 	}
 
 	private static IEnumerable<int> EnumerateIndices(
 		int itemCount,
 		BrowseViewport viewport)
 	{
+		if (itemCount is 0
+			|| viewport.VisibleCount is 0
+			|| viewport.FirstVisibleIndex >= itemCount)
+		{
+			yield break;
+		}
+
 		var visibleStart = Math.Min(viewport.FirstVisibleIndex, itemCount);
-		var visibleEnd = Math.Min(
+		var visibleEnd = (int)Math.Min(
 			itemCount,
-			visibleStart + viewport.VisibleCount);
-		var lookAheadEnd = Math.Min(
+			(long)visibleStart + viewport.VisibleCount);
+		var lookBehindStart = (int)Math.Max(
+			0L,
+			(long)visibleStart - viewport.LookAheadCount);
+		var lookAheadEnd = (int)Math.Min(
 			itemCount,
-			visibleEnd + viewport.LookAheadCount);
+			(long)visibleEnd + viewport.LookAheadCount);
 
 		for (var index = visibleStart; index < visibleEnd; index++)
 		{
@@ -262,33 +376,70 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 			yield return index;
 		}
 
-		for (var index = 0; index < visibleStart; index++)
-		{
-			yield return index;
-		}
-
-		for (var index = lookAheadEnd; index < itemCount; index++)
+		for (var index = visibleStart - 1; index >= lookBehindStart; index--)
 		{
 			yield return index;
 		}
 	}
 
-	private static void CancelAndDispose(CancellationTokenSource? cancellation)
-	{
-		if (cancellation is null)
-		{
-			return;
-		}
-
-		cancellation.Cancel();
-		cancellation.Dispose();
-	}
-
-	private void RemoveCompletedTask(Task task)
+	private void RemoveCompletedWork(PrefetchWork work)
 	{
 		lock (syncRoot)
 		{
-			activeTasks.Remove(task);
+			activeWork.Remove(work);
+			if (ReferenceEquals(currentWork, work))
+			{
+				currentWork = null;
+			}
+		}
+
+		work.Dispose();
+	}
+
+	private sealed class PrefetchWork : IDisposable
+	{
+		private readonly CancellationTokenSource cancellation;
+		private int isDisposed;
+
+		public PrefetchWork(
+			long id,
+			long generation,
+			long contentVersion,
+			CancellationTokenSource cancellation,
+			Task task)
+		{
+			Id = id;
+			Generation = generation;
+			ContentVersion = contentVersion;
+			this.cancellation = cancellation;
+			Task = task;
+		}
+
+		public long Id { get; }
+
+		public long Generation { get; }
+
+		public long ContentVersion { get; }
+
+		public Task Task { get; }
+
+		public void Cancel()
+		{
+			try
+			{
+				cancellation.Cancel();
+			}
+			catch (ObjectDisposedException)
+			{
+			}
+		}
+
+		public void Dispose()
+		{
+			if (Interlocked.Exchange(ref isDisposed, 1) is 0)
+			{
+				cancellation.Dispose();
+			}
 		}
 	}
 }

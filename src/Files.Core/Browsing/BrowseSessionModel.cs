@@ -7,11 +7,12 @@ using Files.Core.Capabilities.Thumbnails;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.ViewSettings;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace Files.Core.Browsing;
 
-public sealed class BrowseSessionModel : IBrowseSessionModel
+public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTarget
 {
 	private const int ChangeQueueCapacity = 256;
 
@@ -33,6 +34,9 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			});
 	private readonly CancellationTokenSource refreshLifetime = new();
 	private readonly object disposalLock = new();
+	private readonly object presentationLock = new();
+	private readonly object selectionLock = new();
+	private readonly Dictionary<StorableKey, PresentationEntry> presentations = [];
 	private BrowseContextState? activeContext;
 	private BrowseContextState? preparingContext;
 	private Task? disposeTask;
@@ -42,6 +46,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	private int refreshSignalPending;
 	private readonly Queue<QueuedFolderChange> deferredChanges = [];
 	private BrowseSelectionState selection = BrowseSelectionState.Empty;
+	private long contentVersion;
 	private long itemsVersion;
 	private bool isDisposed;
 
@@ -54,7 +59,9 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		this.locationResolver = locationResolver;
 		this.viewSettingsStore = viewSettingsStore;
 		this.thumbnailCache = thumbnailCache;
-		itemProjection = new BrowseItemProjection(BrowseViewSettings.Default);
+		itemProjection = new BrowseItemProjection(
+			BrowseViewSettings.Default,
+			GetSortPropertyValue);
 		ViewSettings = BrowseViewSettings.Default;
 		refreshPumpTask = RefreshPumpAsync(refreshLifetime.Token);
 	}
@@ -70,6 +77,8 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 
 	public long ItemsVersion => Volatile.Read(ref itemsVersion);
 
+	long IBrowsePrefetchTarget.ContentVersion => Volatile.Read(ref contentVersion);
+
 	public BrowseSelectionState Selection => Volatile.Read(ref selection);
 
 	public BrowseViewSettings ViewSettings { get; private set; }
@@ -82,11 +91,13 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 
 	public event EventHandler<BrowseItemsChangedEventArgs>? ItemsChanged;
 
+	public event EventHandler<BrowseItemPresentationChangedEventArgs>? ItemPresentationChanged;
+
 	public event EventHandler? SelectionChanged;
 
 	public async ValueTask NavigateAsync(BrowseLocation location, CancellationToken cancellationToken = default)
 	{
-		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed), this);
 		ArgumentNullException.ThrowIfNull(location);
 
 		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -147,12 +158,14 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					nextItems.Add(item);
 				}
 
-				var nextProjection = new BrowseItemProjection(nextViewSettings);
+				var nextProjection = new BrowseItemProjection(
+					nextViewSettings,
+					GetSortPropertyValue);
 				var nextItemChanges = nextProjection.Reset(nextItems);
 				var previousContext = Volatile.Read(ref activeContext);
 				var previousItems = Items;
 				var nextSelection = Equals(Location, location)
-					? NormalizeSelection(selection, nextProjection.Items)
+					? NormalizeSelection(Selection, nextProjection.Items)
 					: BrowseSelectionState.Empty;
 				Location = location;
 				Volatile.Write(ref activeContext, nextContext);
@@ -160,11 +173,12 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				Volatile.Write(ref itemProjection, nextProjection);
 				ViewSettings = nextViewSettings;
 				Error = null;
-				PublishItemsChanged(nextItemChanges);
-				SetSelectionState(nextSelection);
+				ClearPresentations();
 				nextLocationContext = null;
 				nextContext = null;
 				committed = true;
+				PublishItemsChanged(nextItemChanges);
+				SetSelectionState(nextSelection);
 				SignalRefreshPump();
 
 				try
@@ -224,7 +238,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 
 	public ValueTask RefreshAsync(CancellationToken cancellationToken = default)
 	{
-		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed), this);
 
 		return Location is null
 			? ValueTask.CompletedTask
@@ -331,6 +345,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				if (Volatile.Read(ref preparingContext)?.Generation == pendingChange.Generation)
 				{
 					deferredChanges.Enqueue(pendingChange);
+					return;
 				}
 
 				continue;
@@ -594,6 +609,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 
 			try
 			{
+				RemovePresentation(key);
 				PublishItemsChanged(changes);
 				RemoveSelectionKey(key);
 				OnStateChanged();
@@ -706,6 +722,12 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				retained = true;
 				try
 				{
+					RemovePresentation(previousKeyToReplace);
+					if (previousKeyToReplace != currentKey)
+					{
+						RemovePresentation(currentKey);
+					}
+
 					PublishItemsChanged(changes);
 					MigrateSelection(previousKeyToReplace, currentKey);
 					OnStateChanged();
@@ -804,6 +826,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				retained = true;
 				try
 				{
+					RemovePresentation(key);
 					PublishItemsChanged(changes);
 					OnStateChanged();
 				}
@@ -992,7 +1015,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		BrowseViewSettings settings,
 		CancellationToken cancellationToken = default)
 	{
-		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed), this);
 		ArgumentNullException.ThrowIfNull(settings);
 
 		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -1019,7 +1042,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				.Read(ref itemProjection)
 				.UpdateSort(settings);
 			ViewSettings = settings;
-			PublishItemsChanged(changes);
+			PublishItemsChanged(changes, contentChanged: false);
 			OnStateChanged();
 		}
 		finally
@@ -1028,20 +1051,236 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		}
 	}
 
+	public bool TryGetPresentation(
+		StorableKey key,
+		out BrowseItemPresentation presentation)
+	{
+		lock (presentationLock)
+		{
+			if (presentations.TryGetValue(key, out var entry))
+			{
+				presentation = entry.Presentation;
+				return true;
+			}
+		}
+
+		presentation = null!;
+		return false;
+	}
+
+	async ValueTask<bool> IBrowsePrefetchTarget.PublishPropertiesAsync(
+		long generation,
+		long expectedContentVersion,
+		IStorableModel item,
+		IReadOnlyDictionary<string, object?> properties,
+		CancellationToken cancellationToken)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+		ArgumentNullException.ThrowIfNull(properties);
+
+		BrowseItemPresentationChangedEventArgs? presentationChanged = null;
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!TryValidatePrefetchItem(
+				generation,
+				expectedContentVersion,
+				item,
+				out var key))
+			{
+				return false;
+			}
+
+			var presentation = UpdatePresentation(
+				key,
+				item,
+				properties,
+				thumbnail: null,
+				updateProperties: true,
+				updateThumbnail: false);
+			presentationChanged = new BrowseItemPresentationChangedEventArgs(
+				key,
+				presentation);
+
+			if (!string.IsNullOrWhiteSpace(ViewSettings.SortPropertyId)
+				&& properties.ContainsKey(ViewSettings.SortPropertyId))
+			{
+				var changes = Volatile
+					.Read(ref itemProjection)
+					.UpdateSort(ViewSettings);
+				PublishItemsChanged(changes, contentChanged: false);
+			}
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+
+		RaiseEvent(ItemPresentationChanged, presentationChanged!);
+		return true;
+	}
+
+	async ValueTask<bool> IBrowsePrefetchTarget.PublishThumbnailAsync(
+		long generation,
+		long expectedContentVersion,
+		IStorableModel item,
+		ThumbnailResult thumbnail,
+		CancellationToken cancellationToken)
+	{
+		ArgumentNullException.ThrowIfNull(item);
+		ArgumentNullException.ThrowIfNull(thumbnail);
+
+		BrowseItemPresentationChangedEventArgs? presentationChanged = null;
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!TryValidatePrefetchItem(
+				generation,
+				expectedContentVersion,
+				item,
+				out var key))
+			{
+				return false;
+			}
+
+			var presentation = UpdatePresentation(
+				key,
+				item,
+				properties: null,
+				thumbnail: thumbnail,
+				updateProperties: false,
+				updateThumbnail: true);
+			presentationChanged = new BrowseItemPresentationChangedEventArgs(
+				key,
+				presentation);
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+
+		RaiseEvent(ItemPresentationChanged, presentationChanged!);
+		return true;
+	}
+
+	private bool TryValidatePrefetchItem(
+		long generation,
+		long expectedContentVersion,
+		IStorableModel item,
+		out StorableKey key)
+	{
+		key = item.Reference.GetKey();
+		if (Generation != generation
+			|| Volatile.Read(ref contentVersion) != expectedContentVersion)
+		{
+			return false;
+		}
+
+		return Volatile
+			.Read(ref itemProjection)
+			.TryGet(key, out var current, out _)
+			&& ReferenceEquals(current, item);
+	}
+
+	private BrowseItemPresentation UpdatePresentation(
+		StorableKey key,
+		IStorableModel item,
+		IReadOnlyDictionary<string, object?>? properties,
+		ThumbnailResult? thumbnail,
+		bool updateProperties,
+		bool updateThumbnail)
+	{
+		lock (presentationLock)
+		{
+			var current = presentations.TryGetValue(key, out var entry)
+				&& ReferenceEquals(entry.Item, item)
+				? entry.Presentation
+				: new BrowseItemPresentation();
+			var nextProperties = current.Properties;
+			if (updateProperties)
+			{
+				var mergedProperties = new Dictionary<string, object?>(
+					current.Properties,
+					StringComparer.Ordinal);
+				foreach (var pair in properties!)
+				{
+					mergedProperties[pair.Key] = pair.Value;
+				}
+
+				nextProperties = mergedProperties;
+			}
+
+			var next = new BrowseItemPresentation(
+				nextProperties,
+				updateThumbnail ? thumbnail : current.Thumbnail);
+			presentations[key] = new PresentationEntry(item, next);
+			return next;
+		}
+	}
+
+	private object? GetSortPropertyValue(
+		IStorableModel item,
+		string propertyId)
+	{
+		lock (presentationLock)
+		{
+			var key = item.Reference.GetKey();
+			return presentations.TryGetValue(key, out var entry)
+				&& ReferenceEquals(entry.Item, item)
+				&& entry.Presentation.Properties.TryGetValue(propertyId, out var value)
+				? value
+				: null;
+		}
+	}
+
+	private void ClearPresentations()
+	{
+		lock (presentationLock)
+		{
+			presentations.Clear();
+		}
+	}
+
+	private void RemovePresentation(StorableKey key)
+	{
+		lock (presentationLock)
+		{
+			presentations.Remove(key);
+		}
+	}
+
 	public void SetSelection(
 		IEnumerable<StorableKey> selectedKeys,
 		StorableKey? focusedKey,
 		StorableKey? anchorKey)
 	{
-		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed), this);
 		ArgumentNullException.ThrowIfNull(selectedKeys);
 
-		SetSelectionState(NormalizeSelection(
-			new BrowseSelectionState(
-				Array.AsReadOnly(selectedKeys.ToArray()),
-				focusedKey,
-				anchorKey),
-			Items));
+		var requestedSelection = new BrowseSelectionState(
+			Array.AsReadOnly(selectedKeys.ToArray()),
+			focusedKey,
+			anchorKey);
+		while (true)
+		{
+			var version = ItemsVersion;
+			var normalized = NormalizeSelection(requestedSelection, Items);
+			lock (selectionLock)
+			{
+				if (version != ItemsVersion)
+				{
+					continue;
+				}
+
+				if (!TrySetSelectionState(normalized))
+				{
+					return;
+				}
+			}
+
+			RaiseEvent(SelectionChanged);
+			return;
+		}
 	}
 
 	public void Dispose()
@@ -1053,7 +1292,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	{
 		lock (disposalLock)
 		{
-			isDisposed = true;
+			Volatile.Write(ref isDisposed, true);
 			disposeTask ??= DisposeCoreAsync();
 			return new ValueTask(disposeTask);
 		}
@@ -1075,8 +1314,15 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				var currentContext = Volatile.Read(ref activeContext);
 				Volatile.Write(
 					ref itemProjection,
-					new BrowseItemProjection(ViewSettings));
-				Volatile.Write(ref selection, BrowseSelectionState.Empty);
+					new BrowseItemProjection(
+						ViewSettings,
+						GetSortPropertyValue));
+				lock (selectionLock)
+				{
+					Volatile.Write(ref selection, BrowseSelectionState.Empty);
+				}
+
+				ClearPresentations();
 				Volatile.Write(ref activeContext, null);
 				Volatile.Write(ref preparingContext, null);
 				sessionViewSettings.Clear();
@@ -1107,17 +1353,24 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		}
 	}
 
-	private void PublishItemsChanged(BrowseItemChangeSet changeSet)
+	private void PublishItemsChanged(
+		BrowseItemChangeSet changeSet,
+		bool contentChanged = true)
 	{
 		if (changeSet.IsEmpty)
 		{
 			return;
 		}
 
+		if (contentChanged)
+		{
+			Interlocked.Increment(ref contentVersion);
+		}
+
 		var previousVersion = Interlocked.Read(ref itemsVersion);
 		var version = Interlocked.Increment(ref itemsVersion);
-		ItemsChanged?.Invoke(
-			this,
+		RaiseEvent(
+			ItemsChanged,
 			new BrowseItemsChangedEventArgs(
 				previousVersion,
 				version,
@@ -1128,38 +1381,60 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	{
 		ArgumentNullException.ThrowIfNull(nextSelection);
 
+		lock (selectionLock)
+		{
+			if (!TrySetSelectionState(nextSelection))
+			{
+				return;
+			}
+		}
+
+		RaiseEvent(SelectionChanged);
+	}
+
+	private bool TrySetSelectionState(BrowseSelectionState nextSelection)
+	{
 		var currentSelection = Volatile.Read(ref selection);
 		if (currentSelection.FocusedKey == nextSelection.FocusedKey
 			&& currentSelection.AnchorKey == nextSelection.AnchorKey
 			&& currentSelection.SelectedKeys.SequenceEqual(nextSelection.SelectedKeys))
 		{
-			return;
+			return false;
 		}
 
 		Volatile.Write(ref selection, nextSelection);
-		SelectionChanged?.Invoke(this, EventArgs.Empty);
+		return true;
 	}
 
 	private void RemoveSelectionKey(StorableKey key)
 	{
-		var currentSelection = Volatile.Read(ref selection);
-		if (!currentSelection.SelectedKeys.Contains(key)
-			&& currentSelection.FocusedKey != key
-			&& currentSelection.AnchorKey != key)
+		var changed = false;
+		lock (selectionLock)
 		{
-			return;
+			var currentSelection = Volatile.Read(ref selection);
+			if (!currentSelection.SelectedKeys.Contains(key)
+				&& currentSelection.FocusedKey != key
+				&& currentSelection.AnchorKey != key)
+			{
+				return;
+			}
+
+			changed = TrySetSelectionState(new BrowseSelectionState(
+				Array.AsReadOnly(currentSelection.SelectedKeys
+					.Where(selectedKey => selectedKey != key)
+					.ToArray()),
+				currentSelection.FocusedKey == key
+					? null
+					: currentSelection.FocusedKey,
+				currentSelection.AnchorKey == key
+					? null
+					: currentSelection.AnchorKey));
 		}
 
-		SetSelectionState(new BrowseSelectionState(
-			Array.AsReadOnly(currentSelection.SelectedKeys
-				.Where(selectedKey => selectedKey != key)
-				.ToArray()),
-			currentSelection.FocusedKey == key
-				? null
-				: currentSelection.FocusedKey,
-			currentSelection.AnchorKey == key
-				? null
-				: currentSelection.AnchorKey));
+		if (changed)
+		{
+			RaiseEvent(SelectionChanged);
+		}
 	}
 
 	private void MigrateSelection(StorableKey previousKey, StorableKey currentKey)
@@ -1169,18 +1444,27 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			return;
 		}
 
-		var currentSelection = Volatile.Read(ref selection);
-		SetSelectionState(new BrowseSelectionState(
-			Array.AsReadOnly(currentSelection.SelectedKeys
-				.Select(selectedKey => selectedKey == previousKey ? currentKey : selectedKey)
-				.Distinct()
-				.ToArray()),
-			currentSelection.FocusedKey == previousKey
-				? currentKey
-				: currentSelection.FocusedKey,
-			currentSelection.AnchorKey == previousKey
-				? currentKey
-				: currentSelection.AnchorKey));
+		var changed = false;
+		lock (selectionLock)
+		{
+			var currentSelection = Volatile.Read(ref selection);
+			changed = TrySetSelectionState(new BrowseSelectionState(
+				Array.AsReadOnly(currentSelection.SelectedKeys
+					.Select(selectedKey => selectedKey == previousKey ? currentKey : selectedKey)
+					.Distinct()
+					.ToArray()),
+				currentSelection.FocusedKey == previousKey
+					? currentKey
+					: currentSelection.FocusedKey,
+				currentSelection.AnchorKey == previousKey
+					? currentKey
+					: currentSelection.AnchorKey));
+		}
+
+		if (changed)
+		{
+			RaiseEvent(SelectionChanged);
+		}
 	}
 
 	private static BrowseSelectionState NormalizeSelection(
@@ -1208,6 +1492,10 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	private readonly record struct QueuedFolderChange(
 		long Generation,
 		FolderChange Change);
+
+	private sealed record PresentationEntry(
+		IStorableModel Item,
+		BrowseItemPresentation Presentation);
 
 	private enum IncrementalApplyResult
 	{
@@ -1300,7 +1588,54 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		}
 	}
 
-	private void OnStateChanged() => StateChanged?.Invoke(this, EventArgs.Empty);
+	private void OnStateChanged() => RaiseEvent(StateChanged);
+
+	private void RaiseEvent(EventHandler? handlers)
+	{
+		if (handlers is null)
+		{
+			return;
+		}
+
+		foreach (EventHandler handler in handlers.GetInvocationList())
+		{
+			try
+			{
+				handler(this, EventArgs.Empty);
+			}
+			catch (Exception exception)
+			{
+				Trace.TraceError(
+					"BrowseSessionModel event handler failed: {0}",
+					exception);
+			}
+		}
+	}
+
+	private void RaiseEvent<TEventArgs>(
+		EventHandler<TEventArgs>? handlers,
+		TEventArgs args)
+		where TEventArgs : EventArgs
+	{
+		if (handlers is null)
+		{
+			return;
+		}
+
+		foreach (EventHandler<TEventArgs> handler in handlers.GetInvocationList())
+		{
+			try
+			{
+				handler(this, args);
+			}
+			catch (Exception exception)
+			{
+				Trace.TraceError(
+					"BrowseSessionModel event handler failed: {0}",
+					exception);
+			}
+		}
+	}
 
 	private static void DisposeItems(IEnumerable<IStorableModel> items)
 	{

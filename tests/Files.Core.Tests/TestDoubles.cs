@@ -218,6 +218,8 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 
 	public bool BlockEnumeration { get; set; }
 
+	public TaskCompletionSource<bool>? EnumerationRelease { get; set; }
+
 	public Func<BrowseLocation, IStorableModel?>? LocationModelFactory { get; set; }
 
 	public Func<bool>? EnumerationGuard { get; set; }
@@ -241,6 +243,7 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 			Exception,
 			EnumerationStarted,
 			BlockEnumeration,
+			EnumerationRelease,
 			LocationModelFactory?.Invoke(location),
 			EnumerationGuard,
 			EnumerationAction,
@@ -259,6 +262,7 @@ internal sealed class TestBrowseLocationContext :
 	private readonly Exception? exception;
 	private readonly TaskCompletionSource<bool>? enumerationStarted;
 	private readonly bool blockEnumeration;
+	private readonly TaskCompletionSource<bool>? enumerationRelease;
 	private readonly IStorableModel? locationModel;
 	private readonly Func<bool>? enumerationGuard;
 	private readonly Action? enumerationAction;
@@ -271,6 +275,7 @@ internal sealed class TestBrowseLocationContext :
 		Exception? exception,
 		TaskCompletionSource<bool>? enumerationStarted,
 		bool blockEnumeration,
+		TaskCompletionSource<bool>? enumerationRelease,
 		IStorableModel? locationModel,
 		Func<bool>? enumerationGuard,
 		Action? enumerationAction,
@@ -281,6 +286,7 @@ internal sealed class TestBrowseLocationContext :
 		this.exception = exception;
 		this.enumerationStarted = enumerationStarted;
 		this.blockEnumeration = blockEnumeration;
+		this.enumerationRelease = enumerationRelease;
 		this.locationModel = locationModel;
 		this.enumerationGuard = enumerationGuard;
 		this.enumerationAction = enumerationAction;
@@ -317,7 +323,18 @@ internal sealed class TestBrowseLocationContext :
 
 		if (blockEnumeration)
 		{
-			await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+			if (enumerationRelease is null)
+			{
+				await Task
+					.Delay(Timeout.InfiniteTimeSpan, cancellationToken)
+					.ConfigureAwait(false);
+			}
+			else
+			{
+				await enumerationRelease.Task
+					.WaitAsync(cancellationToken)
+					.ConfigureAwait(false);
+			}
 		}
 
 		foreach (var item in items)
@@ -404,6 +421,8 @@ internal sealed class TestFolderChangeSource : IFolderChangeSource
 
 internal sealed class TestThumbnailCache : IThumbnailCache
 {
+	private long invalidationVersion;
+
 	public IList<StorableReference> InvalidatedReferences { get; } = [];
 
 	public ValueTask<ThumbnailCacheEntry?> GetAsync(
@@ -417,11 +436,25 @@ internal sealed class TestThumbnailCache : IThumbnailCache
 		CancellationToken cancellationToken = default)
 		=> ValueTask.CompletedTask;
 
+	public ValueTask<long> GetInvalidationVersionAsync(
+		StorableReference reference,
+		CancellationToken cancellationToken = default)
+		=> ValueTask.FromResult(Volatile.Read(ref invalidationVersion));
+
+	public ValueTask<bool> TrySetAsync(
+		ThumbnailCacheKey key,
+		ThumbnailCacheEntry entry,
+		long expectedInvalidationVersion,
+		CancellationToken cancellationToken = default)
+		=> ValueTask.FromResult(
+			expectedInvalidationVersion == Volatile.Read(ref invalidationVersion));
+
 	public ValueTask InvalidateAsync(
 		StorableReference reference,
 		CancellationToken cancellationToken = default)
 	{
 		InvalidatedReferences.Add(reference);
+		Interlocked.Increment(ref invalidationVersion);
 		return ValueTask.CompletedTask;
 	}
 }

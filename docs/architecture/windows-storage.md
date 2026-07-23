@@ -227,6 +227,32 @@ flowchart TD
 
 File-system items use `FileStream` with read/write/delete sharing. Virtual items request `IStream` through `BHID_Stream`; the prototype exposes that stream as read-only.
 
+## Rename operation
+
+`StorageOperationService` selects `WindowsStorageOperationProvider` for references owned by the Windows source. The current provider intentionally supports file-system rename only. It validates one new path segment, resolves the immutable input snapshot, and schedules `IFileOperation` on the operation STA lane.
+
+```mermaid
+sequenceDiagram
+    participant Service as StorageOperationService
+    participant Provider as Windows operation provider
+    participant STA as Operation STA
+    participant Shell as IFileOperation
+    participant Source as WindowsStorageSource
+
+    Service->>Provider: ExecuteAsync(rename)
+    Provider->>STA: queue rename
+    STA->>Shell: RenameItem + PerformOperations
+    Shell-->>STA: completion and abort state
+    STA-->>Provider: operation outcome
+    Provider->>Source: Resolve original stable ItemId
+    Source-->>Provider: actual renamed snapshot
+    Provider-->>Service: verified result reference
+```
+
+The operation lane rechecks the Shell item's filesystem identity immediately before queuing the mutation, so a stale parsing name cannot silently target a replacement item. The HRESULT from `RenameItem` confirms that the work was queued, not that the individual item was renamed. After `PerformOperations`, the provider therefore does not manufacture a result from `parent + requested name`. It re-resolves the original `StorableReference` by stable filesystem identity, checks that the returned `ItemId` and actual name match the request, and returns that snapshot's actual address. This rejects an unrelated item already occupying the guessed target path.
+
+Cancellation is honored while resolution or the queued STA work can still be prevented. Once the Shell operation has committed, result materialization uses `CancellationToken.None`; reporting cancellation after a successful side effect would encourage an unsafe retry.
+
 ## Lifetime
 
 - `FilesDataRoot` owns each `WindowsStorageSource`.
@@ -254,5 +280,6 @@ Implemented:
 - Injectable message-pumped STA scheduling.
 - Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
 - Windows Shell folder change subscriptions with a source-owned notification provider and managed PIDL delivery.
+- File-system rename through `IFileOperation`, followed by stable-identity result verification.
 
-Generic capability composition now exists for thumbnails, previews, properties, folder changes, and decorators. Cross-directory move recovery, Windows-specific property extraction beyond the initial typed set, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.
+Generic capability composition now exists for thumbnails, previews, properties, folder changes, and decorators. Cross-directory move recovery, Windows-specific property extraction beyond the initial typed set, search, copy/move/delete and bulk operations, context menus, and Shell verbs remain separate vertical slices.

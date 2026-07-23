@@ -35,7 +35,7 @@ public sealed class WindowsStorageOperationTests
 
 			var result = await service.ExecuteAsync(
 				request,
-				new Progress<StorageOperationProgress>(progress.Add));
+				new InlineProgress<StorageOperationProgress>(progress.Add));
 
 			Assert.IsTrue(result.Succeeded, result.Error?.ToString());
 			Assert.IsNull(result.Error);
@@ -81,5 +81,46 @@ public sealed class WindowsStorageOperationTests
 
 		Assert.IsFalse(result.Succeeded);
 		Assert.IsInstanceOfType<ArgumentException>(result.Error);
+	}
+
+	[TestMethod]
+	public async Task RejectsNamesThatWindowsWouldNormalizeOrReserve()
+	{
+		await using var scheduler = new WindowsShellScheduler();
+		await using var source = new WindowsStorageSource(scheduler: scheduler);
+		var provider = new WindowsStorageOperationProvider(source);
+
+		foreach (var newName in new[] { "trailing.", "trailing ", "CON.txt", "LPT9" })
+		{
+			var request = new RenameOperationRequest(
+				new StorableReference(
+					source.SourceId,
+					"winfs:v1:missing",
+					new StorageAddress(
+						WindowsStorageSource.FileAddressScheme,
+						"C:\\missing.txt")),
+				newName);
+
+			var result = await provider.ExecuteAsync(request);
+
+			Assert.IsFalse(result.Succeeded);
+			Assert.IsInstanceOfType<ArgumentException>(result.Error);
+		}
+	}
+
+	private sealed class InlineProgress<T> : IProgress<T>
+	{
+		private readonly Action<T> report;
+
+		public InlineProgress(Action<T> report)
+		{
+			ArgumentNullException.ThrowIfNull(report);
+			this.report = report;
+		}
+
+		public void Report(T value)
+		{
+			report(value);
+		}
 	}
 }

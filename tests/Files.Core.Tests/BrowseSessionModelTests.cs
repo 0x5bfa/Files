@@ -163,6 +163,49 @@ public sealed class BrowseSessionModelTests
 	}
 
 	[TestMethod]
+	public async Task DetailedChangeDuringNextEnumerationIsAppliedAfterActivation()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstLocation = factory.CreateModel("first", "First", out _, firstSource);
+		var secondLocation = factory.CreateModel("second", "Second", out _, secondSource);
+		var created = factory.CreateModel("created", "Created", out _);
+		var locationModels = new Queue<IStorableModel>([firstLocation, secondLocation]);
+		var resolver = new TestBrowseLocationResolver([])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+			ItemResolver = (_, _) => ValueTask.FromResult<IStorableModel>(created),
+		};
+		using var session = new BrowseSessionModel(resolver);
+		await session.NavigateAsync(new FolderLocation(firstLocation.Reference));
+
+		resolver.EnumerationStarted = new TaskCompletionSource<bool>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		resolver.EnumerationRelease = new TaskCompletionSource<bool>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		resolver.BlockEnumeration = true;
+		var navigation = session
+			.NavigateAsync(new FolderLocation(secondLocation.Reference))
+			.AsTask();
+		await resolver.EnumerationStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+		secondSource.RaiseChange(new FolderChange(
+			FolderChangeKind.Created,
+			created.Reference,
+			null,
+			RequiresRefresh: false));
+
+		resolver.EnumerationRelease.TrySetResult(true);
+		await navigation.WaitAsync(TimeSpan.FromSeconds(5));
+		await WaitUntilAsync(() =>
+			session.Items.Count is 1
+			&& ReferenceEquals(session.Items[0], created));
+
+		Assert.AreEqual(2, resolver.OpenedContexts.Count);
+		Assert.AreSame(resolver.OpenedContexts[1], session.Context);
+	}
+
+	[TestMethod]
 	public async Task NotificationBurstIsCoalescedIntoOneRefresh()
 	{
 		var factory = new TestModelFactory();
@@ -750,6 +793,57 @@ public sealed class BrowseSessionModelTests
 
 		Assert.AreSame(earlier, session.Items[0]);
 		Assert.AreSame(later, session.Items[1]);
+	}
+
+	[TestMethod]
+	public async Task SortChangePublishesOneConsistentReset()
+	{
+		var factory = new TestModelFactory();
+		var locationModel = factory.CreateModel("folder", "Folder", out _);
+		var first = factory.CreateModel("first", "Alpha", out _);
+		var second = factory.CreateModel("second", "Beta", out _);
+		var third = factory.CreateModel("third", "Gamma", out _);
+		var resolver = new TestBrowseLocationResolver([first, second, third])
+		{
+			LocationModelFactory = _ => locationModel,
+		};
+		using var session = new BrowseSessionModel(resolver);
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		var changes = new List<BrowseItemChange>();
+		session.ItemsChanged += (_, args) => changes.AddRange(args.Changes);
+
+		await session.UpdateViewSettingsAsync(new BrowseViewSettings(
+			sortPropertyId: "name",
+			sortDirection: ViewSortDirection.Descending));
+
+		Assert.AreEqual(1, changes.Count);
+		Assert.IsInstanceOfType<BrowseItemsReset>(changes[0]);
+		CollectionAssert.AreEqual(
+			new[] { third, second, first },
+			session.Items.ToArray());
+	}
+
+	[TestMethod]
+	public async Task SubscriberFailureDoesNotCorruptCommittedNavigation()
+	{
+		var factory = new TestModelFactory();
+		var locationModel = factory.CreateModel("folder", "Folder", out _);
+		var item = factory.CreateModel("item", "Item", out var itemCore);
+		var resolver = new TestBrowseLocationResolver([item])
+		{
+			LocationModelFactory = _ => locationModel,
+		};
+		using var session = new BrowseSessionModel(resolver);
+		var laterHandlerCalled = false;
+		session.ItemsChanged += (_, _) => throw new InvalidOperationException("subscriber failed");
+		session.ItemsChanged += (_, _) => laterHandlerCalled = true;
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+
+		Assert.AreSame(item, session.Items.Single());
+		Assert.IsFalse(itemCore.IsDisposed);
+		Assert.AreSame(resolver.OpenedContexts.Single(), session.Context);
+		Assert.IsTrue(laterHandlerCalled);
 	}
 
 	[TestMethod]

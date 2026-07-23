@@ -33,6 +33,8 @@ public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 
 	event EventHandler<BrowseItemsChangedEventArgs>? ItemsChanged;
 
+	event EventHandler<BrowseItemPresentationChangedEventArgs>? ItemPresentationChanged;
+
 	event EventHandler? SelectionChanged;
 
 	ValueTask NavigateAsync(BrowseLocation location, CancellationToken cancellationToken = default);
@@ -42,6 +44,10 @@ public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 	ValueTask UpdateViewSettingsAsync(
 		BrowseViewSettings settings,
 		CancellationToken cancellationToken = default);
+
+	bool TryGetPresentation(
+		StorableKey key,
+		out BrowseItemPresentation presentation);
 
 	void SetSelection(
 		IEnumerable<StorableKey> selectedKeys,

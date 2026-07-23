@@ -30,7 +30,7 @@ flowchart TB
 | `InvokeConcurrentAsync` | Independent thumbnail/icon extraction with no retained COM object | Small worker pool; calls may run on different apartments |
 | `InvokeOperationAsync` | Long `IFileOperation`-style mutations | Separate ordered worker so a copy dialog cannot block metadata and browsing |
 
-The operation lane is infrastructure for a later operations slice; the current Windows storage provider uses the ordered lane.
+The operation lane executes long-running Shell mutations such as rename without blocking ordered metadata work.
 
 ## Worker behavior
 

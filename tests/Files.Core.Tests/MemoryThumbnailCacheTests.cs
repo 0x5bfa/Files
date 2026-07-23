@@ -1,8 +1,9 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Storage;
+using Files.Core.Capabilities;
 using Files.Core.Capabilities.Thumbnails;
+using Files.Core.Storage;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
 namespace Files.Core.Tests;
@@ -44,7 +45,70 @@ public sealed class MemoryThumbnailCacheTests
 		Assert.IsNull(await cache.GetAsync(new ThumbnailCacheKey(reference, 32, ThumbnailMode.Icon)));
 		Assert.IsNull(await cache.GetAsync(new ThumbnailCacheKey(reference, 128, ThumbnailMode.Content)));
 		Assert.IsNotNull(await cache.GetAsync(new ThumbnailCacheKey(new StorableReference(sourceId, "other"), 32, ThumbnailMode.Icon)));
-}
+	}
+
+	[TestMethod]
+	public async Task InvalidationRejectsAnOlderInFlightWrite()
+	{
+		var reference = new StorableReference(
+			new StorageSourceId("test"),
+			"item");
+		var key = new ThumbnailCacheKey(
+			reference,
+			64,
+			ThumbnailMode.Content);
+		var cache = new MemoryThumbnailCache();
+		var version = await cache.GetInvalidationVersionAsync(reference);
+
+		await cache.InvalidateAsync(reference);
+		var stored = await cache.TrySetAsync(
+			key,
+			CreateEntry("stale"),
+			version);
+
+		Assert.IsFalse(stored);
+		Assert.IsNull(await cache.GetAsync(key));
+	}
+
+	[TestMethod]
+	public async Task DecoratorDoesNotRepopulateAfterInFlightExtractionIsInvalidated()
+	{
+		var factory = new TestModelFactory();
+		var coreModel = new TestStorable("item", "Item");
+		var reference = new StorableReference(
+			factory.Source.SourceId,
+			coreModel.Id);
+		var entered = new TaskCompletionSource<bool>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		var release = new TaskCompletionSource<bool>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		var source = new TestThumbnailSource
+		{
+			Handler = async (_, _) =>
+			{
+				entered.TrySetResult(true);
+				await release.Task;
+				return new ThumbnailResult(
+					new byte[] { 1 },
+					"image/png",
+					IsFallback: false);
+			},
+		};
+		var cache = new MemoryThumbnailCache();
+		var decorated = new ThumbnailCacheDecorator(cache).Decorate(
+			new CapabilityContext(factory.Source, coreModel, reference),
+			source);
+		var request = new ThumbnailRequest(64, ThumbnailMode.Content);
+
+		var extraction = decorated.GetThumbnailAsync(request).AsTask();
+		await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+		await cache.InvalidateAsync(reference);
+		release.TrySetResult(true);
+
+		Assert.IsNotNull(await extraction);
+		Assert.IsNull(await cache.GetAsync(
+			new ThumbnailCacheKey(reference, 64, ThumbnailMode.Content)));
+	}
 
 	[TestMethod]
 	public async Task CacheEntryReturnsAnIndependentReadOnlyStream()
@@ -59,7 +123,7 @@ public sealed class MemoryThumbnailCacheTests
 		Assert.IsNotNull(entry);
 		CollectionAssert.AreEqual(new byte[] { 1, 2, 3 }, entry.Content.ToArray());
 		Assert.AreEqual("image/test", entry.ContentType);
-}
+	}
 
 	private static ThumbnailCacheKey CreateKey(string itemId, int size)
 		=> new(new StorageSourceId("test"), itemId, size, ThumbnailMode.Content);
