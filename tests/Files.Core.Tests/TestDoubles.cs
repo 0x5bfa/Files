@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Files.Core.Browsing;
 using Files.Core.Capabilities;
 using Files.Core.Capabilities.Changes;
+using Files.Core.Capabilities.Properties;
 using Files.Core.Capabilities.Thumbnails;
 using Files.Core.Models;
 using Files.Core.Storage;
@@ -111,7 +112,9 @@ internal sealed class TestModelFactory
 		string id,
 		string name,
 		out DisposableStorable coreModel,
-		IFolderChangeSource? changeSource = null)
+		IFolderChangeSource? changeSource = null,
+		IPropertySource? propertySource = null,
+		IThumbnailSource? thumbnailSource = null)
 	{
 		coreModel = new DisposableStorable(id, name);
 		var reference = new StorableReference(
@@ -119,17 +122,81 @@ internal sealed class TestModelFactory
 			coreModel.Id,
 			new StorageAddress("test", coreModel.Id));
 		var context = new Files.Core.Capabilities.CapabilityContext(source, coreModel, reference);
+		var pipelineBuilder = new CapabilityPipelineBuilder();
+		if (changeSource is not null)
+		{
+			pipelineBuilder.AddContributor<IFolderChangeSource>(
+				new DelegateCapabilityContributor<IFolderChangeSource>(_ => changeSource));
+		}
+
+		if (propertySource is not null)
+		{
+			pipelineBuilder.AddContributor<IPropertySource>(
+				new DelegateCapabilityContributor<IPropertySource>(_ => propertySource));
+		}
+
+		if (thumbnailSource is not null)
+		{
+			pipelineBuilder.AddContributor<IThumbnailSource>(
+				new DelegateCapabilityContributor<IThumbnailSource>(_ => thumbnailSource));
+		}
+
 		var pipeline = changeSource is null
+			&& propertySource is null
+			&& thumbnailSource is null
 			? CapabilityPipeline.Empty
-			: new CapabilityPipelineBuilder()
-				.AddContributor<IFolderChangeSource>(
-					new DelegateCapabilityContributor<IFolderChangeSource>(_ => changeSource))
-				.Build();
+			: pipelineBuilder.Build();
 
 		return new StorableModel(
 			coreModel,
 			reference,
 			pipeline.CreateSet(context));
+	}
+}
+
+internal sealed class TestPropertySource : IPropertySource
+{
+	public int CallCount { get; private set; }
+
+	public IList<IReadOnlyList<string>> Requests { get; } = [];
+
+	public Func<
+		PropertyRequest,
+		CancellationToken,
+		ValueTask<IReadOnlyDictionary<string, object?>>>? Handler { get; set; }
+
+	public ValueTask<IReadOnlyDictionary<string, object?>> GetPropertiesAsync(
+		PropertyRequest request,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		CallCount++;
+		Requests.Add(request.PropertyIds);
+		return Handler is null
+			? ValueTask.FromResult<IReadOnlyDictionary<string, object?>>(
+				new Dictionary<string, object?>())
+			: Handler(request, cancellationToken);
+	}
+}
+
+internal sealed class TestThumbnailSource : IThumbnailSource
+{
+	public int CallCount { get; private set; }
+
+	public IList<ThumbnailRequest> Requests { get; } = [];
+
+	public Func<ThumbnailRequest, CancellationToken, ValueTask<ThumbnailResult?>>? Handler { get; set; }
+
+	public ValueTask<ThumbnailResult?> GetThumbnailAsync(
+		ThumbnailRequest request,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		CallCount++;
+		Requests.Add(request);
+		return Handler is null
+			? ValueTask.FromResult<ThumbnailResult?>(null)
+			: Handler(request, cancellationToken);
 	}
 }
 

@@ -15,6 +15,8 @@ public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 
 	IBrowseLocationContext? Context { get; }
 
+	long Generation { get; }
+
 	IReadOnlyList<IStorableModel> Items { get; }
 
 	long ItemsVersion { get; }

@@ -31,5 +31,5 @@ Architecture documents are available in [`docs/architecture`](../../docs/archite
 - Existing projects do not reference this prototype yet.
 - Home, search, and tag locations are typed, but need separate handlers before they can be browsed.
 - Persisted Windows filesystem references recover same-directory renames, but not cross-directory moves; reverse lookup by file ID remains a future Windows storage slice.
-- Additional Windows property types, selection, history, operations, actions, and ViewModels remain future vertical slices.
+- Additional Windows property types, history, operations, actions, and ViewModels remain future vertical slices.
 - The eventual merge of `Files.Shared`, `Files.Core.Storage`, `Files.App.Storage`, and `Files.App.CsWin32` is intentionally separate from adopting this architecture.

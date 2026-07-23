@@ -63,6 +63,8 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 
 	public IBrowseLocationContext? Context => Volatile.Read(ref activeContext)?.Context;
 
+	public long Generation => Volatile.Read(ref activeContext)?.Generation ?? 0;
+
 	public IReadOnlyList<IStorableModel> Items =>
 		Volatile.Read(ref itemProjection).Items;
 
