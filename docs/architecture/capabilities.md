@@ -146,6 +146,32 @@ flowchart LR
 
 This split also applies to other expensive capabilities: item-bound access is convenient, while a shared provider can batch, cache, throttle, and schedule the actual work.
 
+## Folder changes
+
+`IFolderChangeSource` is the item-bound watcher contract. `WatchAsync` returns an asynchronous stream of `FolderChange` values; it does not expose Shell notification handles, paths, or COM interfaces to the model layer.
+
+```csharp
+if (model.Get<IFolderChangeSource>() is not { } changes)
+{
+	return;
+}
+
+await foreach (var change in changes.WatchAsync(cancellationToken))
+{
+	if (change.RequiresRefresh)
+	{
+		await ReloadFolderAsync(cancellationToken);
+		continue;
+	}
+
+	ApplyChange(change);
+}
+```
+
+The Windows implementation is a lightweight subscription over a source-owned `WindowsShellChangeProvider`. One provider owns one hidden notification window and manages one Shell registration per subscription. Window creation, registration, unregistration, and destruction all run on the ordered Shell STA. The provider copies PIDLs while the Shell notification is locked and publishes only the managed copies after unlocking.
+
+`Created`, `Deleted`, `Renamed`, and `Updated` carry best-effort `StorableReference` values. `DirectoryUpdated` and notifications whose PIDLs cannot be materialized set `RequiresRefresh`, so a consumer can re-enumerate instead of relying on incomplete event detail. This also keeps virtual Shell items and long paths representable because the watcher never converts notifications through `SHGetPathFromIDList`.
+
 ## Ownership
 
 ```mermaid

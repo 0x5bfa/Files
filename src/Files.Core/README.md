@@ -17,9 +17,10 @@ The capability prototype includes:
 - explicit contributor origin, priority, and ownership;
 - contract-specific composers for thumbnail fallback, preview routing, and property merging;
 - decorators, including a bounded in-memory thumbnail cache;
-- a batch-oriented `IPropertyProvider` adapter for item-bound `IPropertySource` access.
+- a batch-oriented `IPropertyProvider` adapter for item-bound `IPropertySource` access;
+- an item-bound `IFolderChangeSource` over a source-owned Windows Shell notification provider.
 
-The Windows Shell provider supports file-system and virtual item resolution, versioned provider-defined item identity, managed PIDL descriptors, strict persisted-reference validation, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, requested typed property extraction, and PNG thumbnail extraction. `WindowsShellItemResolver` keeps Shell materialization and COM affinity in one boundary. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
+The Windows Shell provider supports file-system and virtual item resolution, versioned provider-defined item identity, managed PIDL descriptors, strict persisted-reference validation, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, requested typed property extraction, PNG thumbnail extraction, and folder change subscriptions. `WindowsShellItemResolver` keeps Shell materialization and COM affinity in one boundary. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
 
 Architecture documents are available in [`docs/architecture`](../../docs/architecture/README.md).
 

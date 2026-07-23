@@ -143,6 +143,32 @@ flowchart LR
 
 Capability sources receive the locator, never an `IShellItem` or a raw PIDL pointer. This keeps COM affinity inside the resolver and gives filesystem, virtual Shell, thumbnail, and property paths one materialization boundary.
 
+## Folder change capability
+
+`WindowsStorageSource` owns one `WindowsShellChangeProvider`. Each `WindowsFolderChangeSource` created for a model is only a subscription to that provider, so watching several folders does not create one native window per model.
+
+```mermaid
+sequenceDiagram
+    participant Model as Folder change source
+    participant Provider as Source-owned provider
+    participant STA as Ordered Shell STA
+    participant Window as Hidden notification window
+    participant Shell as Windows Shell
+
+    Model->>Provider: Subscribe(folder locator)
+    Provider->>STA: Create window and register PIDL
+    STA->>Window: Own WNDPROC and Shell registration
+    Shell-->>Window: Notification message
+    Window->>STA: Lock notification and copy PIDLs
+    Window->>Provider: Publish managed change after unlock
+    Provider-->>Model: Subscription stream
+    Model->>Provider: Dispose subscription
+    Provider->>STA: Deregister PIDL
+    Provider->>STA: Destroy window when last subscription ends
+```
+
+The provider filters absolute PIDLs for non-recursive folder subscriptions. Rename notifications preserve the old and new PIDLs. `SHCNE_UPDATEDIR` and notifications without usable item PIDLs become `DirectoryUpdated` or a change with `RequiresRefresh`, allowing the consumer to re-enumerate safely. No notification is converted to a filesystem path, so virtual Shell items and paths longer than `MAX_PATH` remain supported.
+
 ## Browse flow
 
 ```mermaid
@@ -221,5 +247,6 @@ Implemented:
 - File-system streams and apartment-safe virtual read streams.
 - Injectable message-pumped STA scheduling.
 - Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
+- Windows Shell folder change subscriptions with a source-owned notification provider and managed PIDL delivery.
 
-Generic capability composition now exists for thumbnails, previews, properties, and decorators. Cross-directory move recovery, Windows-specific property extraction beyond the initial typed set, watchers, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.
+Generic capability composition now exists for thumbnails, previews, properties, folder changes, and decorators. Cross-directory move recovery, Windows-specific property extraction beyond the initial typed set, search, mutations, bulk operations, context menus, and Shell verbs remain separate vertical slices.

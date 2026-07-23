@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Windows.Win32;
+using Windows.Win32.System.SystemServices;
 using Windows.Win32.UI.Shell;
 using Windows.Win32.UI.Shell.Common;
 
@@ -33,6 +34,43 @@ internal sealed unsafe class WindowsShellItemResolver
 			cancellationToken);
 	}
 
+	// Must be called on the ordered Shell STA because it creates and compares COM objects.
+	internal static bool IsInFolderOnCurrentSta(
+		ReadOnlyMemory<byte> itemPidl,
+		ReadOnlyMemory<byte> folderPidl,
+		bool recursive)
+	{
+		var item = TryCreateFromPidl(itemPidl);
+		var folder = TryCreateFromPidl(folderPidl);
+		if (item is null || folder is null)
+		{
+			return false;
+		}
+
+		if (AreSame(item, folder))
+		{
+			return true;
+		}
+
+		var current = item;
+		while (current.GetParent(out var parent).Succeeded && parent is not null)
+		{
+			if (AreSame(parent, folder))
+			{
+				return true;
+			}
+
+			if (!recursive)
+			{
+				return false;
+			}
+
+			current = parent;
+		}
+
+		return false;
+	}
+
 	public Task<T> InvokeConcurrentAsync<T>(
 		WindowsItemLocator locator,
 		Func<IShellItem, T> action,
@@ -43,6 +81,28 @@ internal sealed unsafe class WindowsShellItemResolver
 
 		return scheduler.InvokeConcurrentAsync(
 			() => InvokeCore(locator, action),
+			cancellationToken);
+	}
+
+	public Task<T> InvokeAsync<T>(
+		ReadOnlyMemory<byte> absolutePidl,
+		Func<IShellItem, T> action,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(action);
+
+		if (absolutePidl.IsEmpty)
+		{
+			cancellationToken.ThrowIfCancellationRequested();
+			return Task.FromResult(default(T)!);
+		}
+
+		return scheduler.InvokeAsync(
+			() =>
+			{
+				var shellItem = TryCreateFromPidl(absolutePidl);
+				return shellItem is null ? default! : action(shellItem);
+			},
 			cancellationToken);
 	}
 
@@ -98,20 +158,20 @@ internal sealed unsafe class WindowsShellItemResolver
 		WindowsItemLocator locator,
 		Func<IShellItem, T> action)
 	{
-		var shellItem = TryCreateFromPidl(locator)
+		var shellItem = TryCreateFromPidl(locator.AbsolutePidl)
 			?? CreateFromParsingName(locator.ParsingName);
 
 		return shellItem is null ? default! : action(shellItem);
 	}
 
-	private static unsafe IShellItem? TryCreateFromPidl(WindowsItemLocator locator)
+	private static unsafe IShellItem? TryCreateFromPidl(ReadOnlyMemory<byte> absolutePidl)
 	{
-		if (locator.AbsolutePidl.IsEmpty)
+		if (absolutePidl.IsEmpty)
 		{
 			return null;
 		}
 
-		fixed (byte* pidlBytes = locator.AbsolutePidl.Span)
+		fixed (byte* pidlBytes = absolutePidl.Span)
 		{
 			var interfaceId = typeof(IShellItem).GUID;
 			void* itemPointer = null;
@@ -137,5 +197,16 @@ internal sealed unsafe class WindowsShellItemResolver
 			out IShellItem shellItem);
 
 		return result.Succeeded ? shellItem : null;
+	}
+
+	private static bool AreSame(IShellItem first, IShellItem second)
+	{
+		return first
+			.Compare(
+				second,
+				(uint)_SICHINTF.SICHINT_DISPLAY,
+				out var order)
+			.Succeeded
+			&& order is 0;
 	}
 }

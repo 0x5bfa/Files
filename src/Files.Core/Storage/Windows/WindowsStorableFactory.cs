@@ -76,6 +76,21 @@ internal sealed class WindowsStorableFactory
 			cancellationToken);
 	}
 
+	internal Task<WindowsStorable?> TryCreateFromAbsolutePidlAsync(
+		ReadOnlyMemory<byte> absolutePidl,
+		CancellationToken cancellationToken = default)
+	{
+		if (absolutePidl.IsEmpty)
+		{
+			return Task.FromResult<WindowsStorable?>(null);
+		}
+
+		return resolver.InvokeAsync<WindowsStorable?>(
+			absolutePidl,
+			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider)),
+			cancellationToken);
+	}
+
 	public Task<WindowsStorable?> TryCreateFromItemIdAsync(
 		string itemId,
 		StorageAddress? lastKnownAddress = null,

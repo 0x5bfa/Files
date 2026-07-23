@@ -20,6 +20,7 @@ public sealed class WindowsStorageSource : IStorageSource
 
 	private readonly IReadOnlyList<Guid> rootFolderIds;
 	private readonly WindowsStorableFactory storableFactory;
+	private readonly WindowsShellChangeProvider changeProvider;
 	private readonly bool ownsScheduler;
 	private bool isDisposed;
 
@@ -38,6 +39,7 @@ public sealed class WindowsStorageSource : IStorageSource
 		Scheduler = scheduler ?? new WindowsShellScheduler();
 		ownsScheduler = scheduler is null;
 		storableFactory = new WindowsStorableFactory(Scheduler);
+		changeProvider = new WindowsShellChangeProvider(Scheduler);
 	}
 
 	public StorageSourceId SourceId { get; }
@@ -52,6 +54,15 @@ public sealed class WindowsStorageSource : IStorageSource
 	public IWindowsShellScheduler Scheduler { get; }
 
 	internal WindowsShellItemResolver ShellItemResolver => storableFactory.Resolver;
+
+	internal WindowsShellChangeProvider ChangeProvider => changeProvider;
+
+	internal Task<WindowsStorable?> TryCreateFromAbsolutePidlAsync(
+		ReadOnlyMemory<byte> absolutePidl,
+		CancellationToken cancellationToken = default)
+	{
+		return storableFactory.TryCreateFromAbsolutePidlAsync(absolutePidl, cancellationToken);
+	}
 
 	public async IAsyncEnumerable<IFolder> GetRootsAsync(
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -156,6 +167,7 @@ public sealed class WindowsStorageSource : IStorageSource
 		}
 
 		isDisposed = true;
+		await changeProvider.DisposeAsync().ConfigureAwait(false);
 
 		if (ownsScheduler)
 		{
