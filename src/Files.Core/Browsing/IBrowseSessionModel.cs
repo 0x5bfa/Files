@@ -17,6 +17,10 @@ public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 
 	IReadOnlyList<IStorableModel> Items { get; }
 
+	long ItemsVersion { get; }
+
+	BrowseSelectionState Selection { get; }
+
 	BrowseViewSettings ViewSettings { get; }
 
 	bool IsLoading { get; }
@@ -25,6 +29,10 @@ public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 
 	event EventHandler? StateChanged;
 
+	event EventHandler<BrowseItemsChangedEventArgs>? ItemsChanged;
+
+	event EventHandler? SelectionChanged;
+
 	ValueTask NavigateAsync(BrowseLocation location, CancellationToken cancellationToken = default);
 
 	ValueTask RefreshAsync(CancellationToken cancellationToken = default);
@@ -32,4 +40,9 @@ public interface IBrowseSessionModel : IDisposable, IAsyncDisposable
 	ValueTask UpdateViewSettingsAsync(
 		BrowseViewSettings settings,
 		CancellationToken cancellationToken = default);
+
+	void SetSelection(
+		IEnumerable<StorableKey> selectedKeys,
+		StorableKey? focusedKey,
+		StorableKey? anchorKey);
 }

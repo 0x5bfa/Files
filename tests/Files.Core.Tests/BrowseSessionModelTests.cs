@@ -590,6 +590,213 @@ public sealed class BrowseSessionModelTests
 	}
 
 	[TestMethod]
+	public async Task RenamedItemReplacesModelAndPreservesSelectionKey()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var previous = factory.CreateModel("item", "Before", out _);
+		var replacement = factory.CreateModel("item", "After", out _);
+		var currentReference = new StorableReference(
+			previous.Reference.SourceId,
+			previous.Reference.ItemId,
+			new StorageAddress("test", "renamed"));
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			replacement,
+			currentReference,
+			items: [previous]);
+		using var session = new BrowseSessionModel(resolver);
+		var itemChanges = new List<BrowseItemsChangedEventArgs>();
+		session.ItemsChanged += (_, args) => itemChanges.Add(args);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		var key = previous.Reference.GetKey();
+		session.SetSelection([key, key], key, key);
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Renamed,
+			currentReference,
+			previous.Reference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() => ReferenceEquals(session.Items.Single(), replacement));
+
+		Assert.AreEqual(1, session.Selection.SelectedKeys.Count);
+		Assert.AreEqual(key, session.Selection.SelectedKeys[0]);
+		Assert.AreEqual(key, session.Selection.FocusedKey);
+		Assert.AreEqual(key, session.Selection.AnchorKey);
+		Assert.AreEqual(2, itemChanges[^1].Version);
+		Assert.IsInstanceOfType<BrowseItemReplaced>(itemChanges[^1].Changes[0]);
+	}
+
+	[TestMethod]
+	public async Task RenamedItemMigratesSelectionWhenIdentityChanges()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var previous = factory.CreateModel("old", "Before", out _);
+		var replacement = factory.CreateModel("new", "After", out _);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			replacement,
+			replacement.Reference,
+			items: [previous]);
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		var previousKey = previous.Reference.GetKey();
+		var replacementKey = replacement.Reference.GetKey();
+		session.SetSelection([previousKey], previousKey, previousKey);
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Renamed,
+			replacement.Reference,
+			previous.Reference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() =>
+			session.Items.Count is 1
+			&& session.Selection.SelectedKeys.Single() == replacementKey);
+
+		Assert.AreEqual(replacementKey, session.Selection.FocusedKey);
+		Assert.AreEqual(replacementKey, session.Selection.AnchorKey);
+	}
+
+	[TestMethod]
+	public async Task DeletedItemIsRemovedFromSelection()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var item = factory.CreateModel("item", "Item", out _);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			item,
+			item.Reference,
+			items: [item]);
+		using var session = new BrowseSessionModel(resolver);
+		var selectionChanged = 0;
+		session.SelectionChanged += (_, _) => selectionChanged++;
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		var key = item.Reference.GetKey();
+		session.SetSelection([key], key, key);
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Deleted,
+			null,
+			item.Reference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() =>
+			session.Items.Count is 0
+			&& session.Selection.SelectedKeys.Count is 0);
+
+		Assert.IsEmpty(session.Selection.SelectedKeys);
+		Assert.IsNull(session.Selection.FocusedKey);
+		Assert.IsNull(session.Selection.AnchorKey);
+		Assert.AreEqual(2, selectionChanged);
+	}
+
+	[TestMethod]
+	public async Task RenamedItemMovesWhenItsNameChangesSortPosition()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var previous = factory.CreateModel("first", "Beta", out _);
+		var other = factory.CreateModel("second", "Gamma", out _);
+		var replacement = factory.CreateModel("first", "Zulu", out _);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			replacement,
+			replacement.Reference,
+			items: [previous, other]);
+		using var session = new BrowseSessionModel(resolver);
+		var itemChanges = new List<BrowseItemChange>();
+		session.ItemsChanged += (_, args) => itemChanges.AddRange(args.Changes);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Renamed,
+			replacement.Reference,
+			previous.Reference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() =>
+			session.Items.Count is 2
+			&& ReferenceEquals(session.Items[1], replacement)
+			&& itemChanges.OfType<BrowseItemMoved>().Any());
+
+		var moved = itemChanges.OfType<BrowseItemMoved>().Last();
+		Assert.AreEqual(0, moved.PreviousIndex);
+		Assert.AreEqual(1, moved.CurrentIndex);
+		Assert.AreEqual(replacement.Reference.GetKey(), moved.Key);
+	}
+
+	[TestMethod]
+	public async Task SameNameItemsHaveStableIdentityOrder()
+	{
+		var factory = new TestModelFactory();
+		var locationModel = factory.CreateModel("folder", "Folder", out _);
+		var later = factory.CreateModel("z-item", "Same", out _);
+		var earlier = factory.CreateModel("a-item", "Same", out _);
+		var resolver = new TestBrowseLocationResolver([later, earlier])
+		{
+			LocationModelFactory = _ => locationModel,
+		};
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+
+		Assert.AreSame(earlier, session.Items[0]);
+		Assert.AreSame(later, session.Items[1]);
+	}
+
+	[TestMethod]
+	public async Task FullRefreshKeepsOnlySelectionKeysStillPresent()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstLocation = factory.CreateModel("first", "First", out _, firstSource);
+		var secondLocation = factory.CreateModel("second", "Second", out _, secondSource);
+		var selected = factory.CreateModel("selected", "Selected", out _);
+		var removed = factory.CreateModel("removed", "Removed", out _);
+		var retained = factory.CreateModel("retained", "Retained", out _);
+		var refreshedRetained = factory.CreateModel("retained", "Retained", out _);
+		var locationModels = new Queue<IStorableModel>([firstLocation, secondLocation]);
+		var resolver = new TestBrowseLocationResolver([selected, removed, retained])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+		};
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(firstLocation.Reference));
+		var selectedKey = selected.Reference.GetKey();
+		var removedKey = removed.Reference.GetKey();
+		var retainedKey = retained.Reference.GetKey();
+		session.SetSelection(
+			[selectedKey, removedKey, retainedKey],
+			removedKey,
+			selectedKey);
+		resolver.Items.Clear();
+		resolver.Items.Add(refreshedRetained);
+		firstSource.RaiseChange(new FolderChange(
+			FolderChangeKind.DirectoryUpdated,
+			null,
+			null,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() =>
+			session.Items.Count is 1
+			&& ReferenceEquals(session.Items[0], refreshedRetained));
+
+		Assert.AreEqual(retainedKey, session.Selection.SelectedKeys.Single());
+		Assert.IsNull(session.Selection.FocusedKey);
+		Assert.IsNull(session.Selection.AnchorKey);
+	}
+
+	[TestMethod]
 	public async Task ViewSettingsArePersistedByBrowseLocation()
 	{
 		var factory = new TestModelFactory();

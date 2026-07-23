@@ -19,6 +19,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	private readonly IViewSettingsStore? viewSettingsStore;
 	private readonly IThumbnailCache? thumbnailCache;
 	private readonly Dictionary<BrowseLocation, BrowseViewSettings> sessionViewSettings = [];
+	private BrowseItemProjection itemProjection;
 	private readonly SemaphoreSlim navigationLock = new(1, 1);
 	private readonly SemaphoreSlim refreshSignal = new(0, 1);
 	private readonly Channel<QueuedFolderChange> changeQueue =
@@ -40,6 +41,8 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	private long requestedFullRefreshGeneration;
 	private int refreshSignalPending;
 	private readonly Queue<QueuedFolderChange> deferredChanges = [];
+	private BrowseSelectionState selection = BrowseSelectionState.Empty;
+	private long itemsVersion;
 	private bool isDisposed;
 
 	public BrowseSessionModel(
@@ -51,7 +54,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		this.locationResolver = locationResolver;
 		this.viewSettingsStore = viewSettingsStore;
 		this.thumbnailCache = thumbnailCache;
-		Items = Array.Empty<IStorableModel>();
+		itemProjection = new BrowseItemProjection(BrowseViewSettings.Default);
 		ViewSettings = BrowseViewSettings.Default;
 		refreshPumpTask = RefreshPumpAsync(refreshLifetime.Token);
 	}
@@ -60,7 +63,12 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 
 	public IBrowseLocationContext? Context => Volatile.Read(ref activeContext)?.Context;
 
-	public IReadOnlyList<IStorableModel> Items { get; private set; }
+	public IReadOnlyList<IStorableModel> Items =>
+		Volatile.Read(ref itemProjection).Items;
+
+	public long ItemsVersion => Volatile.Read(ref itemsVersion);
+
+	public BrowseSelectionState Selection => Volatile.Read(ref selection);
 
 	public BrowseViewSettings ViewSettings { get; private set; }
 
@@ -69,6 +77,10 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	public Exception? Error { get; private set; }
 
 	public event EventHandler? StateChanged;
+
+	public event EventHandler<BrowseItemsChangedEventArgs>? ItemsChanged;
+
+	public event EventHandler? SelectionChanged;
 
 	public async ValueTask NavigateAsync(BrowseLocation location, CancellationToken cancellationToken = default)
 	{
@@ -133,14 +145,21 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					nextItems.Add(item);
 				}
 
+				var nextProjection = new BrowseItemProjection(nextViewSettings);
+				var nextItemChanges = nextProjection.Reset(nextItems);
 				var previousContext = Volatile.Read(ref activeContext);
 				var previousItems = Items;
+				var nextSelection = Equals(Location, location)
+					? NormalizeSelection(selection, nextProjection.Items)
+					: BrowseSelectionState.Empty;
 				Location = location;
 				Volatile.Write(ref activeContext, nextContext);
 				Volatile.Write(ref preparingContext, null);
-				Items = nextItems.AsReadOnly();
+				Volatile.Write(ref itemProjection, nextProjection);
 				ViewSettings = nextViewSettings;
 				Error = null;
+				PublishItemsChanged(nextItemChanges);
+				SetSelectionState(nextSelection);
 				nextLocationContext = null;
 				nextContext = null;
 				committed = true;
@@ -440,7 +459,10 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				return IncrementalApplyResult.Stale;
 			}
 
-			lookup = FindItemIndex(Items, key, out _);
+			lookup = FindItemIndex(
+				Volatile.Read(ref itemProjection),
+				key,
+				out _);
 			if (lookup is ItemLookupResult.Found)
 			{
 				return IncrementalApplyResult.Applied;
@@ -476,7 +498,8 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					return IncrementalApplyResult.Stale;
 				}
 
-				lookup = FindItemIndex(Items, key, out _);
+				var projection = Volatile.Read(ref itemProjection);
+				lookup = FindItemIndex(projection, key, out _);
 				if (lookup is ItemLookupResult.Found)
 				{
 					return IncrementalApplyResult.Applied;
@@ -487,10 +510,14 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					return IncrementalApplyResult.RequiresFullRefresh;
 				}
 
-				var nextItems = Items.ToList();
-				nextItems.Add(replacement);
-				Items = nextItems.AsReadOnly();
+				var changes = projection.Add(replacement);
+				if (changes.IsEmpty)
+				{
+					return IncrementalApplyResult.Applied;
+				}
+
 				retained = true;
+				PublishItemsChanged(changes);
 				OnStateChanged();
 				return IncrementalApplyResult.Applied;
 			}
@@ -526,7 +553,10 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				return IncrementalApplyResult.Stale;
 			}
 
-			var lookup = FindItemIndex(Items, key, out _);
+			var lookup = FindItemIndex(
+				Volatile.Read(ref itemProjection),
+				key,
+				out _);
 			if (lookup is not ItemLookupResult.Found)
 			{
 				return IncrementalApplyResult.RequiresFullRefresh;
@@ -546,18 +576,24 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				return IncrementalApplyResult.Stale;
 			}
 
-			var lookup = FindItemIndex(Items, key, out var index);
+			var projection = Volatile.Read(ref itemProjection);
+			var lookup = FindItemIndex(projection, key, out var index);
 			if (lookup is not ItemLookupResult.Found)
 			{
 				return IncrementalApplyResult.RequiresFullRefresh;
 			}
 
-			var removed = Items[index];
-			var nextItems = Items.ToList();
-			nextItems.RemoveAt(index);
-			Items = nextItems.AsReadOnly();
+			var removed = projection.Items[index];
+			var changes = projection.Remove(key);
+			if (changes.IsEmpty)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+
 			try
 			{
+				PublishItemsChanged(changes);
+				RemoveSelectionKey(key);
 				OnStateChanged();
 			}
 			finally
@@ -588,6 +624,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			&& TryGetKey(change.PreviousItem, out var previousKey)
 			? previousKey
 			: currentKey;
+		var previousKeyToReplace = oldKey;
 		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
 		try
 		{
@@ -596,11 +633,18 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				return IncrementalApplyResult.Stale;
 			}
 
-			var lookup = FindItemIndex(Items, oldKey, out _);
+			var lookup = FindItemIndex(
+				Volatile.Read(ref itemProjection),
+				oldKey,
+				out _);
 			if (lookup is not ItemLookupResult.Found
 				&& oldKey != currentKey)
 			{
-				lookup = FindItemIndex(Items, currentKey, out _);
+				previousKeyToReplace = currentKey;
+				lookup = FindItemIndex(
+					Volatile.Read(ref itemProjection),
+					currentKey,
+					out _);
 			}
 
 			if (lookup is not ItemLookupResult.Found)
@@ -638,31 +682,30 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					return IncrementalApplyResult.Stale;
 				}
 
-				var lookup = FindItemIndex(Items, oldKey, out var index);
-				if (lookup is not ItemLookupResult.Found
-					&& oldKey != currentKey)
-				{
-					lookup = FindItemIndex(Items, currentKey, out index);
-				}
+				var projection = Volatile.Read(ref itemProjection);
+				var lookup = FindItemIndex(
+					projection,
+					previousKeyToReplace,
+					out var index);
 
 				if (lookup is not ItemLookupResult.Found)
 				{
 					return IncrementalApplyResult.RequiresFullRefresh;
 				}
 
-				var previous = Items[index];
+				var previous = projection.Items[index];
 				if (ReferenceEquals(previous, replacement))
 				{
 					sameInstance = true;
 					return IncrementalApplyResult.RequiresFullRefresh;
 				}
 
-				var nextItems = Items.ToList();
-				nextItems[index] = replacement;
-				Items = nextItems.AsReadOnly();
+				var changes = projection.Replace(previousKeyToReplace, replacement);
 				retained = true;
 				try
 				{
+					PublishItemsChanged(changes);
+					MigrateSelection(previousKeyToReplace, currentKey);
 					OnStateChanged();
 				}
 				finally
@@ -705,7 +748,10 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				return IncrementalApplyResult.Stale;
 			}
 
-			var lookup = FindItemIndex(Items, key, out _);
+			var lookup = FindItemIndex(
+				Volatile.Read(ref itemProjection),
+				key,
+				out _);
 			if (lookup is not ItemLookupResult.Found)
 			{
 				return IncrementalApplyResult.RequiresFullRefresh;
@@ -738,25 +784,25 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					return IncrementalApplyResult.Stale;
 				}
 
-				var lookup = FindItemIndex(Items, key, out var index);
+				var projection = Volatile.Read(ref itemProjection);
+				var lookup = FindItemIndex(projection, key, out var index);
 				if (lookup is not ItemLookupResult.Found)
 				{
 					return IncrementalApplyResult.RequiresFullRefresh;
 				}
 
-				var previous = Items[index];
+				var previous = projection.Items[index];
 				if (ReferenceEquals(previous, replacement))
 				{
 					sameInstance = true;
 					return IncrementalApplyResult.RequiresFullRefresh;
 				}
 
-				var nextItems = Items.ToList();
-				nextItems[index] = replacement;
-				Items = nextItems.AsReadOnly();
+				var changes = projection.Replace(key, replacement);
 				retained = true;
 				try
 				{
+					PublishItemsChanged(changes);
 					OnStateChanged();
 				}
 				finally
@@ -834,28 +880,12 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	}
 
 	private static ItemLookupResult FindItemIndex(
-		IReadOnlyList<IStorableModel> items,
+		BrowseItemProjection projection,
 		StorableKey key,
 		out int index)
 	{
-		index = -1;
-		for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
-		{
-			if (ToKey(items[itemIndex].Reference) != key)
-			{
-				continue;
-			}
-
-			if (index >= 0)
-			{
-				index = -1;
-				return ItemLookupResult.Ambiguous;
-			}
-
-			index = itemIndex;
-		}
-
-		return index >= 0
+		ArgumentNullException.ThrowIfNull(projection);
+		return projection.TryGet(key, out _, out index)
 			? ItemLookupResult.Found
 			: ItemLookupResult.Missing;
 	}
@@ -983,13 +1013,33 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				sessionViewSettings[Location] = settings;
 			}
 
+			var changes = Volatile
+				.Read(ref itemProjection)
+				.UpdateSort(settings);
 			ViewSettings = settings;
+			PublishItemsChanged(changes);
 			OnStateChanged();
 		}
 		finally
 		{
 			navigationLock.Release();
 		}
+	}
+
+	public void SetSelection(
+		IEnumerable<StorableKey> selectedKeys,
+		StorableKey? focusedKey,
+		StorableKey? anchorKey)
+	{
+		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ArgumentNullException.ThrowIfNull(selectedKeys);
+
+		SetSelectionState(NormalizeSelection(
+			new BrowseSelectionState(
+				Array.AsReadOnly(selectedKeys.ToArray()),
+				focusedKey,
+				anchorKey),
+			Items));
 	}
 
 	public void Dispose()
@@ -1021,7 +1071,10 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			{
 				var items = Items;
 				var currentContext = Volatile.Read(ref activeContext);
-				Items = Array.Empty<IStorableModel>();
+				Volatile.Write(
+					ref itemProjection,
+					new BrowseItemProjection(ViewSettings));
+				Volatile.Write(ref selection, BrowseSelectionState.Empty);
 				Volatile.Write(ref activeContext, null);
 				Volatile.Write(ref preparingContext, null);
 				sessionViewSettings.Clear();
@@ -1050,6 +1103,104 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			refreshLifetime.Dispose();
 			GC.SuppressFinalize(this);
 		}
+	}
+
+	private void PublishItemsChanged(BrowseItemChangeSet changeSet)
+	{
+		if (changeSet.IsEmpty)
+		{
+			return;
+		}
+
+		var previousVersion = Interlocked.Read(ref itemsVersion);
+		var version = Interlocked.Increment(ref itemsVersion);
+		ItemsChanged?.Invoke(
+			this,
+			new BrowseItemsChangedEventArgs(
+				previousVersion,
+				version,
+				changeSet.Changes));
+	}
+
+	private void SetSelectionState(BrowseSelectionState nextSelection)
+	{
+		ArgumentNullException.ThrowIfNull(nextSelection);
+
+		var currentSelection = Volatile.Read(ref selection);
+		if (currentSelection.FocusedKey == nextSelection.FocusedKey
+			&& currentSelection.AnchorKey == nextSelection.AnchorKey
+			&& currentSelection.SelectedKeys.SequenceEqual(nextSelection.SelectedKeys))
+		{
+			return;
+		}
+
+		Volatile.Write(ref selection, nextSelection);
+		SelectionChanged?.Invoke(this, EventArgs.Empty);
+	}
+
+	private void RemoveSelectionKey(StorableKey key)
+	{
+		var currentSelection = Volatile.Read(ref selection);
+		if (!currentSelection.SelectedKeys.Contains(key)
+			&& currentSelection.FocusedKey != key
+			&& currentSelection.AnchorKey != key)
+		{
+			return;
+		}
+
+		SetSelectionState(new BrowseSelectionState(
+			Array.AsReadOnly(currentSelection.SelectedKeys
+				.Where(selectedKey => selectedKey != key)
+				.ToArray()),
+			currentSelection.FocusedKey == key
+				? null
+				: currentSelection.FocusedKey,
+			currentSelection.AnchorKey == key
+				? null
+				: currentSelection.AnchorKey));
+	}
+
+	private void MigrateSelection(StorableKey previousKey, StorableKey currentKey)
+	{
+		if (previousKey == currentKey)
+		{
+			return;
+		}
+
+		var currentSelection = Volatile.Read(ref selection);
+		SetSelectionState(new BrowseSelectionState(
+			Array.AsReadOnly(currentSelection.SelectedKeys
+				.Select(selectedKey => selectedKey == previousKey ? currentKey : selectedKey)
+				.Distinct()
+				.ToArray()),
+			currentSelection.FocusedKey == previousKey
+				? currentKey
+				: currentSelection.FocusedKey,
+			currentSelection.AnchorKey == previousKey
+				? currentKey
+				: currentSelection.AnchorKey));
+	}
+
+	private static BrowseSelectionState NormalizeSelection(
+		BrowseSelectionState state,
+		IReadOnlyList<IStorableModel> items)
+	{
+		var existingKeys = items
+			.Select(static item => item.Reference.GetKey())
+			.ToHashSet();
+		return new BrowseSelectionState(
+			Array.AsReadOnly(state.SelectedKeys
+				.Where(existingKeys.Contains)
+				.Distinct()
+				.ToArray()),
+			state.FocusedKey is { } focusedKey
+				&& existingKeys.Contains(focusedKey)
+				? focusedKey
+				: null,
+			state.AnchorKey is { } anchorKey
+				&& existingKeys.Contains(anchorKey)
+				? anchorKey
+				: null);
 	}
 
 	private readonly record struct QueuedFolderChange(
