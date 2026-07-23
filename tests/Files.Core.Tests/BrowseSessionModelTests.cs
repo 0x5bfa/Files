@@ -3,7 +3,9 @@
 
 using Files.Core.Browsing;
 using Files.Core.Capabilities.Changes;
+using Files.Core.Capabilities.Thumbnails;
 using Files.Core.Models;
+using Files.Core.Storage;
 using Files.Core.ViewSettings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -265,6 +267,329 @@ public sealed class BrowseSessionModelTests
 	}
 
 	[TestMethod]
+	public async Task CreatedChangeAddsOneItem()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var created = factory.CreateModel("created", "Created", out _);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			created,
+			created.Reference);
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Created,
+			created.Reference,
+			null,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() => session.Items.Count is 1);
+
+		Assert.AreSame(created, session.Items.Single());
+	}
+
+	[TestMethod]
+	public async Task DuplicateCreatedChangeDoesNotDuplicateItem()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var created = factory.CreateModel("created", "Created", out _);
+		var resolveCount = 0;
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			created,
+			created.Reference,
+			itemResolver: (_, _) =>
+			{
+				resolveCount++;
+				return ValueTask.FromResult<IStorableModel>(created);
+			});
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		var change = new FolderChange(
+			FolderChangeKind.Created,
+			created.Reference,
+			null,
+			RequiresRefresh: false);
+		source.RaiseChange(change);
+		await WaitUntilAsync(() => session.Items.Count is 1);
+		source.RaiseChange(change);
+		await Task.Delay(100);
+
+		Assert.AreEqual(1, session.Items.Count);
+		Assert.AreSame(created, session.Items.Single());
+		Assert.AreEqual(1, resolveCount);
+	}
+
+	[TestMethod]
+	public async Task DeletedChangeRemovesAndDisposesItemOnce()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var deleted = factory.CreateModel("deleted", "Deleted", out var deletedCore);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			deleted,
+			deleted.Reference,
+			items: [deleted]);
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Deleted,
+			null,
+			deleted.Reference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() =>
+			session.Items.Count is 0
+			&& deletedCore.DisposeCount is 1);
+
+		Assert.AreEqual(1, deletedCore.DisposeCount);
+	}
+
+	[TestMethod]
+	public async Task RenamedChangeReplacesModelInstance()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var previous = factory.CreateModel("item", "Before", out var previousCore);
+		var replacement = factory.CreateModel("item", "After", out _);
+		var currentReference = new StorableReference(
+			previous.Reference.SourceId,
+			previous.Reference.ItemId,
+			new StorageAddress("test", "renamed"));
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			replacement,
+			currentReference,
+			items: [previous]);
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Renamed,
+			currentReference,
+			previous.Reference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() => ReferenceEquals(session.Items.Single(), replacement));
+
+		Assert.AreNotSame(previous, replacement);
+		Assert.AreEqual(1, previousCore.DisposeCount);
+	}
+
+	[TestMethod]
+	public async Task UpdatedChangeReplacesModelAndInvalidatesCache()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var previous = factory.CreateModel("item", "Before", out var previousCore);
+		var replacement = factory.CreateModel("item", "After", out _);
+		var cache = new TestThumbnailCache();
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			replacement,
+			previous.Reference,
+			items: [previous]);
+		using var session = new BrowseSessionModel(resolver, thumbnailCache: cache);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Updated,
+			replacement.Reference,
+			null,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() => ReferenceEquals(session.Items.Single(), replacement));
+
+		Assert.AreEqual(1, previousCore.DisposeCount);
+		CollectionAssert.Contains(
+			cache.InvalidatedReferences.ToList(),
+			replacement.Reference);
+	}
+
+	[TestMethod]
+	public async Task CreatedRenamedDeletedChangesPreserveQueueOrder()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var created = factory.CreateModel("sequence", "Created", out var createdCore);
+		var renamed = factory.CreateModel("sequence", "Renamed", out var renamedCore);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			renamed,
+			renamed.Reference,
+			items: [],
+			itemResolver: (reference, _) =>
+			{
+				if (reference.ItemId == created.Reference.ItemId)
+				{
+					return ValueTask.FromResult<IStorableModel>(
+						ReferenceEquals(reference, created.Reference) ? created : renamed);
+				}
+
+				return ValueTask.FromResult<IStorableModel>(renamed);
+			});
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		var renamedReference = new StorableReference(
+			created.Reference.SourceId,
+			created.Reference.ItemId,
+			new StorageAddress("test", "renamed"));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Created,
+			created.Reference,
+			null,
+			RequiresRefresh: false));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Renamed,
+			renamedReference,
+			created.Reference,
+			RequiresRefresh: false));
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Deleted,
+			null,
+			renamedReference,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() =>
+			session.Items.Count is 0
+			&& createdCore.DisposeCount is 1
+			&& renamedCore.DisposeCount is 1);
+
+		Assert.AreEqual(0, session.Items.Count);
+		Assert.IsTrue(createdCore.IsDisposed);
+		Assert.IsTrue(renamedCore.IsDisposed);
+	}
+
+	[TestMethod]
+	public async Task IncompleteChangeFallsBackToFullRefresh()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstLocation = factory.CreateModel("first", "First", out _, firstSource);
+		var secondLocation = factory.CreateModel("second", "Second", out _, secondSource);
+		var oldItem = factory.CreateModel("old", "Old", out var oldItemCore);
+		var newItem = factory.CreateModel("new", "New", out _);
+		var locationModels = new Queue<IStorableModel>([firstLocation, secondLocation]);
+		var resolver = new TestBrowseLocationResolver([oldItem])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+		};
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(firstLocation.Reference));
+		resolver.Items.Clear();
+		resolver.Items.Add(newItem);
+		firstSource.RaiseChange(new FolderChange(
+			FolderChangeKind.DirectoryUpdated,
+			null,
+			null,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() => ReferenceEquals(session.Items.Single(), newItem));
+
+		Assert.AreEqual(2, resolver.OpenedContexts.Count);
+		Assert.IsTrue(oldItemCore.IsDisposed);
+	}
+
+	[TestMethod]
+	public async Task StaleResolveResultIsDisposedAfterNavigation()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstLocation = factory.CreateModel("first", "First", out _, firstSource);
+		var secondLocation = factory.CreateModel("second", "Second", out _, secondSource);
+		var created = factory.CreateModel("created", "Created", out var createdCore);
+		var resolveStarted = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var releaseResolve = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var resolver = CreateIncrementalResolver(
+			firstLocation,
+			created,
+			created.Reference,
+			itemResolver: async (reference, cancellationToken) =>
+			{
+				resolveStarted.TrySetResult(true);
+				await releaseResolve.Task.WaitAsync(cancellationToken);
+				return created;
+			});
+		resolver.LocationModelFactory = location =>
+			location is FolderLocation folderLocation
+				&& folderLocation.Folder == firstLocation.Reference
+				? firstLocation
+				: secondLocation;
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(firstLocation.Reference));
+		firstSource.RaiseChange(new FolderChange(
+			FolderChangeKind.Created,
+			created.Reference,
+			null,
+			RequiresRefresh: false));
+		await resolveStarted.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+		await session.NavigateAsync(new FolderLocation(secondLocation.Reference));
+		releaseResolve.TrySetResult(true);
+		await WaitUntilAsync(() => createdCore.DisposeCount is 1);
+
+		Assert.AreSame(secondLocation.Reference, session.Location is FolderLocation location
+			? location.Folder
+			: null);
+		Assert.IsTrue(createdCore.IsDisposed);
+	}
+
+	[TestMethod]
+	public async Task IncrementalApplyFailureKeepsStateUntilFullRefresh()
+	{
+		var factory = new TestModelFactory();
+		var source = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, source);
+		var failedLocationModel = factory.CreateModel("folder-refresh", "Folder", out _);
+		var current = factory.CreateModel("current", "Current", out var currentCore);
+		var partial = factory.CreateModel("partial", "Partial", out var partialCore);
+		var locationModels = new Queue<IStorableModel>([
+			locationModel,
+			failedLocationModel]);
+		var resolver = CreateIncrementalResolver(
+			locationModel,
+			current,
+			current.Reference,
+			items: [current],
+			itemResolver: (_, _) => throw new InvalidOperationException("resolve failed"));
+		resolver.LocationModelFactory = _ => locationModels.Dequeue();
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+		resolver.Items.Clear();
+		resolver.Items.Add(partial);
+		resolver.Exception = new InvalidOperationException("refresh failed");
+		source.RaiseChange(new FolderChange(
+			FolderChangeKind.Updated,
+			current.Reference,
+			null,
+			RequiresRefresh: false));
+
+		await WaitUntilAsync(() => session.Error is not null);
+
+		Assert.AreSame(current, session.Items.Single());
+		Assert.IsFalse(currentCore.IsDisposed);
+		Assert.IsTrue(partialCore.IsDisposed);
+	}
+
+	[TestMethod]
 	public async Task ViewSettingsArePersistedByBrowseLocation()
 	{
 		var factory = new TestModelFactory();
@@ -281,5 +606,33 @@ public sealed class BrowseSessionModelTests
 
 		Assert.AreSame(settings, session.ViewSettings);
 		Assert.AreSame(settings, await settingsStore.GetAsync(location));
-}
+	}
+
+	private static TestBrowseLocationResolver CreateIncrementalResolver(
+		IStorableModel locationModel,
+		IStorableModel resolvedModel,
+		StorableReference reference,
+		IEnumerable<IStorableModel>? items = null,
+		Func<StorableReference, CancellationToken, ValueTask<IStorableModel>>? itemResolver = null)
+	{
+		var resolver = new TestBrowseLocationResolver(items ?? [])
+		{
+			LocationModelFactory = _ => locationModel,
+			ItemResolver = itemResolver ?? ((_, _) => ValueTask.FromResult(resolvedModel)),
+		};
+
+		return resolver;
+	}
+
+	private static async Task WaitUntilAsync(
+		Func<bool> condition)
+	{
+		var timeout = DateTime.UtcNow + TimeSpan.FromSeconds(5);
+		while (!condition() && DateTime.UtcNow < timeout)
+		{
+			await Task.Delay(10).ConfigureAwait(false);
+		}
+
+		Assert.IsTrue(condition());
+	}
 }

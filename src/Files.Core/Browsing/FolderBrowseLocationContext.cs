@@ -2,26 +2,34 @@
 // Licensed under the MIT License.
 
 using System.Runtime.CompilerServices;
+using Files.Core.Data;
 using Files.Core.Models;
+using Files.Core.Storage;
 
 namespace Files.Core.Browsing;
 
 /// <summary>
 /// Keeps a resolved folder model alive for the duration of a browse location.
 /// </summary>
-public sealed class FolderBrowseLocationContext : IBrowseLocationContext
+public sealed class FolderBrowseLocationContext : IBrowseLocationContext, IBrowseLocationItemResolver
 {
 	private readonly FolderLocation location;
 	private readonly IFolderModel folderModel;
+	private readonly IFilesDataRoot dataRoot;
 	private int isDisposed;
 
-	public FolderBrowseLocationContext(FolderLocation location, IFolderModel folderModel)
+	public FolderBrowseLocationContext(
+		FolderLocation location,
+		IFolderModel folderModel,
+		IFilesDataRoot dataRoot)
 	{
 		ArgumentNullException.ThrowIfNull(location);
 		ArgumentNullException.ThrowIfNull(folderModel);
+		ArgumentNullException.ThrowIfNull(dataRoot);
 
 		this.location = location;
 		this.folderModel = folderModel;
+		this.dataRoot = dataRoot;
 	}
 
 	public BrowseLocation Location => location;
@@ -37,6 +45,16 @@ public sealed class FolderBrowseLocationContext : IBrowseLocationContext
 		{
 			yield return item;
 		}
+	}
+
+	public ValueTask<IStorableModel> ResolveAsync(
+		StorableReference reference,
+		CancellationToken cancellationToken = default)
+	{
+		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed) != 0, this);
+		ArgumentNullException.ThrowIfNull(reference);
+
+		return dataRoot.ResolveAsync(reference, cancellationToken);
 	}
 
 	public ValueTask DisposeAsync()

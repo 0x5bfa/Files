@@ -35,6 +35,6 @@ public sealed class FolderBrowseLocationHandler : IBrowseLocationHandler
 			throw new InvalidOperationException($"Item '{folderLocation.Folder.ItemId}' is not a folder.");
 		}
 
-		return new FolderBrowseLocationContext(folderLocation, folderModel);
+		return new FolderBrowseLocationContext(folderLocation, folderModel, dataRoot);
 	}
 }

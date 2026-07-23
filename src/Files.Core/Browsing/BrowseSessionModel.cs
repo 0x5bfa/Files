@@ -3,18 +3,33 @@
 
 using Files.Core.Capabilities;
 using Files.Core.Capabilities.Changes;
+using Files.Core.Capabilities.Thumbnails;
 using Files.Core.Models;
+using Files.Core.Storage;
 using Files.Core.ViewSettings;
+using System.Threading.Channels;
 
 namespace Files.Core.Browsing;
 
 public sealed class BrowseSessionModel : IBrowseSessionModel
 {
+	private const int ChangeQueueCapacity = 256;
+
 	private readonly IBrowseLocationResolver locationResolver;
 	private readonly IViewSettingsStore? viewSettingsStore;
+	private readonly IThumbnailCache? thumbnailCache;
 	private readonly Dictionary<BrowseLocation, BrowseViewSettings> sessionViewSettings = [];
 	private readonly SemaphoreSlim navigationLock = new(1, 1);
 	private readonly SemaphoreSlim refreshSignal = new(0, 1);
+	private readonly Channel<QueuedFolderChange> changeQueue =
+		Channel.CreateBounded<QueuedFolderChange>(
+			new BoundedChannelOptions(ChangeQueueCapacity)
+			{
+				FullMode = BoundedChannelFullMode.Wait,
+				SingleReader = true,
+				SingleWriter = false,
+				AllowSynchronousContinuations = false,
+			});
 	private readonly CancellationTokenSource refreshLifetime = new();
 	private readonly object disposalLock = new();
 	private BrowseContextState? activeContext;
@@ -22,17 +37,20 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	private Task? disposeTask;
 	private readonly Task refreshPumpTask;
 	private long generationCounter;
-	private long requestedRefreshGeneration;
+	private long requestedFullRefreshGeneration;
 	private int refreshSignalPending;
+	private readonly Queue<QueuedFolderChange> deferredChanges = [];
 	private bool isDisposed;
 
 	public BrowseSessionModel(
 		IBrowseLocationResolver locationResolver,
-		IViewSettingsStore? viewSettingsStore = null)
+		IViewSettingsStore? viewSettingsStore = null,
+		IThumbnailCache? thumbnailCache = null)
 	{
 		ArgumentNullException.ThrowIfNull(locationResolver);
 		this.locationResolver = locationResolver;
 		this.viewSettingsStore = viewSettingsStore;
+		this.thumbnailCache = thumbnailCache;
 		Items = Array.Empty<IStorableModel>();
 		ViewSettings = BrowseViewSettings.Default;
 		refreshPumpTask = RefreshPumpAsync(refreshLifetime.Token);
@@ -126,7 +144,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 				nextLocationContext = null;
 				nextContext = null;
 				committed = true;
-				WakeRefreshPumpIfRequested(generation);
+				SignalRefreshPump();
 
 				try
 				{
@@ -148,7 +166,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					{
 						Volatile.Write(ref preparingContext, null);
 						Interlocked.CompareExchange(
-							ref requestedRefreshGeneration,
+							ref requestedFullRefreshGeneration,
 							0,
 							nextContext.Generation);
 					}
@@ -203,22 +221,22 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 					.ConfigureAwait(false);
 				Interlocked.Exchange(ref refreshSignalPending, 0);
 
-				var generation = Volatile.Read(ref requestedRefreshGeneration);
 				var currentContext = Volatile.Read(ref activeContext);
-				if (generation is 0
-					|| currentContext is null
-					|| currentContext.Generation != generation
-					|| Interlocked.CompareExchange(
-						ref requestedRefreshGeneration,
-						0,
-						generation) != generation)
+				if (currentContext is null)
 				{
 					continue;
 				}
 
 				try
 				{
-					await RefreshCurrentAsync(generation, cancellationToken).ConfigureAwait(false);
+					if (await ProcessRequestedFullRefreshAsync(
+						currentContext,
+						cancellationToken).ConfigureAwait(false))
+					{
+						continue;
+					}
+
+					await ProcessChangesAsync(cancellationToken).ConfigureAwait(false);
 				}
 				catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 				{
@@ -233,6 +251,95 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{
 		}
+	}
+
+	private async ValueTask<bool> ProcessRequestedFullRefreshAsync(
+		BrowseContextState currentContext,
+		CancellationToken cancellationToken)
+	{
+		var generation = Volatile.Read(ref requestedFullRefreshGeneration);
+		if (generation is 0)
+		{
+			return false;
+		}
+
+		if (generation > currentContext.Generation)
+		{
+			return true;
+		}
+
+		if (generation < currentContext.Generation)
+		{
+			Interlocked.CompareExchange(
+				ref requestedFullRefreshGeneration,
+				0,
+				generation);
+			return false;
+		}
+
+		if (Interlocked.CompareExchange(
+			ref requestedFullRefreshGeneration,
+			0,
+			generation) != generation)
+		{
+			return false;
+		}
+
+		await RefreshCurrentAsync(generation, cancellationToken).ConfigureAwait(false);
+		return true;
+	}
+
+	private async ValueTask ProcessChangesAsync(CancellationToken cancellationToken)
+	{
+		while (TryReadNextChange(out var pendingChange))
+		{
+			var currentContext = Volatile.Read(ref activeContext);
+			if (currentContext is null)
+			{
+				deferredChanges.Enqueue(pendingChange);
+				return;
+			}
+
+			if (pendingChange.Generation < currentContext.Generation)
+			{
+				continue;
+			}
+
+			if (pendingChange.Generation > currentContext.Generation)
+			{
+				if (Volatile.Read(ref preparingContext)?.Generation == pendingChange.Generation)
+				{
+					deferredChanges.Enqueue(pendingChange);
+				}
+
+				continue;
+			}
+
+			if (Volatile.Read(ref requestedFullRefreshGeneration) == currentContext.Generation)
+			{
+				return;
+			}
+
+			var result = await ApplyChangeAsync(
+				pendingChange,
+				cancellationToken).ConfigureAwait(false);
+			if (result is IncrementalApplyResult.RequiresFullRefresh)
+			{
+				RequestFullRefresh(currentContext.Generation);
+				return;
+			}
+		}
+	}
+
+	private bool TryReadNextChange(out QueuedFolderChange pendingChange)
+	{
+		if (deferredChanges.Count is not 0)
+		{
+			pendingChange = deferredChanges.Dequeue();
+			return true;
+		}
+
+		return changeQueue.Reader.TryRead(out pendingChange);
 	}
 
 	private async ValueTask RefreshCurrentAsync(
@@ -259,16 +366,531 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		}
 	}
 
-	private void OnFolderChanged(BrowseContextState context)
+	private async ValueTask<IncrementalApplyResult> ApplyChangeAsync(
+		QueuedFolderChange pendingChange,
+		CancellationToken cancellationToken)
 	{
-		RequestRefresh(context);
+		var currentContext = Volatile.Read(ref activeContext);
+		if (currentContext is null
+			|| currentContext.Generation != pendingChange.Generation)
+		{
+			return IncrementalApplyResult.Stale;
+		}
+
+		try
+		{
+			if (pendingChange.Change.RequiresRefresh
+				|| pendingChange.Change.Kind is FolderChangeKind.DirectoryUpdated
+				|| currentContext.Context is not IBrowseLocationItemResolver resolver)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+
+			return pendingChange.Change.Kind switch
+			{
+				FolderChangeKind.Created => await ApplyCreatedAsync(
+					currentContext,
+					resolver,
+					pendingChange.Change,
+					cancellationToken).ConfigureAwait(false),
+				FolderChangeKind.Deleted => await ApplyDeletedAsync(
+					currentContext,
+					pendingChange.Change,
+					cancellationToken).ConfigureAwait(false),
+				FolderChangeKind.Renamed => await ApplyRenamedAsync(
+					currentContext,
+					resolver,
+					pendingChange.Change,
+					cancellationToken).ConfigureAwait(false),
+				FolderChangeKind.Updated => await ApplyUpdatedAsync(
+					currentContext,
+					resolver,
+					pendingChange.Change,
+					cancellationToken).ConfigureAwait(false),
+				_ => IncrementalApplyResult.RequiresFullRefresh,
+			};
+		}
+		catch (OperationCanceledException)
+		{
+			throw;
+		}
+		catch
+		{
+			return IncrementalApplyResult.RequiresFullRefresh;
+		}
+	}
+
+	private async ValueTask<IncrementalApplyResult> ApplyCreatedAsync(
+		BrowseContextState context,
+		IBrowseLocationItemResolver resolver,
+		FolderChange change,
+		CancellationToken cancellationToken)
+	{
+		if (!TryGetKey(change.CurrentItem, out var key))
+		{
+			return IncrementalApplyResult.RequiresFullRefresh;
+		}
+
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		ItemLookupResult lookup;
+		try
+		{
+			if (!IsActiveGeneration(context))
+			{
+				return IncrementalApplyResult.Stale;
+			}
+
+			lookup = FindItemIndex(Items, key, out _);
+			if (lookup is ItemLookupResult.Found)
+			{
+				return IncrementalApplyResult.Applied;
+			}
+
+			if (lookup is ItemLookupResult.Ambiguous)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+
+		var replacement = await resolver
+			.ResolveAsync(change.CurrentItem!, cancellationToken)
+			.ConfigureAwait(false);
+		var retained = false;
+
+		try
+		{
+			if (!HasKey(replacement, key))
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+
+			await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+			try
+			{
+				if (!IsActiveGeneration(context))
+				{
+					return IncrementalApplyResult.Stale;
+				}
+
+				lookup = FindItemIndex(Items, key, out _);
+				if (lookup is ItemLookupResult.Found)
+				{
+					return IncrementalApplyResult.Applied;
+				}
+
+				if (lookup is ItemLookupResult.Ambiguous)
+				{
+					return IncrementalApplyResult.RequiresFullRefresh;
+				}
+
+				var nextItems = Items.ToList();
+				nextItems.Add(replacement);
+				Items = nextItems.AsReadOnly();
+				retained = true;
+				OnStateChanged();
+				return IncrementalApplyResult.Applied;
+			}
+			finally
+			{
+				navigationLock.Release();
+			}
+		}
+		finally
+		{
+			if (!retained)
+			{
+				replacement.Dispose();
+			}
+		}
+	}
+
+	private async ValueTask<IncrementalApplyResult> ApplyDeletedAsync(
+		BrowseContextState context,
+		FolderChange change,
+		CancellationToken cancellationToken)
+	{
+		if (!TryGetKey(change.PreviousItem, out var key))
+		{
+			return IncrementalApplyResult.RequiresFullRefresh;
+		}
+
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!IsActiveGeneration(context))
+			{
+				return IncrementalApplyResult.Stale;
+			}
+
+			var lookup = FindItemIndex(Items, key, out _);
+			if (lookup is not ItemLookupResult.Found)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+
+		await InvalidateAsync([change.PreviousItem], cancellationToken).ConfigureAwait(false);
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!IsActiveGeneration(context))
+			{
+				return IncrementalApplyResult.Stale;
+			}
+
+			var lookup = FindItemIndex(Items, key, out var index);
+			if (lookup is not ItemLookupResult.Found)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+
+			var removed = Items[index];
+			var nextItems = Items.ToList();
+			nextItems.RemoveAt(index);
+			Items = nextItems.AsReadOnly();
+			try
+			{
+				OnStateChanged();
+			}
+			finally
+			{
+				removed.Dispose();
+			}
+
+			return IncrementalApplyResult.Applied;
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+	}
+
+	private async ValueTask<IncrementalApplyResult> ApplyRenamedAsync(
+		BrowseContextState context,
+		IBrowseLocationItemResolver resolver,
+		FolderChange change,
+		CancellationToken cancellationToken)
+	{
+		if (!TryGetKey(change.CurrentItem, out var currentKey))
+		{
+			return IncrementalApplyResult.RequiresFullRefresh;
+		}
+
+		var oldKey = change.PreviousItem is not null
+			&& TryGetKey(change.PreviousItem, out var previousKey)
+			? previousKey
+			: currentKey;
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!IsActiveGeneration(context))
+			{
+				return IncrementalApplyResult.Stale;
+			}
+
+			var lookup = FindItemIndex(Items, oldKey, out _);
+			if (lookup is not ItemLookupResult.Found
+				&& oldKey != currentKey)
+			{
+				lookup = FindItemIndex(Items, currentKey, out _);
+			}
+
+			if (lookup is not ItemLookupResult.Found)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+
+		var replacement = await resolver
+			.ResolveAsync(change.CurrentItem!, cancellationToken)
+			.ConfigureAwait(false);
+		var retained = false;
+		var sameInstance = false;
+
+		try
+		{
+			if (!HasKey(replacement, currentKey))
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+
+			await InvalidateAsync(
+				[change.PreviousItem, change.CurrentItem],
+				cancellationToken).ConfigureAwait(false);
+
+			await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+			try
+			{
+				if (!IsActiveGeneration(context))
+				{
+					return IncrementalApplyResult.Stale;
+				}
+
+				var lookup = FindItemIndex(Items, oldKey, out var index);
+				if (lookup is not ItemLookupResult.Found
+					&& oldKey != currentKey)
+				{
+					lookup = FindItemIndex(Items, currentKey, out index);
+				}
+
+				if (lookup is not ItemLookupResult.Found)
+				{
+					return IncrementalApplyResult.RequiresFullRefresh;
+				}
+
+				var previous = Items[index];
+				if (ReferenceEquals(previous, replacement))
+				{
+					sameInstance = true;
+					return IncrementalApplyResult.RequiresFullRefresh;
+				}
+
+				var nextItems = Items.ToList();
+				nextItems[index] = replacement;
+				Items = nextItems.AsReadOnly();
+				retained = true;
+				try
+				{
+					OnStateChanged();
+				}
+				finally
+				{
+					previous.Dispose();
+				}
+
+				return IncrementalApplyResult.Applied;
+			}
+			finally
+			{
+				navigationLock.Release();
+			}
+		}
+		finally
+		{
+			if (!retained && !sameInstance)
+			{
+				replacement.Dispose();
+			}
+		}
+	}
+
+	private async ValueTask<IncrementalApplyResult> ApplyUpdatedAsync(
+		BrowseContextState context,
+		IBrowseLocationItemResolver resolver,
+		FolderChange change,
+		CancellationToken cancellationToken)
+	{
+		if (!TryGetKey(change.CurrentItem, out var key))
+		{
+			return IncrementalApplyResult.RequiresFullRefresh;
+		}
+
+		await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+		try
+		{
+			if (!IsActiveGeneration(context))
+			{
+				return IncrementalApplyResult.Stale;
+			}
+
+			var lookup = FindItemIndex(Items, key, out _);
+			if (lookup is not ItemLookupResult.Found)
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+		}
+		finally
+		{
+			navigationLock.Release();
+		}
+
+		var replacement = await resolver
+			.ResolveAsync(change.CurrentItem!, cancellationToken)
+			.ConfigureAwait(false);
+		var retained = false;
+		var sameInstance = false;
+
+		try
+		{
+			if (!HasKey(replacement, key))
+			{
+				return IncrementalApplyResult.RequiresFullRefresh;
+			}
+
+			await InvalidateAsync([change.CurrentItem], cancellationToken).ConfigureAwait(false);
+			await navigationLock.WaitAsync(cancellationToken).ConfigureAwait(false);
+			try
+			{
+				if (!IsActiveGeneration(context))
+				{
+					return IncrementalApplyResult.Stale;
+				}
+
+				var lookup = FindItemIndex(Items, key, out var index);
+				if (lookup is not ItemLookupResult.Found)
+				{
+					return IncrementalApplyResult.RequiresFullRefresh;
+				}
+
+				var previous = Items[index];
+				if (ReferenceEquals(previous, replacement))
+				{
+					sameInstance = true;
+					return IncrementalApplyResult.RequiresFullRefresh;
+				}
+
+				var nextItems = Items.ToList();
+				nextItems[index] = replacement;
+				Items = nextItems.AsReadOnly();
+				retained = true;
+				try
+				{
+					OnStateChanged();
+				}
+				finally
+				{
+					previous.Dispose();
+				}
+
+				return IncrementalApplyResult.Applied;
+			}
+			finally
+			{
+				navigationLock.Release();
+			}
+		}
+		finally
+		{
+			if (!retained && !sameInstance)
+			{
+				replacement.Dispose();
+			}
+		}
+	}
+
+	private async ValueTask InvalidateAsync(
+		IEnumerable<StorableReference?> references,
+		CancellationToken cancellationToken)
+	{
+		if (thumbnailCache is null)
+		{
+			return;
+		}
+
+		var seen = new HashSet<StorableKey>();
+		foreach (var reference in references)
+		{
+			if (reference is null || !seen.Add(ToKey(reference)))
+			{
+				continue;
+			}
+
+			await thumbnailCache
+				.InvalidateAsync(reference, cancellationToken)
+				.ConfigureAwait(false);
+		}
+	}
+
+	private bool IsActiveGeneration(BrowseContextState context)
+	{
+		return !Volatile.Read(ref isDisposed)
+			&& ReferenceEquals(Volatile.Read(ref activeContext), context);
+	}
+
+	private static bool TryGetKey(
+		StorableReference? reference,
+		out StorableKey key)
+	{
+		if (reference is null)
+		{
+			key = default;
+			return false;
+		}
+
+		key = ToKey(reference);
+		return true;
+	}
+
+	private static StorableKey ToKey(StorableReference reference)
+	{
+		return new StorableKey(reference.SourceId, reference.ItemId);
+	}
+
+	private static bool HasKey(IStorableModel model, StorableKey key)
+	{
+		return ToKey(model.Reference) == key;
+	}
+
+	private static ItemLookupResult FindItemIndex(
+		IReadOnlyList<IStorableModel> items,
+		StorableKey key,
+		out int index)
+	{
+		index = -1;
+		for (var itemIndex = 0; itemIndex < items.Count; itemIndex++)
+		{
+			if (ToKey(items[itemIndex].Reference) != key)
+			{
+				continue;
+			}
+
+			if (index >= 0)
+			{
+				index = -1;
+				return ItemLookupResult.Ambiguous;
+			}
+
+			index = itemIndex;
+		}
+
+		return index >= 0
+			? ItemLookupResult.Found
+			: ItemLookupResult.Missing;
+	}
+
+	private bool EnqueueChange(
+		BrowseContextState context,
+		FolderChange change)
+	{
+		if (Volatile.Read(ref isDisposed) || !IsKnownContext(context))
+		{
+			return false;
+		}
+
+		var pendingChange = new QueuedFolderChange(context.Generation, change);
+		if (!changeQueue.Writer.TryWrite(pendingChange))
+		{
+			return RequestFullRefresh(context.Generation);
+		}
+
+		SignalRefreshPump();
+		return true;
+	}
+
+	private void OnFolderChanged(
+		BrowseContextState context,
+		FolderChange change)
+	{
+		EnqueueChange(context, change);
 	}
 
 	private void OnFolderChangeFaulted(
 		BrowseContextState context,
 		FolderChangeErrorEventArgs args)
 	{
-		if (!RequestRefresh(context))
+		if (!RequestFullRefresh(context.Generation))
 		{
 			return;
 		}
@@ -277,29 +899,31 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		OnStateChanged();
 	}
 
-	private bool RequestRefresh(BrowseContextState context)
+	private bool RequestFullRefresh(long generation)
 	{
-		if (Volatile.Read(ref isDisposed) || !IsKnownContext(context))
+		if (Volatile.Read(ref isDisposed))
+		{
+			return false;
+		}
+
+		var activeGeneration = Volatile.Read(ref activeContext)?.Generation;
+		var preparingGeneration = Volatile.Read(ref preparingContext)?.Generation;
+		if (activeGeneration != generation && preparingGeneration != generation)
 		{
 			return false;
 		}
 
 		while (true)
 		{
-			if (!IsKnownContext(context))
-			{
-				return false;
-			}
-
-			var requestedGeneration = Volatile.Read(ref requestedRefreshGeneration);
-			if (requestedGeneration >= context.Generation)
+			var requestedGeneration = Volatile.Read(ref requestedFullRefreshGeneration);
+			if (requestedGeneration >= generation)
 			{
 				break;
 			}
 
 			if (Interlocked.CompareExchange(
-				ref requestedRefreshGeneration,
-				context.Generation,
+				ref requestedFullRefreshGeneration,
+				generation,
 				requestedGeneration) == requestedGeneration)
 			{
 				break;
@@ -314,14 +938,6 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 	{
 		return ReferenceEquals(Volatile.Read(ref activeContext), context)
 			|| ReferenceEquals(Volatile.Read(ref preparingContext), context);
-	}
-
-	private void WakeRefreshPumpIfRequested(long generation)
-	{
-		if (Volatile.Read(ref requestedRefreshGeneration) == generation)
-		{
-			SignalRefreshPump();
-		}
 	}
 
 	private void SignalRefreshPump()
@@ -398,6 +1014,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 		try
 		{
 			await refreshPumpTask.ConfigureAwait(false);
+			changeQueue.Writer.TryComplete();
 			await navigationLock.WaitAsync().ConfigureAwait(false);
 
 			try
@@ -433,6 +1050,24 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			refreshLifetime.Dispose();
 			GC.SuppressFinalize(this);
 		}
+	}
+
+	private readonly record struct QueuedFolderChange(
+		long Generation,
+		FolderChange Change);
+
+	private enum IncrementalApplyResult
+	{
+		Applied,
+		Stale,
+		RequiresFullRefresh,
+	}
+
+	private enum ItemLookupResult
+	{
+		Missing,
+		Found,
+		Ambiguous,
 	}
 
 	private sealed class BrowseContextState : IAsyncDisposable
@@ -501,7 +1136,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel
 			object? sender,
 			FolderChangeEventArgs args)
 		{
-			owner.OnFolderChanged(this);
+			owner.OnFolderChanged(this, args.Change);
 		}
 
 		private void OnFaulted(

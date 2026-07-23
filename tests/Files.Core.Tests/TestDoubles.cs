@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Files.Core.Browsing;
 using Files.Core.Capabilities;
 using Files.Core.Capabilities.Changes;
+using Files.Core.Capabilities.Thumbnails;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.ViewSettings;
@@ -65,7 +66,13 @@ internal sealed class DisposableStorable : TestStorable, IDisposable
 
 	public bool IsDisposed { get; private set; }
 
-	public void Dispose() => IsDisposed = true;
+	public int DisposeCount { get; private set; }
+
+	public void Dispose()
+	{
+		DisposeCount++;
+		IsDisposed = true;
+	}
 }
 
 internal sealed class TestCapability : IDisposable
@@ -152,6 +159,8 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 
 	public Action<TestBrowseLocationContext>? ContextOpened { get; set; }
 
+	public Func<StorableReference, CancellationToken, ValueTask<IStorableModel>>? ItemResolver { get; set; }
+
 	public ValueTask<IBrowseLocationContext> OpenAsync(
 		BrowseLocation location,
 		CancellationToken cancellationToken = default)
@@ -167,14 +176,17 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 			BlockEnumeration,
 			LocationModelFactory?.Invoke(location),
 			EnumerationGuard,
-			EnumerationAction);
+			EnumerationAction,
+			ItemResolver);
 		OpenedContexts.Add(context);
 		ContextOpened?.Invoke(context);
 		return ValueTask.FromResult<IBrowseLocationContext>(context);
 	}
 }
 
-internal sealed class TestBrowseLocationContext : IBrowseLocationContext
+internal sealed class TestBrowseLocationContext :
+	IBrowseLocationContext,
+	IBrowseLocationItemResolver
 {
 	private readonly IReadOnlyList<IStorableModel> items;
 	private readonly Exception? exception;
@@ -183,6 +195,7 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 	private readonly IStorableModel? locationModel;
 	private readonly Func<bool>? enumerationGuard;
 	private readonly Action? enumerationAction;
+	private readonly Func<StorableReference, CancellationToken, ValueTask<IStorableModel>>? itemResolver;
 	private int isDisposed;
 
 	public TestBrowseLocationContext(
@@ -193,7 +206,8 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 		bool blockEnumeration,
 		IStorableModel? locationModel,
 		Func<bool>? enumerationGuard,
-		Action? enumerationAction)
+		Action? enumerationAction,
+		Func<StorableReference, CancellationToken, ValueTask<IStorableModel>>? itemResolver)
 	{
 		Location = location;
 		this.items = items;
@@ -203,6 +217,7 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 		this.locationModel = locationModel;
 		this.enumerationGuard = enumerationGuard;
 		this.enumerationAction = enumerationAction;
+		this.itemResolver = itemResolver;
 	}
 
 	public BrowseLocation Location { get; }
@@ -210,6 +225,16 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 	public IStorableModel? LocationModel => locationModel;
 
 	public bool IsDisposed => Volatile.Read(ref isDisposed) != 0;
+
+	public ValueTask<IStorableModel> ResolveAsync(
+		StorableReference reference,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(reference);
+		return itemResolver is null
+			? throw new NotSupportedException()
+			: itemResolver(reference, cancellationToken);
+	}
 
 	public async IAsyncEnumerable<IStorableModel> GetItemsAsync(
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -277,14 +302,17 @@ internal sealed class TestFolderChangeSource : IFolderChangeSource
 
 	public void RaiseChange()
 	{
-		Changed?.Invoke(
-			this,
-			new FolderChangeEventArgs(
-				new FolderChange(
-					FolderChangeKind.Updated,
-					null,
-					null,
-					RequiresRefresh: false)));
+		RaiseChange(new FolderChange(
+			FolderChangeKind.Updated,
+			null,
+			null,
+			RequiresRefresh: false));
+	}
+
+	public void RaiseChange(FolderChange change)
+	{
+		ArgumentNullException.ThrowIfNull(change);
+		Changed?.Invoke(this, new FolderChangeEventArgs(change));
 	}
 
 	public void RaiseFault(Exception error)
@@ -303,6 +331,30 @@ internal sealed class TestFolderChangeSource : IFolderChangeSource
 	public ValueTask DisposeAsync()
 	{
 		Dispose();
+		return ValueTask.CompletedTask;
+	}
+}
+
+internal sealed class TestThumbnailCache : IThumbnailCache
+{
+	public IList<StorableReference> InvalidatedReferences { get; } = [];
+
+	public ValueTask<ThumbnailCacheEntry?> GetAsync(
+		ThumbnailCacheKey key,
+		CancellationToken cancellationToken = default)
+		=> ValueTask.FromResult<ThumbnailCacheEntry?>(null);
+
+	public ValueTask SetAsync(
+		ThumbnailCacheKey key,
+		ThumbnailCacheEntry entry,
+		CancellationToken cancellationToken = default)
+		=> ValueTask.CompletedTask;
+
+	public ValueTask InvalidateAsync(
+		StorableReference reference,
+		CancellationToken cancellationToken = default)
+	{
+		InvalidatedReferences.Add(reference);
 		return ValueTask.CompletedTask;
 	}
 }
