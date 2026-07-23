@@ -9,9 +9,12 @@ namespace Files.Core.Storage.Windows;
 
 internal static unsafe class ShellItemHelpers
 {
-	public static WindowsStorableSnapshot CreateSnapshot(IShellItem shellItem)
+	public static WindowsStorableSnapshot CreateSnapshot(
+		IShellItem shellItem,
+		IWindowsItemIdentityProvider identityProvider)
 	{
 		ArgumentNullException.ThrowIfNull(shellItem);
+		ArgumentNullException.ThrowIfNull(identityProvider);
 
 		var result = shellItem.GetAttributes(
 			SFGAO_FLAGS.SFGAO_FOLDER | SFGAO_FLAGS.SFGAO_FILESYSTEM,
@@ -27,8 +30,13 @@ internal static unsafe class ShellItemHelpers
 		var fileSystemPath = (attributes & SFGAO_FLAGS.SFGAO_FILESYSTEM) != 0
 			? TryGetDisplayName(shellItem, SIGDN.SIGDN_FILESYSPATH)
 			: null;
+		var itemId = identityProvider.GetItemId(
+			shellItem,
+			parsingName,
+			fileSystemPath);
 
 		return new WindowsStorableSnapshot(
+			itemId,
 			parsingName,
 			name,
 			fileSystemPath,

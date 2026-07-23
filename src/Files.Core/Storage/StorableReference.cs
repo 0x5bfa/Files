@@ -4,7 +4,7 @@
 namespace Files.Core.Storage;
 
 /// <summary>
-/// Persistable identity for an item within a configured storage source.
+/// Provider identity and an optional locator for an item within a configured storage source.
 /// </summary>
 public sealed record StorableReference
 {

@@ -71,6 +71,8 @@ WriteFile
 WriteFileEx
 GetFileTime
 SetFileTime
+GetFileInformationByHandle
+BY_HANDLE_FILE_INFORMATION
 GetFileInformationByHandleEx
 FILE_ID_BOTH_DIR_INFO
 FindFirstStreamW

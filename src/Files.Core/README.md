@@ -19,7 +19,7 @@ The capability prototype includes:
 - decorators, including a bounded in-memory thumbnail cache;
 - a batch-oriented `IPropertyProvider` adapter for item-bound `IPropertySource` access.
 
-The Windows Shell provider supports file-system and virtual item resolution, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, requested typed property extraction, and PNG thumbnail extraction. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
+The Windows Shell provider supports file-system and virtual item resolution, centralized best-effort item identity, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, requested typed property extraction, and PNG thumbnail extraction. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
 
 Architecture documents are available in [`docs/architecture`](../../docs/architecture/README.md).
 

@@ -11,19 +11,23 @@ namespace Files.Core.Storage.Windows;
 internal sealed class ShellFolderEnumerator : IAsyncDisposable
 {
 	private readonly IWindowsShellScheduler scheduler;
+	private readonly IWindowsItemIdentityProvider identityProvider;
 	private IEnumShellItems? enumerator;
 	private bool isCompleted;
 	private int isDisposed;
 
 	public ShellFolderEnumerator(
 		IWindowsShellScheduler scheduler,
-		IEnumShellItems enumerator)
+		IEnumShellItems enumerator,
+		IWindowsItemIdentityProvider identityProvider)
 	{
 		ArgumentNullException.ThrowIfNull(scheduler);
 		ArgumentNullException.ThrowIfNull(enumerator);
+		ArgumentNullException.ThrowIfNull(identityProvider);
 
 		this.scheduler = scheduler;
 		this.enumerator = enumerator;
+		this.identityProvider = identityProvider;
 	}
 
 	public unsafe Task<IReadOnlyList<WindowsStorableSnapshot>> ReadNextAsync(
@@ -59,7 +63,7 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 					}
 
 					result.ThrowOnFailure();
-					snapshots.Add(ShellItemHelpers.CreateSnapshot(children[0]));
+					snapshots.Add(ShellItemHelpers.CreateSnapshot(children[0], identityProvider));
 				}
 
 				return snapshots;

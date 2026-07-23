@@ -21,7 +21,7 @@ public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStor
 
 		this.snapshot = snapshot;
 		Factory = factory;
-		Id = snapshot.ParsingName;
+		Id = snapshot.ItemId;
 		Name = snapshot.Name;
 		Address = new StorageAddress(WindowsStorageSource.ShellAddressScheme, snapshot.ParsingName);
 	}

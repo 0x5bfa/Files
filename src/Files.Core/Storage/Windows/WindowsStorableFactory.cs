@@ -15,11 +15,15 @@ namespace Files.Core.Storage.Windows;
 internal sealed unsafe class WindowsStorableFactory
 {
 	private readonly IWindowsShellScheduler scheduler;
+	private readonly IWindowsItemIdentityProvider identityProvider;
 
-	public WindowsStorableFactory(IWindowsShellScheduler scheduler)
+	public WindowsStorableFactory(
+		IWindowsShellScheduler scheduler,
+		IWindowsItemIdentityProvider? identityProvider = null)
 	{
 		ArgumentNullException.ThrowIfNull(scheduler);
 		this.scheduler = scheduler;
+		this.identityProvider = identityProvider ?? new WindowsItemIdentityProvider();
 	}
 
 	public Task<WindowsStorable> CreateAsync(
@@ -36,7 +40,7 @@ internal sealed unsafe class WindowsStorableFactory
 					null,
 					out IShellItem shellItem);
 				result.ThrowOnFailure();
-				return Create(ShellItemHelpers.CreateSnapshot(shellItem));
+				return Create(ShellItemHelpers.CreateSnapshot(shellItem, identityProvider));
 			},
 			cancellationToken);
 	}
@@ -54,7 +58,7 @@ internal sealed unsafe class WindowsStorableFactory
 					null,
 					out IShellItem shellItem);
 				result.ThrowOnFailure();
-				return Create(ShellItemHelpers.CreateSnapshot(shellItem));
+				return Create(ShellItemHelpers.CreateSnapshot(shellItem, identityProvider));
 			},
 			cancellationToken);
 	}
@@ -78,9 +82,20 @@ internal sealed unsafe class WindowsStorableFactory
 
 				return result.Failed
 					? null
-					: Create(ShellItemHelpers.CreateSnapshot(shellItem));
+					: Create(ShellItemHelpers.CreateSnapshot(shellItem, identityProvider));
 			},
 			cancellationToken);
+	}
+
+	public Task<WindowsStorable?> TryCreateFromItemIdAsync(
+		string itemId,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
+
+		return identityProvider.TryGetParsingName(itemId, out var parsingName)
+			? TryCreateAsync(parsingName, cancellationToken)
+			: Task.FromResult<WindowsStorable?>(null);
 	}
 
 	public Task<WindowsFolder?> GetParentAsync(
@@ -105,7 +120,7 @@ internal sealed unsafe class WindowsStorableFactory
 					return null;
 				}
 
-				return Create(ShellItemHelpers.CreateSnapshot(parent)) as WindowsFolder;
+				return Create(ShellItemHelpers.CreateSnapshot(parent, identityProvider)) as WindowsFolder;
 			},
 			cancellationToken);
 	}
@@ -136,7 +151,10 @@ internal sealed unsafe class WindowsStorableFactory
 					throw new InvalidOperationException("The Shell folder returned no item enumerator.");
 				}
 
-				return new ShellFolderEnumerator(scheduler, enumerator);
+				return new ShellFolderEnumerator(
+					scheduler,
+					enumerator,
+					identityProvider);
 			},
 			cancellationToken);
 	}

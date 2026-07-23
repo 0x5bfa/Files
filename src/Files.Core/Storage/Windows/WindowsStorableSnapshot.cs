@@ -7,6 +7,7 @@ namespace Files.Core.Storage.Windows;
 /// Contains apartment-neutral identity and display data copied from a Shell item.
 /// </summary>
 internal sealed record WindowsStorableSnapshot(
+	string ItemId,
 	string ParsingName,
 	string Name,
 	string? FileSystemPath,

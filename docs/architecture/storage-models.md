@@ -50,6 +50,8 @@ Three values have different jobs:
 
 `StorableReference` combines the source ID and item ID. `LastKnownAddress` is an optional recovery hint, not the primary identity.
 
+Windows filesystem items use an opaque identity derived from the volume serial and file index when available. Their Shell parsing name remains a separate locator; virtual or inaccessible items use a documented address fallback. Reverse lookup of opaque file IDs is not implemented yet, so `LastKnownAddress` remains required for recovery.
+
 ```mermaid
 flowchart LR
     SourceId["StorageSourceId"]

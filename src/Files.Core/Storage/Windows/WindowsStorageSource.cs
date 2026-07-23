@@ -116,7 +116,7 @@ public sealed class WindowsStorageSource : IStorageSource
 		}
 
 		var storable = await storableFactory
-			.TryCreateAsync(reference.ItemId, cancellationToken)
+			.TryCreateFromItemIdAsync(reference.ItemId, cancellationToken)
 			.ConfigureAwait(false);
 
 		if (storable is not null)

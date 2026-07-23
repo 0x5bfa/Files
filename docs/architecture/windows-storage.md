@@ -11,7 +11,10 @@ classDiagram
         +Scheduler
     }
     class IWindowsShellScheduler
-    class WindowsStorableSnapshot
+    class WindowsStorableSnapshot {
+        +ItemId
+        +ParsingName
+    }
     class IWindowsStorable {
         +ParsingName
         +FileSystemPath
@@ -50,12 +53,15 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 
 `WindowsStorableSnapshot` copies these values while still on the ordered Shell STA:
 
-- `ParsingName` uses `SIGDN_DESKTOPABSOLUTEPARSING` and becomes `IStorable.Id`. It works for file-system and virtual Shell items.
+- `ItemId` is created by one `IWindowsItemIdentityProvider`. File-system items use the volume serial and file index; virtual or inaccessible items use an explicit `address:` fallback.
+- `ParsingName` uses `SIGDN_DESKTOPABSOLUTEPARSING` as the Shell locator and is kept separate from `IStorable.Id`.
 - `Name` uses a UI-friendly Shell display name with a normal-display fallback.
 - `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
 - `IsFolder` selects `WindowsFolder` or `WindowsFile` without retaining `IShellItem`.
 
-Using `SIGDN_FILESYSPATH` as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
+Windows file IDs are stable across rename, but reverse lookup from a file ID is not implemented yet. Keep `LastKnownAddress` with references so the source can recover through the current address when identity lookup cannot resolve an opaque ID.
+
+Using a filesystem path or parsing name as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
 
 ## Snapshot boundary
 
@@ -152,7 +158,7 @@ Implemented:
 
 - Parsing file-system and virtual Shell items.
 - Resolving known folders, addresses, and persisted references.
-- Stable Shell parsing-name identity.
+- Centralized filesystem identity from volume serial and file index, with an explicit address fallback for items that cannot expose a stable filesystem ID.
 - Parent lookup.
 - Streaming child enumeration in bounded batches.
 - File-system streams and apartment-safe virtual read streams.
