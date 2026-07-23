@@ -175,6 +175,7 @@ The provider filters absolute PIDLs for non-recursive folder subscriptions using
 sequenceDiagram
     participant Session as BrowseSession
     participant Source as WindowsStorageSource
+    participant Changes as IFolderChangeSource
     participant STA as Ordered Shell STA
     participant Shell as Windows Shell
     participant Enum as ShellFolderEnumerator
@@ -186,6 +187,7 @@ sequenceDiagram
     Shell-->>STA: IShellItem
     STA-->>Source: managed folder snapshot
     Source-->>Session: FolderBrowseLocationContext
+    Session->>Changes: subscribe Changed/Faulted and StartAsync
     Session->>STA: create enumerator
     STA->>Shell: BHID_EnumItems
     Shell-->>STA: IEnumShellItems
@@ -196,10 +198,12 @@ sequenceDiagram
         STA-->>Enum: managed descriptors
         Enum-->>Session: Windows child models
     end
+    Changes-->>Session: coalesced refresh request
+    Session->>Source: OpenAsync(FolderLocation) again
     Session->>Source: DisposeAsync() on replacement or close
 ```
 
-Enumeration does not buffer the entire folder. A bounded batch amortizes scheduler transitions while preserving streaming and cancellation between batches.
+The session starts the optional watcher before enumeration. Notifications received during enumeration become one refresh request after the new context is committed. Enumeration does not buffer the entire folder. A bounded batch amortizes scheduler transitions while preserving streaming and cancellation between batches.
 
 ## File streams
 

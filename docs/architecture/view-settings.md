@@ -59,6 +59,8 @@ If no store is supplied, the session keeps an in-memory value per `BrowseLocatio
 
 The session replaces the active context and item list only after the new context has finished loading. A failed or cancelled navigation disposes the new context and partial items while preserving the current context and items. Replacing or disposing the session disposes both the item models and the context that owns the location model.
 
+When the active context exposes `IFolderChangeSource`, the session subscribes to `Changed` and `Faulted` before enumerating items. Synchronous handlers only signal a capacity-one refresh pump; they never navigate directly. The pump serializes full context replacement, coalesces bursts, and ignores notifications from older context generations. A failed refresh leaves the displayed context and items in place while setting `Error`.
+
 ## Why this is not `FolderModel.Get<IViewSettings>()`
 
 - Home, search, and tag pages have view settings but are not folders.

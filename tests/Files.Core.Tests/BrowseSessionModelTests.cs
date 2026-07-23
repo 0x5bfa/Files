@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using Files.Core.Browsing;
+using Files.Core.Capabilities.Changes;
+using Files.Core.Models;
 using Files.Core.ViewSettings;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -104,6 +106,162 @@ public sealed class BrowseSessionModelTests
 		Assert.IsTrue(context.IsDisposed);
 		Assert.IsEmpty(session.Items);
 		Assert.IsNull(session.Context);
+	}
+
+	[TestMethod]
+	public async Task StartsWatcherBeforeInitialEnumeration()
+	{
+		var factory = new TestModelFactory();
+		var changeSource = new TestFolderChangeSource();
+		var locationModel = factory.CreateModel("folder", "Folder", out _, changeSource);
+		var resolver = new TestBrowseLocationResolver([])
+		{
+			LocationModelFactory = _ => locationModel,
+			EnumerationGuard = () => changeSource.IsStarted,
+		};
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
+
+		Assert.AreEqual(1, changeSource.StartCount);
+	}
+
+	[TestMethod]
+	public async Task NotificationDuringEnumerationTriggersRefreshAfterActivation()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstModel = factory.CreateModel("first", "First", out _, firstSource);
+		var secondModel = factory.CreateModel("second", "Second", out _, secondSource);
+		var locationModels = new Queue<IStorableModel>([firstModel, secondModel]);
+		var refreshed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var resolver = new TestBrowseLocationResolver([])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+		};
+		using var session = new BrowseSessionModel(resolver);
+		session.StateChanged += (_, _) =>
+		{
+			if (resolver.OpenedContexts.Count is 2
+				&& !session.IsLoading
+				&& ReferenceEquals(session.Context, resolver.OpenedContexts[1]))
+			{
+				refreshed.TrySetResult(true);
+			}
+		};
+		resolver.EnumerationAction = firstSource.RaiseChange;
+
+		await session.NavigateAsync(new FolderLocation(firstModel.Reference));
+		await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+		Assert.AreEqual(2, resolver.OpenedContexts.Count);
+		Assert.IsTrue(resolver.OpenedContexts[0].IsDisposed);
+		Assert.AreEqual(1, secondSource.StartCount);
+	}
+
+	[TestMethod]
+	public async Task NotificationBurstIsCoalescedIntoOneRefresh()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstModel = factory.CreateModel("first", "First", out _, firstSource);
+		var secondModel = factory.CreateModel("second", "Second", out _, secondSource);
+		var locationModels = new Queue<IStorableModel>([firstModel, secondModel]);
+		var refreshed = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var resolver = new TestBrowseLocationResolver([])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+		};
+		using var session = new BrowseSessionModel(resolver);
+		session.StateChanged += (_, _) =>
+		{
+			if (resolver.OpenedContexts.Count is 2
+				&& !session.IsLoading
+				&& ReferenceEquals(session.Context, resolver.OpenedContexts[1]))
+			{
+				refreshed.TrySetResult(true);
+			}
+		};
+
+		await session.NavigateAsync(new FolderLocation(firstModel.Reference));
+		for (var index = 0; index < 100; index++)
+		{
+			firstSource.RaiseChange();
+		}
+
+		await refreshed.Task.WaitAsync(TimeSpan.FromSeconds(5));
+		await Task.Delay(100);
+
+		Assert.AreEqual(2, resolver.OpenedContexts.Count);
+		Assert.AreEqual(1, secondSource.StartCount);
+	}
+
+	[TestMethod]
+	public async Task NotificationsFromPreviousContextAreIgnoredAfterNavigation()
+	{
+		var factory = new TestModelFactory();
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstModel = factory.CreateModel("first", "First", out _, firstSource);
+		var secondModel = factory.CreateModel("second", "Second", out _, secondSource);
+		var locationModels = new Queue<IStorableModel>([firstModel, secondModel]);
+		var resolver = new TestBrowseLocationResolver([])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+		};
+		using var session = new BrowseSessionModel(resolver);
+
+		await session.NavigateAsync(new FolderLocation(firstModel.Reference));
+		await session.NavigateAsync(new FolderLocation(secondModel.Reference));
+		firstSource.RaiseChange();
+		await Task.Delay(100);
+
+		Assert.AreEqual(2, resolver.OpenedContexts.Count);
+		Assert.IsTrue(firstSource.IsDisposed);
+		Assert.IsFalse(secondSource.IsDisposed);
+	}
+
+	[TestMethod]
+	public async Task FailedRefreshPreservesCurrentItemsAndContext()
+	{
+		var factory = new TestModelFactory();
+		var currentItem = factory.CreateModel("item", "Item", out var currentCore);
+		var partialItem = factory.CreateModel("partial", "Partial", out var partialCore);
+		var firstSource = new TestFolderChangeSource();
+		var secondSource = new TestFolderChangeSource();
+		var firstModel = factory.CreateModel("first", "First", out _, firstSource);
+		var secondModel = factory.CreateModel("second", "Second", out _, secondSource);
+		var locationModels = new Queue<IStorableModel>([firstModel, secondModel]);
+		var errorObserved = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
+		var resolver = new TestBrowseLocationResolver([currentItem])
+		{
+			LocationModelFactory = _ => locationModels.Dequeue(),
+		};
+		using var session = new BrowseSessionModel(resolver);
+		session.StateChanged += (_, _) =>
+		{
+			if (session.Error is not null && !session.IsLoading)
+			{
+				errorObserved.TrySetResult(true);
+			}
+		};
+
+		await session.NavigateAsync(new FolderLocation(firstModel.Reference));
+		resolver.Items.Clear();
+		resolver.Items.Add(partialItem);
+		resolver.Exception = new InvalidOperationException("refresh failed");
+		firstSource.RaiseChange();
+
+		await errorObserved.Task.WaitAsync(TimeSpan.FromSeconds(5));
+
+		Assert.AreSame(currentItem, session.Items.Single());
+		Assert.IsFalse(currentCore.IsDisposed);
+		Assert.IsTrue(partialCore.IsDisposed);
+		Assert.AreSame(resolver.OpenedContexts[0], session.Context);
+		Assert.IsTrue(resolver.OpenedContexts[1].IsDisposed);
+		Assert.IsNotNull(session.Error);
 	}
 
 	[TestMethod]

@@ -3,6 +3,8 @@
 
 using System.Runtime.CompilerServices;
 using Files.Core.Browsing;
+using Files.Core.Capabilities;
+using Files.Core.Capabilities.Changes;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.ViewSettings;
@@ -98,7 +100,11 @@ internal sealed class TestModelFactory
 
 	public TestStorageSource Source => source;
 
-	public StorableModel CreateModel(string id, string name, out DisposableStorable coreModel)
+	public StorableModel CreateModel(
+		string id,
+		string name,
+		out DisposableStorable coreModel,
+		IFolderChangeSource? changeSource = null)
 	{
 		coreModel = new DisposableStorable(id, name);
 		var reference = new StorableReference(
@@ -106,10 +112,17 @@ internal sealed class TestModelFactory
 			coreModel.Id,
 			new StorageAddress("test", coreModel.Id));
 		var context = new Files.Core.Capabilities.CapabilityContext(source, coreModel, reference);
+		var pipeline = changeSource is null
+			? CapabilityPipeline.Empty
+			: new CapabilityPipelineBuilder()
+				.AddContributor<IFolderChangeSource>(
+					new DelegateCapabilityContributor<IFolderChangeSource>(_ => changeSource))
+				.Build();
+
 		return new StorableModel(
 			coreModel,
 			reference,
-			Files.Core.Capabilities.CapabilityPipeline.Empty.CreateSet(context));
+			pipeline.CreateSet(context));
 	}
 }
 
@@ -131,6 +144,14 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 
 	public bool BlockEnumeration { get; set; }
 
+	public Func<BrowseLocation, IStorableModel?>? LocationModelFactory { get; set; }
+
+	public Func<bool>? EnumerationGuard { get; set; }
+
+	public Action? EnumerationAction { get; set; }
+
+	public Action<TestBrowseLocationContext>? ContextOpened { get; set; }
+
 	public ValueTask<IBrowseLocationContext> OpenAsync(
 		BrowseLocation location,
 		CancellationToken cancellationToken = default)
@@ -143,8 +164,12 @@ internal sealed class TestBrowseLocationResolver : IBrowseLocationResolver
 			Items.ToArray(),
 			Exception,
 			EnumerationStarted,
-			BlockEnumeration);
+			BlockEnumeration,
+			LocationModelFactory?.Invoke(location),
+			EnumerationGuard,
+			EnumerationAction);
 		OpenedContexts.Add(context);
+		ContextOpened?.Invoke(context);
 		return ValueTask.FromResult<IBrowseLocationContext>(context);
 	}
 }
@@ -155,6 +180,9 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 	private readonly Exception? exception;
 	private readonly TaskCompletionSource<bool>? enumerationStarted;
 	private readonly bool blockEnumeration;
+	private readonly IStorableModel? locationModel;
+	private readonly Func<bool>? enumerationGuard;
+	private readonly Action? enumerationAction;
 	private int isDisposed;
 
 	public TestBrowseLocationContext(
@@ -162,18 +190,24 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 		IReadOnlyList<IStorableModel> items,
 		Exception? exception,
 		TaskCompletionSource<bool>? enumerationStarted,
-		bool blockEnumeration)
+		bool blockEnumeration,
+		IStorableModel? locationModel,
+		Func<bool>? enumerationGuard,
+		Action? enumerationAction)
 	{
 		Location = location;
 		this.items = items;
 		this.exception = exception;
 		this.enumerationStarted = enumerationStarted;
 		this.blockEnumeration = blockEnumeration;
+		this.locationModel = locationModel;
+		this.enumerationGuard = enumerationGuard;
+		this.enumerationAction = enumerationAction;
 	}
 
 	public BrowseLocation Location { get; }
 
-	public IStorableModel? LocationModel => null;
+	public IStorableModel? LocationModel => locationModel;
 
 	public bool IsDisposed => Volatile.Read(ref isDisposed) != 0;
 
@@ -182,6 +216,12 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 	{
 		ObjectDisposedException.ThrowIf(IsDisposed, this);
 		enumerationStarted?.TrySetResult(true);
+		if (enumerationGuard is not null && !enumerationGuard())
+		{
+			throw new InvalidOperationException("The enumeration started before the watcher.");
+		}
+
+		enumerationAction?.Invoke();
 
 		if (blockEnumeration)
 		{
@@ -203,7 +243,66 @@ internal sealed class TestBrowseLocationContext : IBrowseLocationContext
 
 	public ValueTask DisposeAsync()
 	{
+		if (Interlocked.Exchange(ref isDisposed, 1) == 0)
+		{
+			locationModel?.Dispose();
+		}
+
+		return ValueTask.CompletedTask;
+	}
+}
+
+internal sealed class TestFolderChangeSource : IFolderChangeSource
+{
+	private int isDisposed;
+
+	public event EventHandler<FolderChangeEventArgs>? Changed;
+
+	public event EventHandler<FolderChangeErrorEventArgs>? Faulted;
+
+	public bool IsStarted { get; private set; }
+
+	public bool IsDisposed => Volatile.Read(ref isDisposed) != 0;
+
+	public int StartCount { get; private set; }
+
+	public ValueTask StartAsync(CancellationToken cancellationToken = default)
+	{
+		ObjectDisposedException.ThrowIf(IsDisposed, this);
+		cancellationToken.ThrowIfCancellationRequested();
+		IsStarted = true;
+		StartCount++;
+		return ValueTask.CompletedTask;
+	}
+
+	public void RaiseChange()
+	{
+		Changed?.Invoke(
+			this,
+			new FolderChangeEventArgs(
+				new FolderChange(
+					FolderChangeKind.Updated,
+					null,
+					null,
+					RequiresRefresh: false)));
+	}
+
+	public void RaiseFault(Exception error)
+	{
+		Faulted?.Invoke(this, new FolderChangeErrorEventArgs(error));
+	}
+
+	public void Dispose()
+	{
 		Interlocked.Exchange(ref isDisposed, 1);
+		IsStarted = false;
+		Changed = null;
+		Faulted = null;
+	}
+
+	public ValueTask DisposeAsync()
+	{
+		Dispose();
 		return ValueTask.CompletedTask;
 	}
 }
