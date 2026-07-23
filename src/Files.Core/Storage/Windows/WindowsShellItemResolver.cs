@@ -111,6 +111,28 @@ internal sealed unsafe class WindowsShellItemResolver
 			cancellationToken);
 	}
 
+	public Task<T> InvokeOperationAsync<T>(
+		string parsingName,
+		Func<IShellItem, T> action,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(parsingName);
+		ArgumentNullException.ThrowIfNull(action);
+
+		return scheduler.InvokeOperationAsync(
+			() =>
+			{
+				var result = PInvoke.SHCreateItemFromParsingName(
+					parsingName,
+					null,
+					out IShellItem shellItem);
+
+				result.ThrowOnFailure();
+				return action(shellItem);
+			},
+			cancellationToken);
+	}
+
 	public Task<T> InvokeAsync<T>(
 		ReadOnlyMemory<byte> absolutePidl,
 		Func<IShellItem, T> action,
