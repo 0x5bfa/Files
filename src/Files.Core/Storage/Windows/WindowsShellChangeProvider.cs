@@ -34,6 +34,8 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 		| SHCNE_ID.SHCNE_UPDATEITEM
 		| SHCNE_ID.SHCNE_UPDATEDIR;
 
+	private const int SubscriptionCapacity = 256;
+
 	private readonly IWindowsShellScheduler scheduler;
 	private readonly string windowClassName = $"{WindowClassPrefix}_{Guid.NewGuid():N}";
 	private readonly List<Registration> registrations = [];
@@ -78,18 +80,35 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 					})
 				.ConfigureAwait(false);
 		}
+		catch (Exception error)
+		{
+			foreach (var registration in registrations)
+			{
+				foreach (var subscription in registration.Subscriptions)
+				{
+					subscription.Changes.Writer.TryComplete(error);
+				}
+			}
+
+			throw;
+		}
 		finally
 		{
 			foreach (var registration in registrations)
 			{
-				registration.Changes.Writer.TryComplete();
+				foreach (var subscription in registration.Subscriptions)
+				{
+					subscription.Changes.Writer.TryComplete();
+				}
 			}
 		}
 	}
 
-	private void Unsubscribe(Registration registration)
+	private async Task UnsubscribeAsync(
+		Registration registration,
+		WindowsShellChangeSubscription subscription)
 	{
-		registration.Changes.Writer.TryComplete();
+		subscription.Changes.Writer.TryComplete();
 
 		if (Volatile.Read(ref isDisposed) != 0)
 		{
@@ -98,14 +117,13 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 
 		try
 		{
-			var task = scheduler.InvokeAsync(
+			await scheduler.InvokeAsync(
 				() =>
 				{
-					RemoveCore(registration);
+					RemoveCore(registration, subscription);
 					return true;
-				});
-
-			_ = ObserveUnsubscribeAsync(task);
+				})
+				.ConfigureAwait(false);
 		}
 		catch (ObjectDisposedException)
 		{
@@ -124,9 +142,15 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 				"The folder does not have an absolute PIDL.");
 		}
 
+		var folderPidl = folderLocator.AbsolutePidl.ToArray();
+		var existingRegistration = FindRegistration(folderPidl, recursive);
+		if (existingRegistration is not null)
+		{
+			return existingRegistration.CreateSubscription(this);
+		}
+
 		CreateNotificationWindow();
 
-		var folderPidl = folderLocator.AbsolutePidl.ToArray();
 		var nativePidl = CopyRegistrationPidl(folderPidl);
 		var entry = new SHChangeNotifyEntry
 		{
@@ -162,7 +186,25 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 			registrationId,
 			recursive);
 		registrations.Add(registration);
-		return new WindowsShellChangeSubscription(this, registration);
+		return registration.CreateSubscription(this);
+	}
+
+	private Registration? FindRegistration(
+		ReadOnlyMemory<byte> folderPidl,
+		bool recursive)
+	{
+		foreach (var registration in registrations)
+		{
+			if (registration.Recursive == recursive
+				&& WindowsShellItemResolver.AreSamePidlOnCurrentSta(
+					folderPidl,
+					registration.FolderPidl))
+			{
+				return registration;
+			}
+		}
+
+		return null;
 	}
 
 	private unsafe void CreateNotificationWindow()
@@ -239,9 +281,9 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 			{
 				ProcessNotification(wParam, lParam);
 			}
-			catch
+			catch (Exception error)
 			{
-				CompleteSubscriptions();
+				FailCore(error);
 			}
 
 			return default;
@@ -262,6 +304,7 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 
 		if (lockHandle.IsNull)
 		{
+			PublishDirectoryRefresh();
 			return;
 		}
 
@@ -283,7 +326,26 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 		{
 			if (MatchesRegistration(change, registration))
 			{
-				registration.Changes.Writer.TryWrite(change);
+				foreach (var subscription in registration.Subscriptions)
+				{
+					subscription.Publish(change);
+				}
+			}
+		}
+	}
+
+	private void PublishDirectoryRefresh()
+	{
+		var refresh = new WindowsShellChange(
+			SHCNE_ID.SHCNE_UPDATEDIR,
+			ReadOnlyMemory<byte>.Empty,
+			ReadOnlyMemory<byte>.Empty);
+
+		foreach (var registration in registrations)
+		{
+			foreach (var subscription in registration.Subscriptions)
+			{
+				subscription.Publish(refresh);
 			}
 		}
 	}
@@ -349,7 +411,7 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 		var childOffset = folder.Length - sizeof(ushort);
 		var childSize = BitConverter.ToUInt16(item[childOffset..]);
 		return childSize >= sizeof(ushort)
-			&& childSize == item.Length - childOffset;
+			&& childSize + sizeof(ushort) == item.Length - childOffset;
 	}
 
 	private static unsafe ITEMIDLIST* CopyRegistrationPidl(
@@ -402,9 +464,17 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 		return 0;
 	}
 
-	private unsafe void RemoveCore(Registration registration)
+	private unsafe void RemoveCore(
+		Registration registration,
+		WindowsShellChangeSubscription subscription)
 	{
-		if (!registrations.Remove(registration))
+		if (!registration.Subscriptions.Remove(subscription))
+		{
+			return;
+		}
+
+		if (registration.Subscriptions.Count is not 0
+			|| !registrations.Remove(registration))
 		{
 			return;
 		}
@@ -415,7 +485,6 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 		}
 
 		PInvoke.CoTaskMemFree(registration.NativePidl);
-		registration.Changes.Writer.TryComplete();
 
 		if (registrations.Count is 0)
 		{
@@ -433,7 +502,10 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 			}
 
 			PInvoke.CoTaskMemFree(registration.NativePidl);
-			registration.Changes.Writer.TryComplete();
+			foreach (var subscription in registration.Subscriptions)
+			{
+				subscription.Changes.Writer.TryComplete();
+			}
 		}
 
 		registrations.Clear();
@@ -461,23 +533,24 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 		notificationMessage = 0;
 	}
 
-	private void CompleteSubscriptions()
+	private unsafe void FailCore(Exception error)
 	{
 		foreach (var registration in registrations)
 		{
-			registration.Changes.Writer.TryComplete();
-		}
-	}
+			if (registration.RegistrationId != 0)
+			{
+				PInvoke.SHChangeNotifyDeregister(registration.RegistrationId);
+			}
 
-	private static async Task ObserveUnsubscribeAsync(Task<bool> task)
-	{
-		try
-		{
-			await task.ConfigureAwait(false);
+			PInvoke.CoTaskMemFree(registration.NativePidl);
+			foreach (var subscription in registration.Subscriptions)
+			{
+				subscription.Changes.Writer.TryComplete(error);
+			}
 		}
-		catch
-		{
-		}
+
+		registrations.Clear();
+		DestroyNotificationWindow();
 	}
 
 	internal sealed unsafe class Registration
@@ -502,13 +575,15 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 
 		public bool Recursive { get; }
 
-		public Channel<WindowsShellChange> Changes { get; } =
-			Channel.CreateUnbounded<WindowsShellChange>(
-				new UnboundedChannelOptions
-				{
-					SingleReader = false,
-					SingleWriter = true,
-				});
+		public List<WindowsShellChangeSubscription> Subscriptions { get; } = [];
+
+		public WindowsShellChangeSubscription CreateSubscription(
+			WindowsShellChangeProvider provider)
+		{
+			var subscription = new WindowsShellChangeSubscription(provider, this);
+			Subscriptions.Add(subscription);
+			return subscription;
+		}
 	}
 
 	internal sealed class WindowsShellChangeSubscription : IAsyncDisposable
@@ -525,25 +600,53 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 			this.registration = registration;
 		}
 
+		public Channel<WindowsShellChange> Changes { get; } =
+			Channel.CreateBounded<WindowsShellChange>(
+				new BoundedChannelOptions(SubscriptionCapacity)
+				{
+					FullMode = BoundedChannelFullMode.Wait,
+					SingleReader = false,
+					SingleWriter = true,
+					AllowSynchronousContinuations = false,
+				});
+
+		public void Publish(WindowsShellChange change)
+		{
+			if (Changes.Writer.TryWrite(change))
+			{
+				return;
+			}
+
+			while (Changes.Reader.TryRead(out _))
+			{
+			}
+
+			Changes.Writer.TryWrite(
+				new WindowsShellChange(
+					SHCNE_ID.SHCNE_UPDATEDIR,
+					registration.FolderPidl,
+					ReadOnlyMemory<byte>.Empty));
+		}
+
 		public ValueTask<bool> WaitToReadAsync(
 			CancellationToken cancellationToken = default)
 		{
-			return registration.Changes.Reader.WaitToReadAsync(cancellationToken);
+			return Changes.Reader.WaitToReadAsync(cancellationToken);
 		}
 
 		public bool TryRead(out WindowsShellChange change)
 		{
-			return registration.Changes.Reader.TryRead(out change!);
+			return Changes.Reader.TryRead(out change!);
 		}
 
-		public ValueTask DisposeAsync()
+		public async ValueTask DisposeAsync()
 		{
 			if (Interlocked.Exchange(ref isDisposed, 1) == 0)
 			{
-				provider.Unsubscribe(registration);
+				await provider
+					.UnsubscribeAsync(registration, this)
+					.ConfigureAwait(false);
 			}
-
-			return ValueTask.CompletedTask;
 		}
 	}
 }

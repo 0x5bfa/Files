@@ -145,7 +145,7 @@ Capability sources receive the locator, never an `IShellItem` or a raw PIDL poin
 
 ## Folder change capability
 
-`WindowsStorageSource` owns one `WindowsShellChangeProvider`. Each `WindowsFolderChangeSource` created for a model is only a subscription to that provider, so watching several folders does not create one native window per model.
+`WindowsStorageSource` owns one `WindowsShellChangeProvider`. Each `WindowsFolderChangeSource` created for a model owns one logical source subscription and exposes a `Changed` event. Identical folder registrations are shared by the provider, so multiple event handlers do not create extra native registrations; watching several folders still uses the same hidden window.
 
 ```mermaid
 sequenceDiagram
@@ -155,19 +155,19 @@ sequenceDiagram
     participant Window as Hidden notification window
     participant Shell as Windows Shell
 
-    Model->>Provider: Subscribe(folder locator)
+    Model->>Provider: StartAsync(folder locator)
     Provider->>STA: Create window and register PIDL
     STA->>Window: Own WNDPROC and Shell registration
     Shell-->>Window: Notification message
     Window->>STA: Lock notification and copy PIDLs
     Window->>Provider: Publish managed change after unlock
-    Provider-->>Model: Subscription stream
-    Model->>Provider: Dispose subscription
+    Provider-->>Model: Changed event
+    Model->>Provider: DisposeAsync source
     Provider->>STA: Deregister PIDL
     Provider->>STA: Destroy window when last subscription ends
 ```
 
-The provider filters absolute PIDLs for non-recursive folder subscriptions. Rename notifications preserve the old and new PIDLs. `SHCNE_UPDATEDIR` and notifications without usable item PIDLs become `DirectoryUpdated` or a change with `RequiresRefresh`, allowing the consumer to re-enumerate safely. No notification is converted to a filesystem path, so virtual Shell items and paths longer than `MAX_PATH` remain supported.
+The provider filters absolute PIDLs for non-recursive folder subscriptions using Shell parent checks with a managed-PIDL and Shell-item fallback. Rename notifications preserve the old and new PIDLs. `SHCNE_UPDATEDIR` and notifications without usable item PIDLs become `DirectoryUpdated` or a change with `RequiresRefresh`, allowing the consumer to re-enumerate safely. Each source subscription uses a bounded channel; overflow discards stale detail and emits one directory refresh. No notification is converted to a filesystem path, so virtual Shell items and paths longer than `MAX_PATH` remain supported.
 
 ## Browse flow
 

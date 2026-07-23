@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using System.Diagnostics;
 using Files.Core.Capabilities.Changes;
 using Files.Core.Storage;
 using Windows.Win32.UI.Shell;
@@ -12,6 +13,12 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 	private readonly WindowsStorageSource source;
 	private readonly WindowsItemLocator folderLocator;
 	private readonly CancellationTokenSource lifetime = new();
+	private readonly SemaphoreSlim lifecycleGate = new(1, 1);
+	private readonly object disposeSync = new();
+	private WindowsShellChangeProvider.WindowsShellChangeSubscription? subscription;
+	private Task? pumpTask;
+	private Task? disposeTask;
+	private int isStarted;
 	private int isDisposed;
 
 	public WindowsFolderChangeSource(
@@ -25,11 +32,56 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 		this.folderLocator = folderLocator;
 	}
 
-	public IAsyncEnumerable<FolderChange> WatchAsync(
+	public event EventHandler<FolderChangeEventArgs>? Changed;
+
+	public event EventHandler<FolderChangeErrorEventArgs>? Faulted;
+
+	public async ValueTask StartAsync(
 		CancellationToken cancellationToken = default)
 	{
 		ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed) != 0, this);
-		return new ChangeEnumerable(this, cancellationToken);
+
+		await lifecycleGate
+			.WaitAsync(cancellationToken)
+			.ConfigureAwait(false);
+
+		try
+		{
+			ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed) != 0, this);
+
+			if (Volatile.Read(ref isStarted) != 0)
+			{
+				return;
+			}
+
+			using var linkedCancellation =
+				CancellationTokenSource.CreateLinkedTokenSource(
+					cancellationToken,
+					lifetime.Token);
+			var newSubscription = await source.ChangeProvider
+				.SubscribeAsync(
+					folderLocator,
+					recursive: false,
+					linkedCancellation.Token)
+				.ConfigureAwait(false);
+
+			try
+			{
+				ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed) != 0, this);
+				subscription = newSubscription;
+				Volatile.Write(ref isStarted, 1);
+				pumpTask = PumpAsync(newSubscription, lifetime.Token);
+			}
+			catch
+			{
+				await newSubscription.DisposeAsync().ConfigureAwait(false);
+				throw;
+			}
+		}
+		finally
+		{
+			lifecycleGate.Release();
+		}
 	}
 
 	public void Dispose()
@@ -40,8 +92,47 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 		}
 
 		lifetime.Cancel();
-		lifetime.Dispose();
+		_ = ObserveDisposeAsync(GetDisposeTask());
 		GC.SuppressFinalize(this);
+	}
+
+	public ValueTask DisposeAsync()
+	{
+		if (Interlocked.Exchange(ref isDisposed, 1) == 0)
+		{
+			lifetime.Cancel();
+		}
+
+		return new ValueTask(GetDisposeTask());
+	}
+
+	private async Task PumpAsync(
+		WindowsShellChangeProvider.WindowsShellChangeSubscription changeSubscription,
+		CancellationToken cancellationToken)
+	{
+		try
+		{
+			while (await changeSubscription
+				.WaitToReadAsync(cancellationToken)
+				.ConfigureAwait(false))
+			{
+				while (changeSubscription.TryRead(out var change))
+				{
+					var converted = await ConvertAsync(
+						change,
+						cancellationToken)
+						.ConfigureAwait(false);
+					Publish(converted);
+				}
+			}
+		}
+		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+		{
+		}
+		catch (Exception error)
+		{
+			PublishFault(error);
+		}
 	}
 
 	private async Task<FolderChange> ConvertAsync(
@@ -87,8 +178,53 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 			previousItem,
 			kind is FolderChangeKind.DirectoryUpdated
 				|| (kind is FolderChangeKind.Renamed
-					? second is null
+					? first is null || second is null
 					: first is null));
+	}
+
+	private void Publish(FolderChange change)
+	{
+		var handlers = Changed;
+		if (handlers is null)
+		{
+			return;
+		}
+
+		var args = new FolderChangeEventArgs(change);
+		foreach (EventHandler<FolderChangeEventArgs> handler in handlers.GetInvocationList())
+		{
+			try
+			{
+				handler(this, args);
+			}
+			catch (Exception error)
+			{
+				Trace.TraceError(error.ToString());
+			}
+		}
+	}
+
+	private void PublishFault(Exception error)
+	{
+		var handlers = Faulted;
+		if (handlers is null)
+		{
+			Trace.TraceError(error.ToString());
+			return;
+		}
+
+		var args = new FolderChangeErrorEventArgs(error);
+		foreach (EventHandler<FolderChangeErrorEventArgs> handler in handlers.GetInvocationList())
+		{
+			try
+			{
+				handler(this, args);
+			}
+			catch (Exception handlerError)
+			{
+				Trace.TraceError(handlerError.ToString());
+			}
+		}
 	}
 
 	private StorableReference? CreateReference(WindowsStorable? storable)
@@ -123,90 +259,54 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 		return FolderChangeKind.Updated;
 	}
 
-	private sealed class ChangeEnumerable : IAsyncEnumerable<FolderChange>
+	private async Task DisposeAsyncCore()
 	{
-		private readonly WindowsFolderChangeSource owner;
-		private readonly CancellationToken cancellationToken;
+		WindowsShellChangeProvider.WindowsShellChangeSubscription? currentSubscription;
+		Task? currentPump;
 
-		public ChangeEnumerable(
-			WindowsFolderChangeSource owner,
-			CancellationToken cancellationToken)
+		await lifecycleGate.WaitAsync().ConfigureAwait(false);
+		try
 		{
-			this.owner = owner;
-			this.cancellationToken = cancellationToken;
+			currentSubscription = subscription;
+			currentPump = pumpTask;
+			subscription = null;
+			pumpTask = null;
+		}
+		finally
+		{
+			lifecycleGate.Release();
 		}
 
-		public IAsyncEnumerator<FolderChange> GetAsyncEnumerator(
-			CancellationToken cancellationToken = default)
+		if (currentPump is not null)
 		{
-			var linkedCancellation = CancellationTokenSource.CreateLinkedTokenSource(
-				cancellationToken,
-				owner.lifetime.Token,
-				this.cancellationToken);
+			await currentPump.ConfigureAwait(false);
+		}
 
-			return new ChangeEnumerator(owner, linkedCancellation);
+		if (currentSubscription is not null)
+		{
+			await currentSubscription.DisposeAsync().ConfigureAwait(false);
+		}
+
+		lifetime.Dispose();
+	}
+
+	private Task GetDisposeTask()
+	{
+		lock (disposeSync)
+		{
+			return disposeTask ??= DisposeAsyncCore();
 		}
 	}
 
-	private sealed class ChangeEnumerator : IAsyncEnumerator<FolderChange>
+	private static async Task ObserveDisposeAsync(Task task)
 	{
-		private readonly WindowsFolderChangeSource owner;
-		private readonly CancellationTokenSource cancellation;
-		private WindowsShellChangeProvider.WindowsShellChangeSubscription? subscription;
-		private int isDisposed;
-
-		public ChangeEnumerator(
-			WindowsFolderChangeSource owner,
-			CancellationTokenSource cancellation)
+		try
 		{
-			this.owner = owner;
-			this.cancellation = cancellation;
+			await task.ConfigureAwait(false);
 		}
-
-		public FolderChange Current { get; private set; } = null!;
-
-		public async ValueTask<bool> MoveNextAsync()
+		catch (Exception error)
 		{
-			ObjectDisposedException.ThrowIf(Volatile.Read(ref isDisposed) != 0, this);
-
-			subscription ??= await owner.source.ChangeProvider
-				.SubscribeAsync(
-					owner.folderLocator,
-					recursive: false,
-					cancellation.Token)
-				.ConfigureAwait(false);
-
-			while (await subscription
-				.WaitToReadAsync(cancellation.Token)
-				.ConfigureAwait(false))
-			{
-				while (subscription.TryRead(out var change))
-				{
-					Current = await owner
-						.ConvertAsync(change, cancellation.Token)
-						.ConfigureAwait(false);
-					return true;
-				}
-			}
-
-			return false;
-		}
-
-		public async ValueTask DisposeAsync()
-		{
-			if (Interlocked.Exchange(ref isDisposed, 1) != 0)
-			{
-				return;
-			}
-
-			cancellation.Cancel();
-
-			if (subscription is not null)
-			{
-				await subscription.DisposeAsync().ConfigureAwait(false);
-			}
-
-			cancellation.Dispose();
+			Trace.TraceError(error.ToString());
 		}
 	}
 }

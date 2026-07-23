@@ -148,7 +148,7 @@ This split also applies to other expensive capabilities: item-bound access is co
 
 ## Folder changes
 
-`IFolderChangeSource` is the item-bound watcher contract. `WatchAsync` returns an asynchronous stream of `FolderChange` values; it does not expose Shell notification handles, paths, or COM interfaces to the model layer.
+`IFolderChangeSource` is the item-bound watcher contract. The source is explicitly started and then fans out managed `FolderChange` values through an event; it does not expose Shell notification handles, paths, or COM interfaces to the model layer.
 
 ```csharp
 if (model.Get<IFolderChangeSource>() is not { } changes)
@@ -156,19 +156,28 @@ if (model.Get<IFolderChangeSource>() is not { } changes)
 	return;
 }
 
-await foreach (var change in changes.WatchAsync(cancellationToken))
+changes.Changed += OnChanged;
+await changes.StartAsync(cancellationToken);
+
+void OnChanged(object? sender, FolderChangeEventArgs args)
 {
-	if (change.RequiresRefresh)
+	if (args.Change.RequiresRefresh)
 	{
-		await ReloadFolderAsync(cancellationToken);
-		continue;
+		ReloadFolder();
+		return;
 	}
 
-	ApplyChange(change);
+	ApplyChange(args.Change);
 }
+
+// Detach before disposing the model-bound capability.
+changes.Changed -= OnChanged;
+await changes.DisposeAsync();
 ```
 
-The Windows implementation is a lightweight subscription over a source-owned `WindowsShellChangeProvider`. One provider owns one hidden notification window and manages one Shell registration per subscription. Window creation, registration, unregistration, and destruction all run on the ordered Shell STA. The provider copies PIDLs while the Shell notification is locked and publishes only the managed copies after unlocking.
+The Windows implementation is a model-bound event source over a source-owned `WindowsShellChangeProvider`. One provider owns one hidden notification window; identical folder registrations are shared and each source fans out to its event handlers. Window creation, registration, unregistration, and destruction all run on the ordered Shell STA. The provider copies PIDLs while the Shell notification is locked and publishes only the managed copies after unlocking. The event is raised by the source's processing pump, never directly from the Shell window procedure.
+
+`Faulted` reports terminal failures from the notification pump. Exceptions from individual `Changed` handlers are isolated and written to tracing instead; they do not stop the native watcher or prevent other consumers from receiving changes.
 
 `Created`, `Deleted`, `Renamed`, and `Updated` carry best-effort `StorableReference` values. `DirectoryUpdated` and notifications whose PIDLs cannot be materialized set `RequiresRefresh`, so a consumer can re-enumerate instead of relying on incomplete event detail. This also keeps virtual Shell items and long paths representable because the watcher never converts notifications through `SHGetPathFromIDList`.
 
@@ -195,7 +204,7 @@ flowchart TB
 - The set owns disposable instances marked `CapabilityOwnership.Model`, plus new disposable composer/decorator wrappers.
 - `CapabilityOwnership.External` marks instances owned elsewhere.
 - Composers and decorators must not dispose the candidate or inner capability they wrap; the set tracks those lifetimes separately.
-- Model-scoped resources currently use synchronous `IDisposable`. Long-lived asynchronous resources belong at the root or source boundary.
+- Model-scoped resources are synchronously disposable by the current capability set; long-lived sources may also expose `IAsyncDisposable` for ordered native cleanup.
 - Disposal runs wrappers and candidates in reverse creation order, then the AppModel disposes its CoreModel.
 
 Direct capabilities implemented by the CoreModel are always externally owned by the pipeline because the AppModel already owns the CoreModel itself.

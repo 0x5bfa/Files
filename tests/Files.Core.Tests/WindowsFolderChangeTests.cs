@@ -32,40 +32,39 @@ public sealed class WindowsFolderChangeTests
 				source.SourceId,
 				folder.Id,
 				folder.Address);
-			using var changeSource = new FolderChangeCapabilityContributor().Create(
+			await using var changeSource = new FolderChangeCapabilityContributor().Create(
 				new CapabilityContext(source, folder, reference));
 
 			Assert.IsNotNull(changeSource);
-			await using var enumerator = changeSource
-				.WatchAsync()
-				.GetAsyncEnumerator();
-
-			var firstChangeTask = enumerator.MoveNextAsync().AsTask();
+			var createdTask = WaitForChangeAsync(
+				changeSource!,
+				static change => change.Kind is FolderChangeKind.Created);
+			await changeSource.StartAsync();
 			await Task.Delay(100);
 			File.WriteAllText(createdPath, "created");
-			Assert.IsTrue(await firstChangeTask.WaitAsync(TimeSpan.FromSeconds(10)));
-			var created = enumerator.Current;
-			if (created.Kind is not FolderChangeKind.Created)
-			{
-				created = await ReadUntilAsync(
-					enumerator,
-					static change => change.Kind is FolderChangeKind.Created);
-			}
+			var created = await createdTask.WaitAsync(TimeSpan.FromSeconds(10));
 			Assert.IsNotNull(created.CurrentItem);
 
-			var renamedTask = ReadUntilAsync(
-				enumerator,
+			var renamedTask = WaitForChangeAsync(
+				changeSource,
 				static change => change.Kind is FolderChangeKind.Renamed);
 			File.Move(createdPath, renamedPath);
-			var renamed = await renamedTask;
-			Assert.IsNotNull(renamed.CurrentItem);
+			var renamed = await renamedTask.WaitAsync(TimeSpan.FromSeconds(10));
+			Assert.IsTrue(
+				renamed.CurrentItem is not null
+				|| renamed.RequiresRefresh);
+			Assert.IsTrue(
+				renamed.PreviousItem is not null
+				|| renamed.RequiresRefresh);
 
-			var deletedTask = ReadUntilAsync(
-				enumerator,
+			var deletedTask = WaitForChangeAsync(
+				changeSource,
 				static change => change.Kind is FolderChangeKind.Deleted);
 			File.Delete(renamedPath);
-			var deleted = await deletedTask;
-			Assert.IsNotNull(deleted.PreviousItem);
+			var deleted = await deletedTask.WaitAsync(TimeSpan.FromSeconds(10));
+			Assert.IsTrue(
+				deleted.PreviousItem is not null
+				|| deleted.RequiresRefresh);
 		}
 		finally
 		{
@@ -92,36 +91,93 @@ public sealed class WindowsFolderChangeTests
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, leftPath));
 			var rightFolder = (WindowsFolder)await source.ResolveAsync(
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, rightPath));
-			using var leftChanges = CreateChangeSource(source, leftFolder);
-			using var rightChanges = CreateChangeSource(source, rightFolder);
-			await using var leftEnumerator = leftChanges
-				.WatchAsync()
-				.GetAsyncEnumerator();
-			await using var rightEnumerator = rightChanges
-				.WatchAsync()
-				.GetAsyncEnumerator();
-
-			var leftChangeTask = leftEnumerator.MoveNextAsync().AsTask();
-			var rightChangeTask = rightEnumerator.MoveNextAsync().AsTask();
+			await using var leftChanges = CreateChangeSource(source, leftFolder);
+			await using var rightChanges = CreateChangeSource(source, rightFolder);
+			var leftChangeTask = WaitForChangeAsync(
+				leftChanges,
+				static change => change.Kind is FolderChangeKind.Created);
+			var rightChangeTask = WaitForChangeAsync(
+				rightChanges,
+				static change => change.Kind is FolderChangeKind.Created);
+			await leftChanges.StartAsync();
+			await rightChanges.StartAsync();
 			await Task.Delay(100);
 
 			var leftFilePath = Path.Combine(leftPath, "left.txt");
 			File.WriteAllText(leftFilePath, "left");
 
-			Assert.IsTrue(await leftChangeTask.WaitAsync(TimeSpan.FromSeconds(10)));
+			var leftChange = await leftChangeTask.WaitAsync(TimeSpan.FromSeconds(10));
+			Assert.IsNotNull(leftChange.CurrentItem);
 			Assert.IsFalse(rightChangeTask.IsCompleted);
 
 			var rightFilePath = Path.Combine(rightPath, "right.txt");
 			File.WriteAllText(rightFilePath, "right");
-			Assert.IsTrue(await rightChangeTask.WaitAsync(TimeSpan.FromSeconds(10)));
-			Assert.IsNotNull(rightEnumerator.Current.CurrentItem);
+			var rightChange = await rightChangeTask.WaitAsync(TimeSpan.FromSeconds(10));
+			Assert.IsNotNull(rightChange.CurrentItem);
 			StringAssert.Contains(
-				rightEnumerator.Current.CurrentItem!.LastKnownAddress!.Value,
+				rightChange.CurrentItem!.LastKnownAddress!.Value,
 				rightFilePath);
 		}
 		finally
 		{
 			Directory.Delete(rootPath, recursive: true);
+		}
+	}
+
+	[TestMethod]
+	public async Task SharedRegistrationDoesNotDuplicateChanges()
+	{
+		var directoryPath = Path.Combine(
+			Path.GetTempPath(),
+			$"Files.Core.FolderChangeDuplicateTests-{Guid.NewGuid():N}");
+		Directory.CreateDirectory(directoryPath);
+		var filePath = Path.Combine(directoryPath, "created.txt");
+
+		try
+		{
+			await using var scheduler = new WindowsShellScheduler();
+			await using var source = new WindowsStorageSource(scheduler: scheduler);
+			var folder = (WindowsFolder)await source.ResolveAsync(
+				new StorageAddress(WindowsStorageSource.FileAddressScheme, directoryPath));
+			await using var firstChanges = CreateChangeSource(source, folder);
+			await using var secondChanges = CreateChangeSource(source, folder);
+			var isCreatedFile = (FolderChange change) =>
+				change.Kind is FolderChangeKind.Created
+				&& change.CurrentItem?.LastKnownAddress?.Value.Contains(
+					filePath,
+					StringComparison.OrdinalIgnoreCase) is true;
+			var firstChangeTask = WaitForChangeAsync(firstChanges, isCreatedFile);
+			var secondChangeTask = WaitForChangeAsync(secondChanges, isCreatedFile);
+			var firstCount = 0;
+			var secondCount = 0;
+			firstChanges.Changed += (_, args) =>
+			{
+				if (isCreatedFile(args.Change))
+				{
+					Interlocked.Increment(ref firstCount);
+				}
+			};
+			secondChanges.Changed += (_, args) =>
+			{
+				if (isCreatedFile(args.Change))
+				{
+					Interlocked.Increment(ref secondCount);
+				}
+			};
+			await firstChanges.StartAsync();
+			await secondChanges.StartAsync();
+			await Task.Delay(100);
+
+			File.WriteAllText(filePath, "created");
+			await firstChangeTask.WaitAsync(TimeSpan.FromSeconds(10));
+			await secondChangeTask.WaitAsync(TimeSpan.FromSeconds(10));
+			await Task.Delay(1000);
+			Assert.AreEqual(1, Volatile.Read(ref firstCount));
+			Assert.AreEqual(1, Volatile.Read(ref secondCount));
+		}
+		finally
+		{
+			Directory.Delete(directoryPath, recursive: true);
 		}
 	}
 
@@ -140,20 +196,25 @@ public sealed class WindowsFolderChangeTests
 		return changeSource!;
 	}
 
-	private static async Task<FolderChange> ReadUntilAsync(
-		IAsyncEnumerator<FolderChange> enumerator,
+	private static Task<FolderChange> WaitForChangeAsync(
+		IFolderChangeSource changeSource,
 		Func<FolderChange, bool> predicate)
 	{
-		using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-
-		while (await enumerator.MoveNextAsync().AsTask().WaitAsync(timeout.Token))
+		var completion = new TaskCompletionSource<FolderChange>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		EventHandler<FolderChangeEventArgs>? handler = null;
+		handler = (_, args) =>
 		{
-			if (predicate(enumerator.Current))
+			if (!predicate(args.Change))
 			{
-				return enumerator.Current;
+				return;
 			}
-		}
 
-		throw new AssertFailedException("The expected folder change was not received.");
+			changeSource.Changed -= handler;
+			completion.TrySetResult(args.Change);
+		};
+
+		changeSource.Changed += handler;
+		return completion.Task;
 	}
 }

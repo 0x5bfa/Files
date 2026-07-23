@@ -192,6 +192,7 @@ BHID_Stream
 FOLDERID_RecycleBinFolder
 CoTaskMemFree
 SHGetIDListFromObject
+ILIsParent
 SHCreateItemFromIDList
 BHID_SFUIObject
 IContextMenu

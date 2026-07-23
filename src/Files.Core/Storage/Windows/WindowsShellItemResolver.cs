@@ -35,11 +35,38 @@ internal sealed unsafe class WindowsShellItemResolver
 	}
 
 	// Must be called on the ordered Shell STA because it creates and compares COM objects.
+	internal static bool AreSamePidlOnCurrentSta(
+		ReadOnlyMemory<byte> firstPidl,
+		ReadOnlyMemory<byte> secondPidl)
+	{
+		if (firstPidl.IsEmpty || secondPidl.IsEmpty)
+		{
+			return false;
+		}
+
+		if (firstPidl.Span.SequenceEqual(secondPidl.Span))
+		{
+			return true;
+		}
+
+		var first = TryCreateFromPidl(firstPidl);
+		var second = TryCreateFromPidl(secondPidl);
+		return first is not null
+			&& second is not null
+			&& AreSame(first, second);
+	}
+
+	// Must be called on the ordered Shell STA because it creates and compares COM objects.
 	internal static bool IsInFolderOnCurrentSta(
 		ReadOnlyMemory<byte> itemPidl,
 		ReadOnlyMemory<byte> folderPidl,
 		bool recursive)
 	{
+		if (IsParentPidl(folderPidl, itemPidl, recursive))
+		{
+			return true;
+		}
+
 		var item = TryCreateFromPidl(itemPidl);
 		var folder = TryCreateFromPidl(folderPidl);
 		if (item is null || folder is null)
@@ -204,9 +231,29 @@ internal sealed unsafe class WindowsShellItemResolver
 		return first
 			.Compare(
 				second,
-				(uint)_SICHINTF.SICHINT_DISPLAY,
+				unchecked((uint)_SICHINTF.SICHINT_ALLFIELDS),
 				out var order)
 			.Succeeded
 			&& order is 0;
+	}
+
+	private static unsafe bool IsParentPidl(
+		ReadOnlyMemory<byte> folderPidl,
+		ReadOnlyMemory<byte> itemPidl,
+		bool recursive)
+	{
+		if (folderPidl.IsEmpty || itemPidl.IsEmpty)
+		{
+			return false;
+		}
+
+		fixed (byte* folderBytes = folderPidl.Span)
+		fixed (byte* itemBytes = itemPidl.Span)
+		{
+			return PInvoke.ILIsParent(
+				(ITEMIDLIST*)folderBytes,
+				(ITEMIDLIST*)itemBytes,
+				!recursive);
+		}
 	}
 }
