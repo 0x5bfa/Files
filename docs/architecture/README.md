@@ -74,6 +74,7 @@ The prototype implements the storage-backed portion of this graph: `IFilesDataRo
 
 - [Storage model boundaries](storage-models.md)
 - [Capability composition](capabilities.md)
+- [Preview pipeline](previews.md)
 - [Windows storage provider](windows-storage.md)
 - [Windows Shell threading](threading.md)
 - [Browse view settings](view-settings.md)
