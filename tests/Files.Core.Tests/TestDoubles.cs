@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using Files.Core.Browsing;
 using Files.Core.Capabilities;
 using Files.Core.Capabilities.Changes;
+using Files.Core.Capabilities.Previews;
 using Files.Core.Capabilities.Properties;
 using Files.Core.Capabilities.Thumbnails;
 using Files.Core.Models;
@@ -114,7 +115,8 @@ internal sealed class TestModelFactory
 		out DisposableStorable coreModel,
 		IFolderChangeSource? changeSource = null,
 		IPropertySource? propertySource = null,
-		IThumbnailSource? thumbnailSource = null)
+		IThumbnailSource? thumbnailSource = null,
+		IPreviewSource? previewSource = null)
 	{
 		coreModel = new DisposableStorable(id, name);
 		var reference = new StorableReference(
@@ -141,9 +143,16 @@ internal sealed class TestModelFactory
 				new DelegateCapabilityContributor<IThumbnailSource>(_ => thumbnailSource));
 		}
 
+		if (previewSource is not null)
+		{
+			pipelineBuilder.AddContributor<IPreviewSource>(
+				new DelegateCapabilityContributor<IPreviewSource>(_ => previewSource));
+		}
+
 		var pipeline = changeSource is null
 			&& propertySource is null
 			&& thumbnailSource is null
+			&& previewSource is null
 			? CapabilityPipeline.Empty
 			: pipelineBuilder.Build();
 

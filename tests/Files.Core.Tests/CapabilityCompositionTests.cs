@@ -64,8 +64,27 @@ public sealed class CapabilityCompositionTests
 
 		await using var result = await source.GetPreviewAsync(new PreviewRequest());
 		Assert.IsNotNull(result);
-		Assert.AreEqual("preview", await ReadTextAsync(result.Content));
-}
+		var streamResult = result as StreamPreviewResult;
+		Assert.IsNotNull(streamResult);
+		Assert.AreEqual("preview", await ReadTextAsync(streamResult!.Content));
+	}
+
+	[TestMethod]
+	public async Task PreviewCompositionStopsFallbackAfterBlockedResult()
+	{
+		var context = CreateContext();
+		var blocked = new BlockedPreviewSource();
+		var fallback = new TestPreviewSource("fallback");
+		var source = new PreviewSourceComposer().Compose(context, [
+			new CapabilityCandidate<IPreviewSource>(blocked, 20, "blocked", CapabilityOwnership.External),
+			new CapabilityCandidate<IPreviewSource>(fallback, 10, "fallback", CapabilityOwnership.External),
+		])!;
+
+		await using var result = await source.GetPreviewAsync(new PreviewRequest());
+
+		Assert.IsInstanceOfType<BlockedPreviewResult>(result);
+		Assert.AreEqual(0, fallback.CallCount);
+	}
 
 	[TestMethod]
 	public async Task PropertyCompositionMergesSourcesWithHigherPriorityWinning()
@@ -131,20 +150,34 @@ public sealed class CapabilityCompositionTests
 		}
 	}
 
-	private sealed class TestPreviewSource : IPreviewSource
+		private sealed class TestPreviewSource : IPreviewSource
 	{
 		private readonly string? value;
 
 		public TestPreviewSource(string? value) => this.value = value;
 
+		public int CallCount { get; private set; }
+
 		public ValueTask<PreviewResult?> GetPreviewAsync(
 			PreviewRequest request,
 			CancellationToken cancellationToken = default)
-			=> ValueTask.FromResult<PreviewResult?>(value is null
+		{
+			CallCount++;
+			return ValueTask.FromResult<PreviewResult?>(value is null
 				? null
-				: new PreviewResult(
+				: new StreamPreviewResult(
 					new MemoryStream(Encoding.UTF8.GetBytes(value), writable: false),
 					"text/plain"));
+		}
+	}
+
+	private sealed class BlockedPreviewSource : IPreviewSource
+	{
+		public ValueTask<PreviewResult?> GetPreviewAsync(
+			PreviewRequest request,
+			CancellationToken cancellationToken = default)
+			=> ValueTask.FromResult<PreviewResult?>(
+				new BlockedPreviewResult(PreviewBlockReason.RequiresHydration));
 	}
 
 	private sealed class TestPropertySource : IPropertySource

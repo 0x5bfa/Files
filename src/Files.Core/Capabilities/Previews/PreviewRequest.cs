@@ -3,9 +3,17 @@
 
 namespace Files.Core.Capabilities.Previews;
 
+public enum PreviewHydrationPolicy
+{
+	LocalOnly,
+	AllowHydration,
+}
+
 public sealed record PreviewRequest
 {
-	public PreviewRequest(long? maximumBytes = null)
+	public PreviewRequest(
+		long? maximumBytes = null,
+		PreviewHydrationPolicy hydrationPolicy = PreviewHydrationPolicy.LocalOnly)
 	{
 		if (maximumBytes is not null)
 		{
@@ -13,7 +21,10 @@ public sealed record PreviewRequest
 		}
 
 		MaximumBytes = maximumBytes;
+		HydrationPolicy = hydrationPolicy;
 	}
 
 	public long? MaximumBytes { get; }
+
+	public PreviewHydrationPolicy HydrationPolicy { get; }
 }
