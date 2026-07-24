@@ -1,0 +1,46 @@
+// Copyright (c) Files Community
+// Licensed under the MIT License.
+
+using System.IO;
+using Files.Core.Models;
+using Files.Core.Storage;
+using Files.Core.Storage.Windows;
+
+namespace Files.Core.Capabilities.Previews;
+
+public sealed class WindowsPreviewTarget : IDisposable
+{
+	private readonly IStorableModel model;
+	private int isDisposed;
+
+	public WindowsPreviewTarget(
+		IStorableModel model,
+		IWindowsStorable item)
+	{
+		ArgumentNullException.ThrowIfNull(model);
+		ArgumentNullException.ThrowIfNull(item);
+
+		if (!StringComparer.Ordinal.Equals(model.Reference.ItemId, item.Id))
+		{
+			throw new InvalidDataException(
+				"The target model and Windows item have different identities.");
+		}
+
+		this.model = model;
+		Item = item;
+	}
+
+	public IWindowsStorable Item { get; }
+
+	public IStorableModel Model => model;
+
+	public StorableReference Reference => model.Reference;
+
+	public void Dispose()
+	{
+		if (Interlocked.Exchange(ref isDisposed, 1) is 0)
+		{
+			model.Dispose();
+		}
+	}
+}

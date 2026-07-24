@@ -31,8 +31,10 @@ LPARAM
 WM_*
 SetForegroundWindow
 GetForegroundWindow
+GetDesktopWindow
 GetCurrentThreadId
 GetWindowThreadProcessId
+IsWindow
 AttachThreadInput
 SetWindowPos
 SetFocus

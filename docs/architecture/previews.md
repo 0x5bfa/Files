@@ -5,6 +5,29 @@ current item, while an `IPreviewSource` turns that item into a disposable
 `PreviewResult`. WinUI image, media, and document renderers consume the result
 outside `Files.Core`.
 
+The Core preview architecture has two independent result paths. Stream
+previews return data owned by `StreamPreviewResult`; Windows Shell previews
+return a descriptor and create the COM handler only when a UI host opens a
+session.
+
+```mermaid
+flowchart TD
+    Browse["BrowsePreviewModel"]
+    Pipeline["Preview capability pipeline"]
+    Result["WindowsShellPreviewResult"]
+    Factory["Shell session factory"]
+    Session["Preview session on dedicated STA"]
+    Host["Future WinUI host adapter"]
+    Handler["Windows IPreviewHandler"]
+
+    Browse --> Pipeline
+    Pipeline --> Result
+    Host --> Factory
+    Result --> Factory
+    Factory --> Session
+    Session --> Handler
+```
+
 ## Provider and item-bound source
 
 Providers contain reusable backend logic. A
@@ -87,3 +110,51 @@ sequenceDiagram
 
 The renderer, preview cache, shell-specific preview handlers, and application
 composition registrations are intentionally outside this Core slice.
+
+## Windows Shell preview backend
+
+`WindowsShellPreviewResult` is a UI-independent descriptor. It stores the
+stable `StorableReference` and the associated handler CLSID, but does not own a
+COM object, `IShellItem`, PIDL, HWND, WinUI object, or a path used as identity.
+`WindowsShellPreviewSessionFactory` resolves the reference again when a
+session starts and verifies the returned source and item identity before using
+the item.
+
+`WindowsPreviewHandlerResolver` discovers the preview handler through the
+Shell association API (`AssocQueryStringW`) using the preview-handler Shell
+extension category. It normalizes extensions, performs the required-size
+query before allocating the native result buffer, and caches both successful
+and missing associations. A malformed CLSID is treated as unavailable. The
+provider therefore performs no COM activation, file open, or HWND work.
+
+The session factory uses a dedicated `WindowsShellScheduler` instance. Every
+activation, handler method call, `IShellItem`/stream creation, and COM release
+is queued to that preview STA. The handler is activated with
+`CLSCTX_LOCAL_SERVER` by the default activation policy. An alternative context
+such as in-process activation must be explicitly supplied by an injected
+activation policy; there is no implicit in-process fallback. Initialization is
+attempted in this order:
+
+1. `IInitializeWithStream`
+2. `IInitializeWithItem`
+3. `IInitializeWithFile`
+
+The first successful contract wins. Streams and Shell items are retained until
+`Unload()` and deterministic disposal. The controller also supplies a minimal
+`IPreviewHandlerFrame` site, applies optional `IPreviewHandlerVisuals`, and
+exposes bounds, focus, and accelerator operations without taking a WinUI
+dependency. Cleanup attempts `Unload()`, `SetSite(null)`, and every COM release
+even when one cleanup operation fails. Disposal is idempotent.
+
+Cancellation prevents queued operations from starting, but cannot interrupt a
+synchronous third-party COM method that is already executing. A future WinUI
+adapter creates the dedicated host HWND, converts its arranged size to
+physical-pixel bounds, forwards theme/focus/keyboard events, and disposes the
+session on unload. XAML controls and host-window creation are deliberately not
+part of this Core implementation.
+
+The test composition gives `StreamPreviewProvider` priority 200 and
+`WindowsShellPreviewProvider` priority 100. Known safe stream formats are
+therefore preferred; a blocked result stops fallback, while a `null` stream
+result allows the Shell descriptor provider to run. Production registration
+and the actual WinUI adapter remain follow-up work.

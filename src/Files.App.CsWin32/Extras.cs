@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using System;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using Windows.Win32.Foundation;
@@ -12,6 +13,33 @@ namespace Windows.Win32
 {
 	public static partial class PInvoke
 	{
+		[LibraryImport("ole32.dll", EntryPoint = "CoCreateInstance")]
+		public static unsafe partial int CoCreateInstanceRaw(
+			Guid* classId,
+			nint outer,
+			uint context,
+			Guid* interfaceId,
+			nint* instance);
+
+		[LibraryImport("shell32.dll", EntryPoint = "SHCreateItemFromParsingName")]
+		public static unsafe partial int SHCreateItemFromParsingNameRaw(
+			char* parsingName,
+			nint bindContext,
+			Guid* interfaceId,
+			nint* item);
+
+		[LibraryImport(
+			"shlwapi.dll",
+			EntryPoint = "SHCreateStreamOnFileEx",
+			StringMarshalling = StringMarshalling.Utf16)]
+		public static partial int SHCreateStreamOnFileExRaw(
+			string fileName,
+			uint mode,
+			uint attributes,
+			[MarshalAs(UnmanagedType.Bool)] bool create,
+			nint templateStream,
+			out nint stream);
+
 		[LibraryImport("User32", EntryPoint = "SetWindowLongW")]
 		private static partial int _SetWindowLong(nint hWnd, int nIndex, int dwNewLong);
 
