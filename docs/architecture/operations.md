@@ -20,6 +20,10 @@ Create, copy, and move accept `StorageConflictBehavior.Fail` or
 `GenerateUniqueName`. Delete defaults to the Recycle Bin; permanent deletion
 must be explicit.
 
+`StorageOperationResult` cannot represent contradictory state: success has no
+error, while failure has an error and no result item. Progress values are
+non-negative and `CompletedItems` cannot exceed a known `TotalItems`.
+
 `IStorageOperationService.CanHandle` is a cheap command-enablement check for a
 fully formed request. It does not guarantee later success: permissions,
 connectivity, collisions, or identity may change before execution.
@@ -63,6 +67,17 @@ invalid characters, and reserved DOS device names. Collision checks happen
 before queuing the Shell operation. `GenerateUniqueName` uses the familiar
 `name (2).ext` sequence.
 
+Windows path comparison deliberately has two meanings:
+
+- identity/collision comparison is case-insensitive;
+- exact path spelling comparison is ordinal and case-sensitive.
+
+Consequently, renaming `report.txt` to `REPORT.TXT` is not treated as a no-op.
+When the case-insensitive destination already exists, the provider resolves it
+and permits the rename only if its stable `ItemId` matches the source item.
+Copy and move derive their default name from `FileSystemPath`, not the Shell
+display name, because display names may hide a file extension.
+
 ```mermaid
 flowchart TD
     Request["Operation request"]
@@ -83,6 +98,13 @@ Rename rechecks the item ID immediately before mutation and verifies that the
 result path still identifies the expected item. Create, copy, and move
 materialize the actual destination through the source rather than returning a
 guessed path.
+
+Non-permanent delete configures `IFileOperation` with both `FOF_ALLOWUNDO` and
+`FOFX_RECYCLEONDELETE` (`0x00080000`). `FOF_ALLOWUNDO` alone only requests
+undo preservation when possible; the extended flag explicitly requests the
+Recycle Bin. Permanent delete sets neither flag. Both modes still materialize
+completion through `PerformOperations` and inspect
+`GetAnyOperationsAborted`.
 
 Cancellation can prevent work that has not started. It cannot interrupt a
 synchronous Shell extension already executing. After a side effect commits,

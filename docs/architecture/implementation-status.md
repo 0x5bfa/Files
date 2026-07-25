@@ -18,7 +18,7 @@ storage provider or Files feature is implemented.
 | Properties | Item-bound and batch-provider contracts, typed Windows values |
 | Folder changes | Shared `SHChangeNotifyRegister` provider and incremental updates |
 | Previews | Stream results and Windows Shell preview sessions |
-| Operations | Create, rename, copy, move, delete, collision policy |
+| Operations | Create, case-preserving rename, copy, move, Recycle Bin/permanent delete, collision policy |
 | Composition | One builder/runtime with deterministic ownership |
 | Quality | Unit tests, Windows integration tests, benchmarks, Core CI |
 

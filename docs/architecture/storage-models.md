@@ -119,6 +119,13 @@ See [Capability composition](capabilities.md) for resolution, multiple providers
 the returned AppModel. The AppModel asynchronously disposes its capability set
 before disposing the CoreModel. If a capability or CoreModel supports only
 `IDisposable`, that synchronous cleanup runs inside the same ordered
-disposal. A browse session disposes replaced item models.
+disposal.
+
+Browse-session replacement, refresh, incremental delete/rename/update, failed
+navigation, and session shutdown all await `IStorableModel.DisposeAsync`.
+Cleanup attempts every owned item and aggregates failures instead of
+abandoning the remaining models. Synchronous `Dispose` members are
+compatibility bridges; Files.App must keep disposal asynchronous on the UI
+thread.
 
 Storage sources and shared services have a longer lifetime and are owned by `FilesDataRoot` or the application composition root. This keeps native resources bounded by the model graph rather than the visual tree.

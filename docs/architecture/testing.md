@@ -13,8 +13,10 @@ model graph through public contracts.
 - browse navigation, replacement, incremental folder changes, selection,
   projection, preview, and viewport prefetch;
 - application/window/tab/pane ownership and navigation history;
-- composition-root construction failure and runtime disposal;
-- operation routing and result semantics;
+- awaited item/capability/CoreModel disposal and aggregated cleanup failures;
+- unbuilt-builder cleanup, ownership transfer, construction failure, and
+  runtime disposal;
+- operation routing, enum validation, and result/progress invariants;
 - storage identity and recovery-address equality.
 
 Use test doubles for deterministic model behavior. A test that creates an
@@ -30,7 +32,8 @@ Windows tests use real temporary files and real Shell APIs for:
 - typed property extraction;
 - Shell scheduler apartment and concurrency behavior;
 - `SHChangeNotifyRegister` folder notifications;
-- create, rename, copy, move, and permanent delete;
+- create, rename (including case-only spelling changes), copy, move, and
+  permanent delete;
 - preview association and session orchestration with controller doubles.
 
 Shell integration tests are marked `DoNotParallelize` where they share

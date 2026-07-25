@@ -155,6 +155,13 @@ physical-pixel bounds, forwards theme/focus/keyboard events, and disposes the
 session on unload. XAML controls and host-window creation are deliberately not
 part of Core.
 
+Session teardown is ordered across the thread boundary. The preview controller
+and its COM state are disposed on the dedicated preview STA first; the resolved
+target `IStorableModel` is then asynchronously disposed outside that callback.
+Both cleanup steps are attempted and multiple failures are aggregated.
+Activation failure similarly cleans the controller on the preview STA and
+awaits target-model disposal before returning the original error.
+
 `AddWindowsStorage` gives `StreamPreviewProvider` priority 200 and
 `WindowsShellPreviewProvider` priority 100. Known stream formats are therefore
 preferred; a blocked result stops fallback, while a `null` stream result

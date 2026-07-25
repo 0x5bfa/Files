@@ -118,6 +118,12 @@ factory fails during construction, already-created sources, application
 models, and owned services are all cleaned up; cleanup failures are
 aggregated with the construction failure.
 
+`FilesCoreBuilder` is itself asynchronously disposable. Disposing an unbuilt
+builder cleans every source and owned service it has accepted. A successful
+`Build` transfers those resources to `FilesCoreRuntime`; disposing the builder
+after that transfer is therefore a no-op, and the runtime becomes the sole
+owner.
+
 The runtime disposes in this order:
 
 ```mermaid
