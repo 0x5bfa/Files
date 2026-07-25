@@ -10,4 +10,5 @@ internal sealed record WindowsStorableSnapshot(
 	string ItemId,
 	string Name,
 	string? FileSystemPath,
-	bool IsFolder);
+	bool IsFolder,
+	bool IsStream);

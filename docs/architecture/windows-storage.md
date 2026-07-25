@@ -25,6 +25,7 @@ classDiagram
         +ParsingName
         +FileSystemPath
         +Address
+        +IsStream
     }
     class WindowsStorable
     class WindowsFile
@@ -65,6 +66,9 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 - `Name` uses a UI-friendly Shell display name with a normal-display fallback.
 - `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
 - `IsFolder` selects `WindowsFolder` or `WindowsFile` without retaining `IShellItem`.
+- `IsStream` snapshots `SFGAO_STREAM`. Together with `IsFolder`, it
+  distinguishes a file-like Shell container such as an archive from a normal
+  filesystem directory without synchronous filesystem probing.
 
 Addresses and identities are intentionally independent. A filesystem model exposes a `file:` address containing its current filesystem path. An item without a filesystem path exposes a `shell:` address containing its desktop-absolute parsing name. Either kind may still use a provider-defined identity.
 

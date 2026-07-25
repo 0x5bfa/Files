@@ -21,7 +21,9 @@ internal static unsafe class ShellItemHelpers
 		ArgumentNullException.ThrowIfNull(identityProvider);
 
 		var result = shellItem.GetAttributes(
-			SFGAO_FLAGS.SFGAO_FOLDER | SFGAO_FLAGS.SFGAO_FILESYSTEM,
+			SFGAO_FLAGS.SFGAO_FOLDER
+				| SFGAO_FLAGS.SFGAO_FILESYSTEM
+				| SFGAO_FLAGS.SFGAO_STREAM,
 			out var attributes);
 		result.ThrowOnFailure();
 
@@ -43,7 +45,8 @@ internal static unsafe class ShellItemHelpers
 			itemId,
 			name,
 			fileSystemPath,
-			(attributes & SFGAO_FLAGS.SFGAO_FOLDER) != 0);
+			(attributes & SFGAO_FLAGS.SFGAO_FOLDER) != 0,
+			(attributes & SFGAO_FLAGS.SFGAO_STREAM) != 0);
 		var address = fileSystemPath is null
 			? new StorageAddress(WindowsStorageSource.ShellAddressScheme, parsingName)
 			: new StorageAddress(WindowsStorageSource.FileAddressScheme, fileSystemPath);

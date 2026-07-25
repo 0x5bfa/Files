@@ -69,7 +69,11 @@ public sealed class PaneModel : IAsyncDisposable
 	public bool CanGoForward => History.CanGoForward;
 
 	public bool CanGoUp =>
-		BrowseSession.Context?.LocationModel is IFolderModel;
+		BrowseSession.Context
+			is IBrowseLocationParentResolver parentResolver
+				? parentResolver.CanGetParent
+				: BrowseSession.Context?.LocationModel
+					is IFolderModel;
 
 	public event EventHandler? StateChanged;
 
@@ -195,6 +199,27 @@ public sealed class PaneModel : IAsyncDisposable
 		try
 		{
 			EnsureActive();
+			if (BrowseSession.Context
+				is IBrowseLocationParentResolver parentResolver)
+			{
+				var parentLocation = await parentResolver
+					.GetParentLocationAsync(
+						linkedCancellation.Token)
+					.ConfigureAwait(false);
+				if (parentLocation is null)
+				{
+					return false;
+				}
+
+				await NavigateAndCommitAsync(
+					parentLocation,
+					() => History.Push(parentLocation),
+					linkedCancellation.Token).ConfigureAwait(false);
+				return Equals(
+					BrowseSession.Location,
+					parentLocation);
+			}
+
 			if (BrowseSession.Context?.LocationModel is not IFolderModel folder)
 			{
 				return false;

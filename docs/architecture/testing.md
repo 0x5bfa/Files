@@ -17,6 +17,8 @@ model graph through public contracts.
 - unbuilt-builder cleanup, ownership transfer, construction failure, and
   runtime disposal;
 - operation routing, enum validation, and result/progress invariants;
+- archive path safety, backend fallback, encryption routing, credential
+  retry, and logical parent navigation;
 - storage identity and recovery-address equality.
 
 Use test doubles for deterministic model behavior. A test that creates an
@@ -44,6 +46,14 @@ The Windows Shell preview controller has a separate manual smoke boundary:
 run Files.App's host adapter against representative local `.txt`, `.pdf`, and
 Office files because installed third-party handlers and out-of-process COM
 servers cannot be made deterministic on a hosted test machine.
+
+Archive scenario tests should keep small committed fixtures for
+unencrypted/encrypted ZIP and 7z, a header-encrypted 7z, synthesized folders,
+case-distinct names, malformed traversal entries, and a non-seekable backing
+stream. Run each supported fixture through Windows 10 and the current
+Windows 11 image because Shell eligibility is deliberately capability-based,
+not OS-version-based. Never place fixture passwords in production telemetry
+or error messages.
 
 ## Benchmarks
 

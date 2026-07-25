@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.Core.Storage;
+using Files.Core.Storage.Archives;
 
 namespace Files.Core.Browsing;
 
@@ -16,6 +17,31 @@ public sealed record FolderLocation : BrowseLocation
 	}
 
 	public StorableReference Folder { get; }
+}
+
+public sealed record ArchiveLocation : BrowseLocation
+{
+	public ArchiveLocation(
+		StorableReference archive,
+		string? entryPath = null)
+	{
+		ArgumentNullException.ThrowIfNull(archive);
+
+		Archive = archive;
+		EntryPath = ArchiveEntryPath.Normalize(entryPath);
+	}
+
+	public ArchiveLocation(IArchiveEntry entry)
+		: this(
+			entry?.Archive
+				?? throw new ArgumentNullException(nameof(entry)),
+			entry?.EntryPath)
+	{
+	}
+
+	public StorableReference Archive { get; }
+
+	public string EntryPath { get; }
 }
 
 public sealed record HomeLocation : BrowseLocation

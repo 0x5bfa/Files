@@ -51,12 +51,14 @@ Implemented areas:
 - OwlCore.Storage CoreModels wrapped by Files AppModels;
 - lazy per-capability contributors, composers, decorators, and ownership;
 - application, window, tab, split-pane, navigation-history, and browse models;
-- home/folder locations plus extensible search/tag location contracts;
+- home/folder/archive locations plus extensible search/tag location contracts;
 - immutable item snapshots, selection, sorting, granular changes, and
   viewport prefetch;
 - in-memory and pluggable view settings;
 - cached encoded thumbnails, typed properties, and folder changes;
 - stream previews and hosted Windows Shell preview sessions;
+- Shell-first archive browsing with SevenZip fallback and UI-independent
+  credential requests;
 - create, rename, copy, move, delete, collision, and progress contracts;
 - one composition root with deterministic asynchronous disposal;
 - Windows integration tests, architecture benchmarks, and Core CI.
@@ -73,6 +75,8 @@ Implemented areas:
 - PNG thumbnails, typed Shell properties, and shared folder notifications;
 - stream and Shell preview providers;
 - `IFileOperation` create/rename/copy/move/delete.
+- Windows Shell archive folders with SevenZipSharp fallback on Windows 10,
+  encrypted archives, unsupported Shell formats, and remote streams.
 
 Files.Core targets Windows and temporarily references `Files.App.CsWin32` for
 source-generated interop. It does not reference WinUI.

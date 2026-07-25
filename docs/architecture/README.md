@@ -84,6 +84,7 @@ Read these in order when starting the new Files.App:
 Reference documents:
 
 - [Storage model boundaries and identity](storage-models.md)
+- [Archive browsing and SevenZip fallback](archives.md)
 - [Capability composition](capabilities.md)
 - [Browse view settings and projection](view-settings.md)
 - [Preview pipeline and Shell sessions](previews.md)
@@ -95,7 +96,7 @@ Reference documents:
 ## Current state
 
 Files.Core now contains the complete application/window/tab/pane model graph,
-home and folder browsing, selection and projection, view settings, viewport
+home, folder, and archive browsing, selection and projection, view settings, viewport
 prefetch, capability composition, thumbnail/property/folder-change/preview
 vertical slices, Windows Shell storage, storage mutations, composition,
 tests, benchmarks, and dedicated CI.

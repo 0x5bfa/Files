@@ -52,6 +52,9 @@ src/Files.App/
   Commands/
     StorageCommandAdapter.cs
     NavigationCommandAdapter.cs
+  Archives/
+    ArchiveCredentialProvider.cs
+    ArchiveCredentialDialogService.cs
   Previews/
     PreviewPresenter.cs
     StreamPreviewPresenter.cs
@@ -99,7 +102,9 @@ public sealed class FilesAppHost : IAsyncDisposable
 				services.ThumbnailCache)
 			.AddWindowsStorage(
 				streamPreviewPolicy: services.StreamPreviewPolicy,
-				shellPreviewPolicy: services.ShellPreviewPolicy)
+				shellPreviewPolicy: services.ShellPreviewPolicy,
+				archiveCredentialProvider:
+					services.ArchiveCredentials)
 			.Build();
 
 		return new FilesAppHost(
@@ -309,6 +314,50 @@ Can-execute state comes from `CanGoBack`, `CanGoForward`, `CanGoUp`,
 `IsLoading`, and model membership. Commands should hold a per-command
 `CancellationTokenSource` and never block the dispatcher.
 
+### Opening archives
+
+The open command checks archive capabilities before ordinary folder shape.
+This matters because Windows Shell can expose `.zip` or `.7z` as an
+`IFolderModel`, while an encrypted archive must still be routed to the
+SevenZip fallback.
+
+```csharp
+private static BrowseLocation GetOpenLocation(
+	IStorableModel item)
+{
+	if (item is IFolderModel
+		&& item.Get<IArchiveEntry>() is { } entry)
+	{
+		return new ArchiveLocation(entry);
+	}
+
+	if (item.Get<IArchiveSource>() is { } archive)
+	{
+		return new ArchiveLocation(archive.Archive);
+	}
+
+	if (item is IFolderModel folder)
+	{
+		return new FolderLocation(folder.Reference);
+	}
+
+	throw new InvalidOperationException(
+		$"'{item.Name}' cannot be browsed.");
+}
+```
+
+`ArchiveCredentialProvider` is window-aware application infrastructure. It
+marshals to the owning window dispatcher, shows localized WinUI content, and
+returns `ArchiveCredential` or `null` when canceled. It does not store the
+password in navigation history or the item ViewModel.
+
+Core's archive context resolves Up inside the archive with another
+`ArchiveLocation`. Up from the archive root resolves the outer archive's
+storage parent and returns a `FolderLocation`. Back and Forward retain the
+outer reference and normalized entry path.
+
+See [Archive browsing](archives.md) for backend selection and ownership.
+
 ## Storage commands
 
 `StorageCommandAdapter` captures references from the pane, prompts for any UI
@@ -341,6 +390,7 @@ database. Serialize by an explicit location DTO:
 
 - location kind;
 - source ID and item ID for folders;
+- outer source/item identity and normalized entry path for archives;
 - current recovery address as non-key metadata;
 - search query/scope;
 - tag ID;

@@ -11,6 +11,7 @@ storage provider or Files feature is implemented.
 | --- | --- |
 | Model graph | Application, windows, tabs, split panes, browse sessions |
 | Navigation | Home, folder, back, forward, up, refresh, bounded history |
+| Archives | Shell-first browsing, SevenZip fallback, encrypted credentials, read-only entry streams |
 | Items | Stable identity, immutable model replacement, selection |
 | Presentation | View settings, sorting, item changes, viewport prefetch |
 | Capabilities | Contributors, per-contract composers, decorators, ownership |
@@ -28,8 +29,11 @@ These do not block the new Files.App:
 
 - Search and tag have typed `BrowseLocation` values but require a chosen
   index/backend and corresponding location handler.
-- FTP, archive, cloud, MTP, and other sources implement the same source,
-  capability, location, and operation contracts as later vertical slices.
+- FTP, cloud, MTP, and other sources implement the same source, capability,
+  location, and operation contracts as later vertical slices.
+- Archive browsing and read streams are implemented. Compression,
+  extract-all, entry mutations, split volumes, and archive operation
+  progress remain separate operation-provider work.
 - Cold recovery of a moved Windows file from only an old same-volume address
   needs a file-ID index or `OpenFileById` strategy. Live operations already
   return an updated reference and watchers update open sessions.

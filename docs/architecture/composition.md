@@ -42,7 +42,8 @@ instrumented `IThumbnailCache` before `Build`.
 
 `AddWindowsStorage` registers one `WindowsStorageSource`, its operation
 provider, Windows thumbnail/property/folder-change contributors, stream
-preview providers, and the Windows Shell preview provider.
+preview providers, the Windows Shell preview provider, and default archive
+browsing.
 
 ```csharp
 var builder = new FilesCoreBuilder(
@@ -51,7 +52,8 @@ var builder = new FilesCoreBuilder(
 
 builder.AddWindowsStorage(
 	streamPreviewPolicy: previewAccessPolicy,
-	shellPreviewPolicy: shellPreviewPolicy);
+	shellPreviewPolicy: shellPreviewPolicy,
+	archiveCredentialProvider: archiveCredentials);
 
 await using var runtime = builder.Build();
 ```
@@ -64,6 +66,11 @@ Shell provider; a blocked stream result is terminal.
 permissive policy defaults are useful for tests and early integration.
 Production Files.App should inject policies that account for cloud hydration,
 trust, managed policy, and user settings.
+
+`AddWindowsStorage(enableArchives: false)` omits archive capabilities and its
+location handler. `AddArchiveBrowsing` can also be registered independently
+with custom backends, probe, and credential provider. The default selector
+uses Windows Shell at priority 200 and SevenZipSharp at priority 100.
 
 ## Extending Core
 

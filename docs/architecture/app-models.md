@@ -90,6 +90,10 @@ contains a stable `StorableReference`; replacing its recovery address does
 not create a duplicate entry. The latest location value replaces the old
 entry so `LastKnownAddress` remains fresh.
 
+`ArchiveLocation` contains the outer archive's stable reference plus a
+normalized logical entry path. It never contains a scoped archive-entry
+source ID or credential.
+
 `BrowseNavigationHistorySnapshot` is immutable and validates its cursor. It
 is suitable for a Files.App persistence DTO after translating polymorphic
 `BrowseLocation` values into an explicit serialized schema. Storage and
@@ -98,20 +102,28 @@ application activation and user settings policy.
 
 ## Up navigation
 
-`PaneModel.GoUpAsync` asks the current `IFolderModel` for its parent, captures
-the parent's stable reference, and disposes that temporary parent model after
-navigation. A root or non-folder location returns `false`.
+`PaneModel.GoUpAsync` first honors
+`IBrowseLocationParentResolver` for logical locations such as archives.
+Inside an archive, Up creates another `ArchiveLocation`; from the archive
+root, it resolves the outer storage item's parent. Other folders use the
+current `IFolderModel`, capture the parent's stable reference, and dispose
+that temporary parent model after navigation. A root or non-folder location
+returns `false`.
 
 ```mermaid
 flowchart TD
     Pane["Current pane"]
+    Logical{"Logical parent resolver?"}
     Folder{"Folder model?"}
     Parent["Resolve parent model"]
-    Target["FolderLocation"]
+    Target["BrowseLocation"]
     Navigate["Navigate and push"]
+    Stop["Return false"]
 
-    Pane --> Folder
-    Folder -->|No| Pane
+    Pane --> Logical
+    Logical -->|Yes| Target
+    Logical -->|No| Folder
+    Folder -->|No| Stop
     Folder -->|Yes| Parent
     Parent --> Target
     Target --> Navigate

@@ -81,6 +81,7 @@ Multiple implementations do not have one universally correct meaning. Files.Core
 | Preview | Route by descending priority; `null` means “not handled” | `PreviewSourceComposer` |
 | Properties | Merge all sources; higher priority wins duplicate property IDs | `PropertySourceComposer` |
 | Watcher or mutation service | Normally exactly one implementation | Default ambiguity exception or `PriorityCapabilityComposer<T>` |
+| Archive navigation marker | Select the highest-priority applicable marker | `PriorityCapabilityComposer<IArchiveSource>` |
 | Commands or adornments | Aggregate all applicable contributions | A contract-specific composer should define ordering and duplicate behavior |
 
 Without a registered composer, zero candidates resolve to `null`, one candidate is returned directly, and multiple candidates throw. This prevents registration order from silently deciding correctness.
@@ -146,6 +147,18 @@ flowchart LR
 `PropertyRequest` currently carries only the requested property IDs. A fast-only option is intentionally not exposed until providers can enforce the same latency contract; the current Windows provider reads its small supported typed set directly from `IShellItem2`.
 
 This split also applies to other expensive capabilities: item-bound access is convenient, while a shared provider can batch, cache, throttle, and schedule the actual work.
+
+## Archive navigation capabilities
+
+`IArchiveSource` marks an outer file, including a Windows Shell archive that
+also appears as an `IFolder`, as a candidate for `ArchiveLocation`.
+It does not open SevenZip or select a backend during capability resolution.
+That asynchronous work belongs to `ArchiveBrowseLocationHandler`.
+
+SevenZip-backed folders directly implement `IArchiveEntry`, which preserves
+the outer archive reference and normalized entry path for child navigation.
+Files.App checks `IArchiveEntry`, then `IArchiveSource`, then ordinary
+`IFolderModel` shape. See [Archive browsing](archives.md).
 
 ## Folder changes
 

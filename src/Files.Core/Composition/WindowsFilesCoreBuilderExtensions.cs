@@ -6,6 +6,7 @@ using Files.Core.Capabilities.Changes;
 using Files.Core.Capabilities.Previews;
 using Files.Core.Capabilities.Properties;
 using Files.Core.Capabilities.Thumbnails;
+using Files.Core.Storage.Archives;
 using Files.Core.Storage.Windows;
 
 namespace Files.Core.Composition;
@@ -28,7 +29,9 @@ public static class WindowsFilesCoreBuilderExtensions
 		WindowsStorageSource? source = null,
 		IPreviewStreamAccessPolicy? streamPreviewPolicy = null,
 		IWindowsShellPreviewPolicy? shellPreviewPolicy = null,
-		bool enablePreviews = true)
+		bool enablePreviews = true,
+		bool enableArchives = true,
+		IArchiveCredentialProvider? archiveCredentialProvider = null)
 	{
 		ArgumentNullException.ThrowIfNull(builder);
 
@@ -89,6 +92,12 @@ public static class WindowsFilesCoreBuilderExtensions
 			AddWindowsShellPreviews(
 				builder,
 				shellPreviewPolicy ?? AllowWindowsShellPreviewPolicy.Instance);
+		}
+
+		if (enableArchives)
+		{
+			builder.AddArchiveBrowsing(
+				archiveCredentialProvider);
 		}
 
 		return builder;

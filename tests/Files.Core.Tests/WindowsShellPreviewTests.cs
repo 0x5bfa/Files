@@ -544,6 +544,8 @@ public sealed class WindowsShellPreviewTests
 
 		public bool IsFileSystem => true;
 
+		public bool IsStream => true;
+
 		public int OpenCount { get; private set; }
 
 		public Func<CancellationToken, Task<Stream>> StreamFactory { get; init; } =

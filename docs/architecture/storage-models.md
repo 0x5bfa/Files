@@ -129,3 +129,9 @@ compatibility bridges; Files.App must keep disposal asynchronous on the UI
 thread.
 
 Storage sources and shared services have a longer lifetime and are owned by `FilesDataRoot` or the application composition root. This keeps native resources bounded by the model graph rather than the visual tree.
+
+An opened archive is a scoped exception to the process-wide source lifetime:
+its selected `IArchiveMount` exposes an item source only for the active
+`ArchiveBrowseLocationContext`. Inner entries use a backend-neutral outer
+`StorableReference` plus normalized entry path for navigation. See
+[Archive browsing](archives.md).

@@ -46,6 +46,8 @@ public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStor
 
 	public bool IsFileSystem => FileSystemPath is not null;
 
+	public bool IsStream => descriptor.Snapshot.IsStream;
+
 	public async Task<IFolder?> GetParentAsync(CancellationToken cancellationToken = default)
 	{
 		return await Factory.GetParentAsync(Descriptor, cancellationToken).ConfigureAwait(false);

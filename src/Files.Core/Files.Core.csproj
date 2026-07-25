@@ -17,6 +17,7 @@
 
 	<ItemGroup>
 		<PackageReference Include="OwlCore.Storage" />
+		<PackageReference Include="SevenZipSharp" />
 	</ItemGroup>
 
 	<ItemGroup>

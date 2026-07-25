@@ -15,4 +15,6 @@ public interface IWindowsStorable : IStorableChild, IStorageAddressSource
 	string? FileSystemPath { get; }
 
 	bool IsFileSystem { get; }
+
+	bool IsStream { get; }
 }
