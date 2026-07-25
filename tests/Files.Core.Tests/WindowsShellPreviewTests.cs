@@ -42,7 +42,28 @@ public sealed class WindowsShellPreviewTests
 		Assert.IsNull(await resolver.ResolveAsync(CreateContext(source, missing)));
 		Assert.IsNull(await resolver.ResolveAsync(CreateContext(source, missing)));
 		Assert.AreEqual(3, association.CallCount);
-}
+	}
+
+	[TestMethod]
+	public async Task HandlerResolverUsesTheFileSystemNameWhenTheDisplayNameHasNoExtension()
+	{
+		var expected = Guid.NewGuid();
+		var association = new FakeAssociation
+		{
+			Value = expected.ToString("B"),
+		};
+		var resolver = new WindowsPreviewHandlerResolver(association);
+		var source = new TestStorageSource();
+		var file = new FakeWindowsFile(
+			"item",
+			"Document",
+			@"C:\Content\document.pdf");
+
+		var actual = await resolver.ResolveAsync(CreateContext(source, file));
+
+		Assert.AreEqual(expected, actual);
+		Assert.AreEqual(".PDF", association.Extensions.Single());
+	}
 
 	[TestMethod]
 	public async Task HandlerResolverTreatsMalformedGuidAsUnavailable()
@@ -499,11 +520,16 @@ public sealed class WindowsShellPreviewTests
 
 	private sealed class FakeWindowsFile : IWindowsStorable, IFile, IDisposable
 	{
-		public FakeWindowsFile(string id, string name)
+		public FakeWindowsFile(
+			string id,
+			string name,
+			string? fileSystemPath = null)
 		{
 			Id = id;
 			Name = name;
-			Address = new StorageAddress("file", name);
+			Address = new StorageAddress(
+				"file",
+				fileSystemPath ?? name);
 		}
 
 		public string Id { get; }

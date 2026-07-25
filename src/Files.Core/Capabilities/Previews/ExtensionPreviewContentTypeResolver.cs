@@ -3,6 +3,7 @@
 
 using System.IO;
 using Files.Core.Capabilities;
+using Files.Core.Storage;
 using OwlCore.Storage;
 
 namespace Files.Core.Capabilities.Previews;
@@ -41,8 +42,24 @@ public sealed class ExtensionPreviewContentTypeResolver : IPreviewContentTypeRes
 	{
 		ArgumentNullException.ThrowIfNull(context);
 
-		if (context.CoreModel is IFile file
-			&& contentTypes.TryGetValue(Path.GetExtension(file.Name), out var resolvedType))
+		if (context.CoreModel is not IFile file)
+		{
+			contentType = null!;
+			return false;
+		}
+
+		if (contentTypes.TryGetValue(
+			Path.GetExtension(file.Name),
+			out var resolvedType))
+		{
+			contentType = resolvedType;
+			return true;
+		}
+
+		if (file is IStorageAddressSource addressSource
+			&& contentTypes.TryGetValue(
+				Path.GetExtension(addressSource.Address.Value),
+				out resolvedType))
 		{
 			contentType = resolvedType;
 			return true;

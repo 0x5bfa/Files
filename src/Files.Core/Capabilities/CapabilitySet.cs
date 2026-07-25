@@ -14,6 +14,7 @@ internal sealed class CapabilitySet : ICapabilitySet
 	private readonly CapabilityContext context;
 	private readonly Dictionary<Type, object> resolvedCapabilities = [];
 	private readonly List<object> ownedInstances = [];
+	private Task? disposeTask;
 	private bool isDisposed;
 
 	public CapabilitySet(CapabilityPipeline pipeline, CapabilityContext context)
@@ -66,26 +67,29 @@ internal sealed class CapabilitySet : ICapabilitySet
 
 	public void Dispose()
 	{
-		object[] instances;
+		DisposeAsync().AsTask().GetAwaiter().GetResult();
+	}
 
+	public ValueTask DisposeAsync()
+	{
 		lock (syncRoot)
 		{
-			if (isDisposed)
+			if (disposeTask is not null)
 			{
-				return;
+				return new ValueTask(disposeTask);
 			}
 
 			isDisposed = true;
-			instances = ownedInstances.ToArray();
+			var instances = ownedInstances.ToArray();
 			ownedInstances.Clear();
 			resolvedCapabilities.Clear();
+			disposeTask = DisposeInstancesAsync(instances);
+			GC.SuppressFinalize(this);
+			return new ValueTask(disposeTask);
 		}
-
-		DisposeInstances(instances);
-		GC.SuppressFinalize(this);
 	}
 
-	internal static void DisposeInstances(IEnumerable<object> instances)
+	internal static async Task DisposeInstancesAsync(IEnumerable<object> instances)
 	{
 		List<Exception>? exceptions = null;
 
@@ -93,7 +97,14 @@ internal sealed class CapabilitySet : ICapabilitySet
 		{
 			try
 			{
-				(instance as IDisposable)?.Dispose();
+				if (instance is IAsyncDisposable asyncDisposable)
+				{
+					await asyncDisposable.DisposeAsync().ConfigureAwait(false);
+				}
+				else
+				{
+					(instance as IDisposable)?.Dispose();
+				}
 			}
 			catch (Exception exception)
 			{

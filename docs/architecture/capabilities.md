@@ -73,7 +73,7 @@ Contributors are invoked only the first time their capability contract is reques
 
 ## Composition is contract-specific
 
-Multiple implementations do not have one universally correct meaning. The prototype makes that policy explicit.
+Multiple implementations do not have one universally correct meaning. Files.Core makes that policy explicit.
 
 | Capability shape | Composition rule | Prototype |
 | --- | --- | --- |
@@ -205,7 +205,10 @@ flowchart TB
 - The set owns disposable instances marked `CapabilityOwnership.Model`, plus new disposable composer/decorator wrappers.
 - `CapabilityOwnership.External` marks instances owned elsewhere.
 - Composers and decorators must not dispose the candidate or inner capability they wrap; the set tracks those lifetimes separately.
-- Model-scoped resources are synchronously disposable by the current capability set; long-lived sources may also expose `IAsyncDisposable` for ordered native cleanup.
+- `ICapabilitySet` supports both `IDisposable` and `IAsyncDisposable`.
+  Asynchronous disposal is preferred and awaited; synchronous disposal is a
+  compatibility bridge for callers that cannot yet flow async lifetime.
+- Long-lived sources expose `IAsyncDisposable` for ordered native cleanup.
 - Disposal runs wrappers and candidates in reverse creation order, then the AppModel disposes its CoreModel.
 
 Direct capabilities implemented by the CoreModel are always externally owned by the pipeline because the AppModel already owns the CoreModel itself.

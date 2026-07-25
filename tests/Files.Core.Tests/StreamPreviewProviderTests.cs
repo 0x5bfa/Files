@@ -29,6 +29,17 @@ public sealed class StreamPreviewProviderTests
 
 		var unsupported = new TestStorable("other", "readme.bin");
 		Assert.IsFalse(resolver.TryResolve(CreateContext(source, unsupported), out _));
+
+		var addressedFile = new TestFile(
+			"addressed",
+			"Readme",
+			_ => Task.FromResult<Stream>(new MemoryStream()),
+			@"C:\Content\readme.txt");
+		Assert.IsTrue(
+			resolver.TryResolve(
+				CreateContext(source, addressedFile),
+				out contentType));
+		Assert.AreEqual("text/plain", contentType.MediaType);
 	}
 
 	[TestMethod]
@@ -331,23 +342,29 @@ public sealed class StreamPreviewProviderTests
 		}
 	}
 
-	private sealed class TestFile : IFile
+	private sealed class TestFile : IFile, IStorageAddressSource
 	{
 		private readonly Func<CancellationToken, Task<Stream>> openStream;
 
 		public TestFile(
 			string id,
 			string name,
-			Func<CancellationToken, Task<Stream>> openStream)
+			Func<CancellationToken, Task<Stream>> openStream,
+			string? addressValue = null)
 		{
 			Id = id;
 			Name = name;
 			this.openStream = openStream;
+			Address = new StorageAddress(
+				"test",
+				addressValue ?? name);
 		}
 
 		public string Id { get; }
 
 		public string Name { get; }
+
+		public StorageAddress Address { get; }
 
 		public int OpenCount { get; private set; }
 

@@ -64,8 +64,8 @@ Access decisions are kept separate from stream opening through
 `IPreviewStreamAccessPolicy`. A policy can return `RequiresHydration`,
 `AccessDenied`, `DisabledByPolicy`, or another `PreviewBlockReason` before any
 stream is opened. The request's `PreviewHydrationPolicy` is passed through to
-the policy; production registration of a concrete policy remains an
-application composition-root concern.
+the policy. `FilesCoreBuilder` supplies a permissive fallback; production
+Files.App should inject its hydration and trust policy.
 
 ## Stream ownership and size limits
 
@@ -108,8 +108,10 @@ sequenceDiagram
     UI->>Browse: dispose obsolete/current result
 ```
 
-The renderer, preview cache, shell-specific preview handlers, and application
-composition registrations are intentionally outside this Core slice.
+WinUI renderers, dispatcher-affine image/media objects, and the child-HWND
+host are outside Files.Core. Stream ownership, Shell association, handler
+activation, STA scheduling, session control, and deterministic COM cleanup
+are implemented in Core.
 
 ## Windows Shell preview backend
 
@@ -147,14 +149,14 @@ dependency. Cleanup attempts `Unload()`, `SetSite(null)`, and every COM release
 even when one cleanup operation fails. Disposal is idempotent.
 
 Cancellation prevents queued operations from starting, but cannot interrupt a
-synchronous third-party COM method that is already executing. A future WinUI
+synchronous third-party COM method that is already executing. The Files.App
 adapter creates the dedicated host HWND, converts its arranged size to
 physical-pixel bounds, forwards theme/focus/keyboard events, and disposes the
 session on unload. XAML controls and host-window creation are deliberately not
-part of this Core implementation.
+part of Core.
 
-The test composition gives `StreamPreviewProvider` priority 200 and
-`WindowsShellPreviewProvider` priority 100. Known safe stream formats are
-therefore preferred; a blocked result stops fallback, while a `null` stream
-result allows the Shell descriptor provider to run. Production registration
-and the actual WinUI adapter remain follow-up work.
+`AddWindowsStorage` gives `StreamPreviewProvider` priority 200 and
+`WindowsShellPreviewProvider` priority 100. Known stream formats are therefore
+preferred; a blocked result stops fallback, while a `null` stream result
+allows the Shell descriptor provider to run. The remaining implementation is
+the Files.App renderer/host described in [New Files.App architecture](files-app.md).

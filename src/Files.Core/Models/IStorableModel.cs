@@ -10,7 +10,7 @@ namespace Files.Core.Models;
 /// <summary>
 /// Files-specific application model for an OwlCore storage item.
 /// </summary>
-public interface IStorableModel : ICapabilityHost, IDisposable
+public interface IStorableModel : ICapabilityHost, IDisposable, IAsyncDisposable
 {
 	IStorable CoreModel { get; }
 

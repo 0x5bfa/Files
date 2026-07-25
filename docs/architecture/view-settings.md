@@ -2,7 +2,8 @@
 
 Details-view column widths, layout mode, sort selection, and item size describe how a browse location is presented. They are not properties or capabilities of one storage item.
 
-The prototype therefore places them on `IBrowseSessionModel` and persists them through `IViewSettingsStore`.
+Files.Core therefore places them on `IBrowseSessionModel` and persists them
+through `IViewSettingsStore`.
 
 ```mermaid
 flowchart TD
@@ -56,7 +57,10 @@ sequenceDiagram
     Session-->>VM: StateChanged
 ```
 
-If no store is supplied, the session keeps an in-memory value per `BrowseLocation`. A real composition root can inject a persisted store backed by the Files settings database.
+If no store is supplied directly to a session, it keeps an in-memory value per
+`BrowseLocation`. `FilesCoreBuilder` supplies `InMemoryViewSettingsStore` by
+default. Files.App should inject a persisted store backed by the Files
+settings database.
 
 The session replaces the active context and item list only after the new context has finished loading. A failed or cancelled navigation disposes the new context and partial items while preserving the current context and items. Replacing or disposing the session disposes both the item models and the context that owns the location model.
 

@@ -39,21 +39,49 @@ public sealed class StorableModelFactory : IStorableModelFactory
 				_ => new StorableModel(coreModel, reference, capabilities),
 			};
 		}
-		catch
+		catch (Exception creationError)
 		{
-			try
+			var cleanupErrors = new List<Exception>();
+			if (capabilities is not null)
 			{
-				capabilities?.Dispose();
-			}
-			finally
-			{
-				if (coreModel is IDisposable disposableCoreModel)
-				{
-					disposableCoreModel.Dispose();
-				}
+				TryDisposeSynchronously(capabilities, cleanupErrors);
 			}
 
-			throw;
+			TryDisposeSynchronously(coreModel, cleanupErrors);
+			if (cleanupErrors.Count is 0)
+			{
+				throw;
+			}
+
+			cleanupErrors.Insert(0, creationError);
+			throw new AggregateException(
+				"Storable model construction and cleanup failed.",
+				cleanupErrors);
+		}
+	}
+
+	private static void TryDisposeSynchronously(
+		object instance,
+		ICollection<Exception> errors)
+	{
+		try
+		{
+			if (instance is IAsyncDisposable asyncDisposable)
+			{
+				asyncDisposable
+					.DisposeAsync()
+					.AsTask()
+					.GetAwaiter()
+					.GetResult();
+			}
+			else
+			{
+				(instance as IDisposable)?.Dispose();
+			}
+		}
+		catch (Exception error)
+		{
+			errors.Add(error);
 		}
 	}
 }

@@ -19,6 +19,12 @@ public sealed record ThumbnailCacheKey
 		ArgumentNullException.ThrowIfNull(sourceId);
 		ArgumentException.ThrowIfNullOrWhiteSpace(itemId);
 		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(requestedSize);
+		if (mode is not ThumbnailMode.Icon
+			and not ThumbnailMode.Content
+			and not ThumbnailMode.PreferContent)
+		{
+			throw new ArgumentOutOfRangeException(nameof(mode));
+		}
 
 		SourceId = sourceId;
 		ItemId = itemId;

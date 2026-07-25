@@ -9,7 +9,9 @@ namespace Files.Core.Models;
 
 public class StorableModel : IStorableModel
 {
-	private bool isDisposed;
+	private readonly object disposalLock = new();
+	private Task? disposeTask;
+	private volatile bool isDisposed;
 
 	public StorableModel(
 		IStorable coreModel,
@@ -36,32 +38,69 @@ public class StorableModel : IStorableModel
 
 	public void Dispose()
 	{
-		Dispose(true);
-		GC.SuppressFinalize(this);
+		DisposeAsync().AsTask().GetAwaiter().GetResult();
 	}
 
-	protected virtual void Dispose(bool disposing)
+	public ValueTask DisposeAsync()
 	{
-		if (isDisposed)
+		lock (disposalLock)
 		{
-			return;
+			if (disposeTask is null)
+			{
+				isDisposed = true;
+				disposeTask = DisposeAsyncCore().AsTask();
+			}
+
+			return new ValueTask(disposeTask);
+		}
+	}
+
+	protected void ThrowIfDisposed()
+	{
+		ObjectDisposedException.ThrowIf(isDisposed, this);
+	}
+
+	protected virtual async ValueTask DisposeAsyncCore()
+	{
+		List<Exception>? errors = null;
+
+		try
+		{
+			await Capabilities.DisposeAsync().ConfigureAwait(false);
+		}
+		catch (Exception error)
+		{
+			(errors ??= []).Add(error);
 		}
 
-		isDisposed = true;
-
-		if (disposing)
+		try
 		{
-			try
+			if (CoreModel is IAsyncDisposable asyncDisposableCoreModel)
 			{
-				Capabilities.Dispose();
+				await asyncDisposableCoreModel.DisposeAsync().ConfigureAwait(false);
 			}
-			finally
+			else if (CoreModel is IDisposable disposableCoreModel)
 			{
-				if (CoreModel is IDisposable coreModel)
-				{
-					coreModel.Dispose();
-				}
+				disposableCoreModel.Dispose();
 			}
+		}
+		catch (Exception error)
+		{
+			(errors ??= []).Add(error);
+		}
+
+		GC.SuppressFinalize(this);
+
+		if (errors is { Count: 1 })
+		{
+			throw errors[0];
+		}
+
+		if (errors is { Count: > 1 })
+		{
+			throw new AggregateException(
+				"One or more storable model resources could not be disposed.",
+				errors);
 		}
 	}
 }

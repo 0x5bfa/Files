@@ -12,7 +12,11 @@ public sealed record ViewColumnSettings
 		bool isVisible = true)
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(propertyId);
-		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+		if (!double.IsFinite(width) || width <= 0)
+		{
+			throw new ArgumentOutOfRangeException(nameof(width));
+		}
+
 		ArgumentOutOfRangeException.ThrowIfNegative(order);
 
 		PropertyId = propertyId;

@@ -96,9 +96,29 @@ public sealed class CapabilityPipeline
 
 			return new CapabilityResolution<TCapability>(capabilityResult, ownedInstances);
 		}
-		catch
+		catch (Exception resolutionError)
 		{
-			DisposeTrackedInstances(ownedInstances);
+			try
+			{
+				DisposeTrackedInstances(ownedInstances);
+			}
+			catch (AggregateException cleanupError)
+			{
+				throw new AggregateException(
+					"Capability resolution and cleanup failed.",
+					[
+						resolutionError,
+						.. cleanupError.InnerExceptions,
+					]);
+			}
+			catch (Exception cleanupError)
+			{
+				throw new AggregateException(
+					"Capability resolution and cleanup failed.",
+					resolutionError,
+					cleanupError);
+			}
+
 			throw;
 		}
 	}
@@ -160,7 +180,7 @@ public sealed class CapabilityPipeline
 			return;
 		}
 
-		if (instance is IDisposable)
+		if (instance is IDisposable or IAsyncDisposable)
 		{
 			ownedInstances.Add(instance);
 		}
@@ -170,7 +190,10 @@ public sealed class CapabilityPipeline
 	{
 		var instances = ownedInstances.ToArray();
 		ownedInstances.Clear();
-		CapabilitySet.DisposeInstances(instances);
+		CapabilitySet
+			.DisposeInstancesAsync(instances)
+			.GetAwaiter()
+			.GetResult();
 	}
 }
 

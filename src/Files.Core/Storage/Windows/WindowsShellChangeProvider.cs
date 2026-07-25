@@ -39,9 +39,11 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 	private readonly IWindowsShellScheduler scheduler;
 	private readonly string windowClassName = $"{WindowClassPrefix}_{Guid.NewGuid():N}";
 	private readonly List<Registration> registrations = [];
+	private readonly object disposalLock = new();
 	private WNDPROC? wndProc;
 	private HWND window;
 	private uint notificationMessage;
+	private Task? disposeTask;
 	private int isDisposed;
 
 	public WindowsShellChangeProvider(IWindowsShellScheduler scheduler)
@@ -62,12 +64,18 @@ internal sealed class WindowsShellChangeProvider : IAsyncDisposable
 			cancellationToken);
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
-		if (Interlocked.Exchange(ref isDisposed, 1) != 0)
+		lock (disposalLock)
 		{
-			return;
+			disposeTask ??= DisposeProviderAsync();
+			return new ValueTask(disposeTask);
 		}
+	}
+
+	private async Task DisposeProviderAsync()
+	{
+		Interlocked.Exchange(ref isDisposed, 1);
 
 		try
 		{

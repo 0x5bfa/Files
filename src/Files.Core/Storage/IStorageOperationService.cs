@@ -8,6 +8,8 @@ namespace Files.Core.Storage;
 /// </summary>
 public interface IStorageOperationService
 {
+	bool CanHandle(StorageOperationRequest request);
+
 	ValueTask<StorageOperationResult> ExecuteAsync(
 		StorageOperationRequest request,
 		IProgress<StorageOperationProgress>? progress = null,

@@ -1,35 +1,94 @@
-# Files.Core prototype
+# Files.Core
 
-This project prototypes the new UI-agnostic model graph alongside the existing implementation.
+Files.Core is the UI-independent model, storage, capability, and application
+state foundation for the next Files.App.
 
-The implemented vertical slice is:
+## Public entry point
 
-1. `IStorageSource` owns provider-specific resolution and returns OwlCore.Storage CoreModels.
-2. `IStorableModelFactory` wraps CoreModels as Files AppModels.
-3. `CapabilityPipeline` lazily composes item-bound capabilities from direct, provider, and plugin candidates.
-4. `IFilesDataRoot` composes configured sources and forms the root of the storage-backed graph.
-5. `IBrowseLocationHandler` opens an owned context for each typed location.
-6. `IBrowseSessionModel` owns one browser pane's context, item projection, prefetched presentation data, selection, and view settings.
+Construct one `FilesCoreRuntime` at process startup:
 
-The capability prototype includes:
+```csharp
+await using var runtime = new FilesCoreBuilder(
+		persistedViewSettings,
+		thumbnailCache)
+	.AddWindowsStorage(
+		streamPreviewPolicy: streamPolicy,
+		shellPreviewPolicy: shellPolicy)
+	.Build();
 
-- `model.Get<TCapability>()` over an owned `ICapabilitySet`;
-- explicit contributor origin, priority, and ownership;
-- contract-specific composers for thumbnail fallback, preview routing, and property merging;
-- decorators, including a bounded in-memory thumbnail cache;
-- a batch-oriented `IPropertyProvider` adapter for item-bound `IPropertySource` access;
-- an item-bound `IFolderChangeSource` over a source-owned Windows Shell notification provider.
+var window = await runtime.Application.CreateWindowAsync(
+	HomeLocation.Instance,
+	cancellationToken);
+```
 
-The Windows Shell provider supports file-system and virtual item resolution, versioned provider-defined item identity, managed PIDL descriptors, strict persisted-reference validation, snapshot-based files and folders, bounded streaming enumeration, file-system streams, apartment-safe virtual read streams, requested typed property extraction, PNG thumbnail extraction, folder change subscriptions, and identity-verified file-system rename. `WindowsShellItemResolver` keeps Shell materialization and COM affinity in one boundary. `IWindowsShellScheduler` supplies injectable, message-pumped STA lanes for ordered metadata, independent concurrent extraction, and long operations.
+The runtime exposes explicit roots for application models, data/source
+resolution, storage operations, view settings, thumbnail caching, and Windows
+Shell preview sessions.
 
-Architecture documents are available in [`docs/architecture`](../../docs/architecture/README.md).
+## Implemented model graph
 
-## Prototype boundaries
+```mermaid
+flowchart TB
+    Runtime["FilesCoreRuntime"]
+    App["FilesApplicationModel"]
+    Window["WindowModel"]
+    Tab["TabModel"]
+    Pane["PaneModel"]
+    Session["BrowseSessionModel"]
+    Items["IStorableModel + capabilities"]
 
-- The project targets Windows so it can eventually absorb `Files.App.CsWin32`, while the prototype code does not reference WinUI.
-- Existing storage implementations remain untouched. `Files.Core` temporarily references `Files.App.CsWin32` for source-generated interop.
-- Existing projects do not reference this prototype yet.
-- Home, search, and tag locations are typed, but need separate handlers before they can be browsed.
-- Persisted Windows filesystem references recover same-directory renames, but not cross-directory moves; reverse lookup by file ID remains a future Windows storage slice.
-- Additional Windows property types, history, copy/move/delete and bulk operations, actions, and ViewModels remain future vertical slices.
-- The eventual merge of `Files.Shared`, `Files.Core.Storage`, `Files.App.Storage`, and `Files.App.CsWin32` is intentionally separate from adopting this architecture.
+    Runtime --> App
+    App --> Window
+    Window --> Tab
+    Tab --> Pane
+    Pane --> Session
+    Session --> Items
+```
+
+Implemented areas:
+
+- stable provider/source/item identity and recovery addresses;
+- OwlCore.Storage CoreModels wrapped by Files AppModels;
+- lazy per-capability contributors, composers, decorators, and ownership;
+- application, window, tab, split-pane, navigation-history, and browse models;
+- home/folder locations plus extensible search/tag location contracts;
+- immutable item snapshots, selection, sorting, granular changes, and
+  viewport prefetch;
+- in-memory and pluggable view settings;
+- cached encoded thumbnails, typed properties, and folder changes;
+- stream previews and hosted Windows Shell preview sessions;
+- create, rename, copy, move, delete, collision, and progress contracts;
+- one composition root with deterministic asynchronous disposal;
+- Windows integration tests, architecture benchmarks, and Core CI.
+
+## Windows vertical slice
+
+`AddWindowsStorage` supplies:
+
+- filesystem and virtual Shell resolution;
+- versioned filesystem identity and encoded virtual-item identity;
+- managed PIDL locators without exposing COM interfaces;
+- parent lookup, bounded folder enumeration, and affine virtual streams;
+- message-pumped STA lanes for metadata, extraction, operations, and preview;
+- PNG thumbnails, typed Shell properties, and shared folder notifications;
+- stream and Shell preview providers;
+- `IFileOperation` create/rename/copy/move/delete.
+
+Files.Core targets Windows and temporarily references `Files.App.CsWin32` for
+source-generated interop. It does not reference WinUI.
+
+## Boundaries
+
+- WinUI ViewModels, dispatcher adaptation, image decoding, media/document
+  rendering, the preview child HWND, activation, drag/drop, and context menus
+  belong to Files.App.
+- Search/tag behavior needs a selected backend and custom location handler.
+- Additional storage providers plug into the same source, capability,
+  location, and operation contracts.
+- Durable settings and window-session serialization are application policy.
+- The eventual merge of `Files.Shared`, `Files.Core.Storage`,
+  `Files.App.Storage`, and `Files.App.CsWin32` is a separate mechanical
+  migration and must preserve these logical namespaces.
+
+The complete design and Files.App implementation blueprint are in
+[`docs/architecture`](../../docs/architecture/README.md).

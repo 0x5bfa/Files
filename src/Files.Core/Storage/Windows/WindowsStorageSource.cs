@@ -22,7 +22,9 @@ public sealed class WindowsStorageSource : IStorageSource
 	private readonly WindowsStorableFactory storableFactory;
 	private readonly WindowsShellChangeProvider changeProvider;
 	private readonly bool ownsScheduler;
-	private bool isDisposed;
+	private readonly object disposalLock = new();
+	private Task? disposeTask;
+	private volatile bool isDisposed;
 
 	public WindowsStorageSource(
 		StorageSourceId? sourceId = null,
@@ -159,21 +161,58 @@ public sealed class WindowsStorageSource : IStorageSource
 			reference.ItemId);
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
-		if (isDisposed)
+		lock (disposalLock)
 		{
-			return;
-		}
+			if (disposeTask is not null)
+			{
+				return new ValueTask(disposeTask);
+			}
 
-		isDisposed = true;
-		await changeProvider.DisposeAsync().ConfigureAwait(false);
+			isDisposed = true;
+			disposeTask = DisposeCoreAsync();
+			return new ValueTask(disposeTask);
+		}
+	}
+
+	private async Task DisposeCoreAsync()
+	{
+		var errors = new List<Exception>();
+
+		try
+		{
+			await changeProvider.DisposeAsync().ConfigureAwait(false);
+		}
+		catch (Exception error)
+		{
+			errors.Add(error);
+		}
 
 		if (ownsScheduler)
 		{
-			await Scheduler.DisposeAsync().ConfigureAwait(false);
+			try
+			{
+				await Scheduler.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception error)
+			{
+				errors.Add(error);
+			}
 		}
 
 		GC.SuppressFinalize(this);
+
+		if (errors.Count is 1)
+		{
+			throw errors[0];
+		}
+
+		if (errors.Count > 1)
+		{
+			throw new AggregateException(
+				"One or more Windows storage source resources could not be disposed.",
+				errors);
+		}
 	}
 }

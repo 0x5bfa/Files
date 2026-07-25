@@ -35,7 +35,11 @@ public sealed class WindowsPreviewHandlerResolver : IWindowsPreviewHandlerResolv
 			return ValueTask.FromResult<Guid?>(null);
 		}
 
-		var extension = NormalizeExtension(Path.GetExtension(file.Name));
+		var extension = NormalizeExtension(
+			Path.GetExtension(
+				((IWindowsStorable)context.CoreModel).FileSystemPath
+					?? file.Name))
+			?? NormalizeExtension(Path.GetExtension(file.Name));
 		if (extension is null)
 		{
 			return ValueTask.FromResult<Guid?>(null);

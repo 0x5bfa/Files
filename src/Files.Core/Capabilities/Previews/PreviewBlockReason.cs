@@ -18,6 +18,14 @@ public sealed class BlockedPreviewResult : PreviewResult
 {
 	public BlockedPreviewResult(PreviewBlockReason reason)
 	{
+		if (reason is not PreviewBlockReason.RequiresHydration
+			and not PreviewBlockReason.TooLarge
+			and not PreviewBlockReason.AccessDenied
+			and not PreviewBlockReason.DisabledByPolicy)
+		{
+			throw new ArgumentOutOfRangeException(nameof(reason));
+		}
+
 		Reason = reason;
 	}
 

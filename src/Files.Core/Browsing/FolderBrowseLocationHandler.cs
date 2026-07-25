@@ -31,7 +31,7 @@ public sealed class FolderBrowseLocationHandler : IBrowseLocationHandler
 
 		if (model is not IFolderModel folderModel)
 		{
-			model.Dispose();
+			await model.DisposeAsync().ConfigureAwait(false);
 			throw new InvalidOperationException($"Item '{folderLocation.Folder.ItemId}' is not a folder.");
 		}
 

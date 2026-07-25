@@ -16,6 +16,13 @@ public sealed class ThumbnailCacheEntry
 		bool isFallback = false)
 	{
 		ArgumentNullException.ThrowIfNull(content);
+		if (content.Length is 0)
+		{
+			throw new ArgumentException(
+				"Thumbnail content cannot be empty.",
+				nameof(content));
+		}
+
 		ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
 
 		this.content = (byte[])content.Clone();

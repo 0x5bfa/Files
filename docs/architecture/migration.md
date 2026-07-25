@@ -36,22 +36,31 @@ flowchart TD
     Move --> Delete
 ```
 
-1. Stabilize `IStorageSource`, CoreModel capabilities, AppModels, and browse-session ownership in the new project.
-2. Implement one provider and one browser path end to end. Windows storage is the first slice.
-3. Introduce composition in `Files.App` behind a feature boundary. Do not move unrelated source files during adoption.
+1. Stabilize `IStorageSource`, CoreModel capabilities, AppModels, and
+   browse-session ownership in the new project. **Complete.**
+2. Implement one provider and one browser path end to end. Windows storage,
+   browsing, presentation, preview, and operations are the first slice.
+   **Complete.**
+3. Introduce `FilesCoreRuntime` in `Files.App` behind a feature boundary. Do
+   not move unrelated source files during adoption. **Next step.**
 4. Move WinUI-agnostic logic from the four existing projects after consumers use the new contracts.
 5. Remove old projects and temporary references only after their dependency edges reach zero.
 
 ## Transitional dependency
 
-The prototype currently has this temporary edge:
+Files.Core currently has this temporary edge:
 
 ```mermaid
 flowchart LR
     Core["Files.Core"] --> CsWin32["Files.App.CsWin32"]
 ```
 
-It allows the Windows provider to use existing source-generated interop without copying generated code. When CsWin32 moves into `Files.Core`, this project reference disappears while namespaces and higher-level contracts remain stable.
+It allows the Windows provider to use existing source-generated interop
+without copying generated code. When CsWin32 moves into `Files.Core`, this
+project reference disappears while namespaces and higher-level contracts
+remain stable.
+
+See [New Files.App architecture](files-app.md) for the exact adoption slice.
 
 ## Conflict controls
 

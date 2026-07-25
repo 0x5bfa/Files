@@ -125,19 +125,12 @@ public sealed class WindowsShellPreviewSession : IWindowsShellPreviewSession
 		}
 	}
 
-	internal void CleanupOnPreviewSta()
+	internal void CleanupControllerOnPreviewSta()
 	{
-		try
+		controller.Dispose();
+		lock (syncRoot)
 		{
-			controller.Dispose();
-		}
-		finally
-		{
-			target.Dispose();
-			lock (syncRoot)
-			{
-				state = WindowsShellPreviewSessionState.Disposed;
-			}
+			state = WindowsShellPreviewSessionState.Disposed;
 		}
 	}
 
@@ -158,6 +151,8 @@ public sealed class WindowsShellPreviewSession : IWindowsShellPreviewSession
 
 	private async Task DisposeCoreAsync()
 	{
+		var errors = new List<Exception>();
+
 		try
 		{
 			await scheduler
@@ -169,9 +164,31 @@ public sealed class WindowsShellPreviewSession : IWindowsShellPreviewSession
 					})
 				.ConfigureAwait(false);
 		}
-		finally
+		catch (Exception error)
 		{
-			target.Dispose();
+			errors.Add(error);
+		}
+
+		try
+		{
+			await target.DisposeAsync().ConfigureAwait(false);
+		}
+		catch (Exception error)
+		{
+			errors.Add(error);
+		}
+
+		GC.SuppressFinalize(this);
+		if (errors.Count is 1)
+		{
+			throw errors[0];
+		}
+
+		if (errors.Count > 1)
+		{
+			throw new AggregateException(
+				"Preview handler and target cleanup failed.",
+				errors);
 		}
 	}
 

@@ -4,7 +4,7 @@
 namespace Files.Core.Storage;
 
 /// <summary>
-/// Provider identity and an optional locator for an item within a configured storage source.
+/// Stable provider identity and an optional recovery locator for an item.
 /// </summary>
 public sealed record StorableReference
 {
@@ -22,5 +22,23 @@ public sealed record StorableReference
 
 	public string ItemId { get; }
 
+	/// <summary>
+	/// Gets a mutable-in-the-world recovery hint. It is intentionally excluded
+	/// from equality and hashing.
+	/// </summary>
 	public StorageAddress? LastKnownAddress { get; }
+
+	public bool Equals(StorableReference? other)
+	{
+		return other is not null
+			&& SourceId == other.SourceId
+			&& StringComparer.Ordinal.Equals(ItemId, other.ItemId);
+	}
+
+	public override int GetHashCode()
+	{
+		return HashCode.Combine(
+			SourceId,
+			StringComparer.Ordinal.GetHashCode(ItemId));
+	}
 }

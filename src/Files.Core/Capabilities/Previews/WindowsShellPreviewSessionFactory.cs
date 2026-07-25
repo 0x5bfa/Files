@@ -69,9 +69,26 @@ public sealed class WindowsShellPreviewSessionFactory : IWindowsShellPreviewSess
 
 			return session;
 		}
-		finally
+		catch (Exception creationError)
 		{
-			target?.Dispose();
+			if (target is null)
+			{
+				throw;
+			}
+
+			try
+			{
+				await target.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception cleanupError)
+			{
+				throw new AggregateException(
+					"Preview session creation and target cleanup failed.",
+					creationError,
+					cleanupError);
+			}
+
+			throw;
 		}
 	}
 
@@ -119,10 +136,21 @@ public sealed class WindowsShellPreviewSessionFactory : IWindowsShellPreviewSess
 
 			return session;
 		}
-		catch
+		catch (Exception activationError)
 		{
 			session.TransitionTo(WindowsShellPreviewSessionState.Faulted);
-			session.CleanupOnPreviewSta();
+			try
+			{
+				session.CleanupControllerOnPreviewSta();
+			}
+			catch (Exception cleanupError)
+			{
+				throw new AggregateException(
+					"Preview handler activation and cleanup failed.",
+					activationError,
+					cleanupError);
+			}
+
 			throw;
 		}
 	}

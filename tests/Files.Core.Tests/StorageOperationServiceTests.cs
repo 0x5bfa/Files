@@ -16,6 +16,7 @@ public sealed class StorageOperationServiceTests
 		var second = new TestOperationProvider(canHandle: true);
 		var service = new StorageOperationService([first, second]);
 
+		Assert.IsTrue(service.CanHandle(request));
 		var result = await service.ExecuteAsync(request);
 
 		Assert.IsTrue(result.Succeeded);
@@ -29,6 +30,7 @@ public sealed class StorageOperationServiceTests
 		var service = new StorageOperationService(
 			[new TestOperationProvider(canHandle: false)]);
 
+		Assert.IsFalse(service.CanHandle(new UnknownOperationRequest()));
 		var result = await service.ExecuteAsync(new UnknownOperationRequest());
 
 		Assert.IsFalse(result.Succeeded);
@@ -67,6 +69,56 @@ public sealed class StorageOperationServiceTests
 		Assert.AreEqual(0, provider.ExecuteCount);
 	}
 
+	[TestMethod]
+	public async Task MapsNullProviderResultToFailedResult()
+	{
+		var service = new StorageOperationService(
+			[new NullOperationProvider()]);
+
+		var result = await service.ExecuteAsync(CreateRenameRequest());
+
+		Assert.IsFalse(result.Succeeded);
+		Assert.IsInstanceOfType<InvalidOperationException>(result.Error);
+	}
+
+	[TestMethod]
+	public void RequestsRejectUnknownEnumValues()
+	{
+		var reference = CreateRenameRequest().Item;
+
+		Assert.Throws<ArgumentOutOfRangeException>(
+			() => new CreateItemOperationRequest(
+				reference,
+				"item",
+				(StorageItemKind)int.MaxValue));
+		Assert.Throws<ArgumentOutOfRangeException>(
+			() => new CopyOperationRequest(
+				reference,
+				reference,
+				conflictBehavior:
+					(StorageConflictBehavior)int.MaxValue));
+	}
+
+	[TestMethod]
+	public void ResultAndProgressRejectContradictoryState()
+	{
+		var reference = CreateRenameRequest().Item;
+
+		Assert.Throws<ArgumentException>(
+			() => new StorageOperationResult(
+				Succeeded: true,
+				ResultItem: reference,
+				Error: new IOException("unexpected")));
+		Assert.Throws<ArgumentNullException>(
+			() => new StorageOperationResult(
+				Succeeded: false,
+				ResultItem: null));
+		Assert.Throws<ArgumentOutOfRangeException>(
+			() => new StorageOperationProgress(
+				CompletedItems: 2,
+				TotalItems: 1));
+	}
+
 	private static RenameOperationRequest CreateRenameRequest()
 	{
 		return new RenameOperationRequest(
@@ -78,6 +130,19 @@ public sealed class StorageOperationServiceTests
 	}
 
 	private sealed record UnknownOperationRequest : StorageOperationRequest;
+
+	private sealed class NullOperationProvider : IStorageOperationProvider
+	{
+		public bool CanHandle(StorageOperationRequest request) => true;
+
+		public ValueTask<StorageOperationResult> ExecuteAsync(
+			StorageOperationRequest request,
+			IProgress<StorageOperationProgress>? progress = null,
+			CancellationToken cancellationToken = default)
+		{
+			return ValueTask.FromResult<StorageOperationResult>(null!);
+		}
+	}
 
 	private sealed class TestOperationProvider : IStorageOperationProvider
 	{

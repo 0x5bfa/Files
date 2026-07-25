@@ -57,14 +57,13 @@ public sealed class FolderBrowseLocationContext : IBrowseLocationContext, IBrows
 		return dataRoot.ResolveAsync(reference, cancellationToken);
 	}
 
-	public ValueTask DisposeAsync()
+	public async ValueTask DisposeAsync()
 	{
 		if (Interlocked.Exchange(ref isDisposed, 1) == 0)
 		{
-			folderModel.Dispose();
+			await folderModel.DisposeAsync().ConfigureAwait(false);
 		}
 
 		GC.SuppressFinalize(this);
-		return ValueTask.CompletedTask;
 	}
 }

@@ -10,7 +10,15 @@ public sealed class BrowseLocationResolver : IBrowseLocationResolver
 	public BrowseLocationResolver(IEnumerable<IBrowseLocationHandler> handlers)
 	{
 		ArgumentNullException.ThrowIfNull(handlers);
-		this.handlers = Array.AsReadOnly(handlers.ToArray());
+		var handlerArray = handlers.ToArray();
+		if (handlerArray.Any(static handler => handler is null))
+		{
+			throw new ArgumentException(
+				"Browse location handlers cannot contain null values.",
+				nameof(handlers));
+		}
+
+		this.handlers = Array.AsReadOnly(handlerArray);
 	}
 
 	public ValueTask<IBrowseLocationContext> OpenAsync(

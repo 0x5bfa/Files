@@ -20,6 +20,12 @@ public sealed record PreviewRequest
 			ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumBytes.Value);
 		}
 
+		if (hydrationPolicy is not PreviewHydrationPolicy.LocalOnly
+			and not PreviewHydrationPolicy.AllowHydration)
+		{
+			throw new ArgumentOutOfRangeException(nameof(hydrationPolicy));
+		}
+
 		MaximumBytes = maximumBytes;
 		HydrationPolicy = hydrationPolicy;
 	}

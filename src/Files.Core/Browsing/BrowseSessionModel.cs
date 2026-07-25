@@ -183,7 +183,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 
 				try
 				{
-					DisposeItems(previousItems);
+					await DisposeItemsAsync(previousItems).ConfigureAwait(false);
 				}
 				finally
 				{
@@ -208,7 +208,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 
 					try
 					{
-						DisposeItems(nextItems);
+						await DisposeItemsAsync(nextItems).ConfigureAwait(false);
 					}
 					finally
 					{
@@ -547,7 +547,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 		{
 			if (!retained)
 			{
-				replacement.Dispose();
+				await replacement.DisposeAsync().ConfigureAwait(false);
 			}
 		}
 	}
@@ -616,7 +616,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 			}
 			finally
 			{
-				removed.Dispose();
+				await removed.DisposeAsync().ConfigureAwait(false);
 			}
 
 			return IncrementalApplyResult.Applied;
@@ -734,7 +734,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 				}
 				finally
 				{
-					previous.Dispose();
+					await previous.DisposeAsync().ConfigureAwait(false);
 				}
 
 				return IncrementalApplyResult.Applied;
@@ -748,7 +748,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 		{
 			if (!retained && !sameInstance)
 			{
-				replacement.Dispose();
+				await replacement.DisposeAsync().ConfigureAwait(false);
 			}
 		}
 	}
@@ -832,7 +832,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 				}
 				finally
 				{
-					previous.Dispose();
+					await previous.DisposeAsync().ConfigureAwait(false);
 				}
 
 				return IncrementalApplyResult.Applied;
@@ -846,7 +846,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 		{
 			if (!retained && !sameInstance)
 			{
-				replacement.Dispose();
+				await replacement.DisposeAsync().ConfigureAwait(false);
 			}
 		}
 	}
@@ -1329,7 +1329,7 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 
 				try
 				{
-					DisposeItems(items);
+					await DisposeItemsAsync(items).ConfigureAwait(false);
 				}
 				finally
 				{
@@ -1637,11 +1637,32 @@ public sealed class BrowseSessionModel : IBrowseSessionModel, IBrowsePrefetchTar
 		}
 	}
 
-	private static void DisposeItems(IEnumerable<IStorableModel> items)
+	private static async ValueTask DisposeItemsAsync(
+		IEnumerable<IStorableModel> items)
 	{
+		List<Exception>? errors = null;
 		foreach (var item in items)
 		{
-			item.Dispose();
+			try
+			{
+				await item.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception error)
+			{
+				(errors ??= []).Add(error);
+			}
+		}
+
+		if (errors is { Count: 1 })
+		{
+			throw errors[0];
+		}
+
+		if (errors is { Count: > 1 })
+		{
+			throw new AggregateException(
+				"One or more browse items could not be disposed.",
+				errors);
 		}
 	}
 }

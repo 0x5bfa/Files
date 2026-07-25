@@ -14,7 +14,9 @@ namespace Files.Core.Data;
 public sealed class FilesDataRoot : IFilesDataRoot
 {
 	private readonly IReadOnlyDictionary<StorageSourceId, IStorageSource> sourcesById;
-	private bool isDisposed;
+	private readonly object disposalLock = new();
+	private Task? disposeTask;
+	private volatile bool isDisposed;
 
 	public FilesDataRoot(IEnumerable<IStorageSource> sources, IStorableModelFactory modelFactory)
 	{
@@ -43,6 +45,19 @@ public sealed class FilesDataRoot : IFilesDataRoot
 
 	public IStorableModelFactory ModelFactory { get; }
 
+	public IStorageSource GetSource(StorageSourceId sourceId)
+	{
+		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ArgumentNullException.ThrowIfNull(sourceId);
+
+		if (!sourcesById.TryGetValue(sourceId, out var source))
+		{
+			throw new KeyNotFoundException($"Storage source '{sourceId}' is not registered.");
+		}
+
+		return source;
+	}
+
 	public async IAsyncEnumerable<IFolderModel> GetRootsAsync(
 		StorageSourceId sourceId,
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
@@ -55,11 +70,57 @@ public sealed class FilesDataRoot : IFilesDataRoot
 
 			if (model is not IFolderModel folderModel)
 			{
+				await model.DisposeAsync().ConfigureAwait(false);
 				throw new InvalidOperationException($"Storage source '{source.SourceId}' returned a root that is not a folder.");
 			}
 
 			yield return folderModel;
 		}
+	}
+
+	public async ValueTask<IStorableModel> ResolveAsync(
+		StorageSourceId sourceId,
+		StorageAddress address,
+		CancellationToken cancellationToken = default)
+	{
+		ArgumentNullException.ThrowIfNull(address);
+
+		var source = GetSource(sourceId);
+		if (!source.CanResolve(address))
+		{
+			throw new ArgumentException(
+				$"Storage source '{sourceId}' cannot resolve address scheme '{address.Scheme}'.",
+				nameof(address));
+		}
+
+		var coreModel = await source
+			.ResolveAsync(address, cancellationToken)
+			.ConfigureAwait(false);
+		return ModelFactory.Create(source, coreModel);
+	}
+
+	public ValueTask<IStorableModel> ResolveAsync(
+		StorageAddress address,
+		CancellationToken cancellationToken = default)
+	{
+		ObjectDisposedException.ThrowIf(isDisposed, this);
+		ArgumentNullException.ThrowIfNull(address);
+
+		var candidates = Sources
+			.Where(source => source.CanResolve(address))
+			.Take(2)
+			.ToArray();
+
+		return candidates.Length switch
+		{
+			0 => ValueTask.FromException<IStorableModel>(
+				new KeyNotFoundException(
+					$"No storage source can resolve address scheme '{address.Scheme}'.")),
+			1 => ResolveAsync(candidates[0].SourceId, address, cancellationToken),
+			_ => ValueTask.FromException<IStorableModel>(
+				new InvalidOperationException(
+					$"More than one storage source can resolve address scheme '{address.Scheme}'. Specify a source ID.")),
+		};
 	}
 
 	public async ValueTask<IStorableModel> ResolveAsync(
@@ -73,33 +134,49 @@ public sealed class FilesDataRoot : IFilesDataRoot
 		return ModelFactory.Create(source, coreModel);
 	}
 
-	public async ValueTask DisposeAsync()
+	public ValueTask DisposeAsync()
 	{
-		if (isDisposed)
+		lock (disposalLock)
 		{
-			return;
+			if (disposeTask is not null)
+			{
+				return new ValueTask(disposeTask);
+			}
+
+			isDisposed = true;
+			disposeTask = DisposeCoreAsync();
+			return new ValueTask(disposeTask);
 		}
+	}
 
-		isDisposed = true;
-
-		foreach (var source in Sources)
+	private async Task DisposeCoreAsync()
+	{
+		List<Exception>? errors = null;
+		foreach (var source in Sources.Reverse())
 		{
-			await source.DisposeAsync().ConfigureAwait(false);
+			try
+			{
+				await source.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception error)
+			{
+				(errors ??= []).Add(error);
+			}
 		}
 
 		GC.SuppressFinalize(this);
-	}
 
-	private IStorageSource GetSource(StorageSourceId sourceId)
-	{
-		ObjectDisposedException.ThrowIf(isDisposed, this);
-		ArgumentNullException.ThrowIfNull(sourceId);
-
-		if (!sourcesById.TryGetValue(sourceId, out var source))
+		if (errors is { Count: 1 })
 		{
-			throw new KeyNotFoundException($"Storage source '{sourceId}' is not registered.");
+			throw errors[0];
 		}
 
-		return source;
+		if (errors is { Count: > 1 })
+		{
+			throw new AggregateException(
+				"One or more storage sources could not be disposed.",
+				errors);
+		}
 	}
+
 }

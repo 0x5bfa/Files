@@ -11,9 +11,16 @@
   <Folder Name="/docs/" />
   <Folder Name="/docs/architecture/">
     <File Path="docs/architecture/README.md" />
+    <File Path="docs/architecture/app-models.md" />
     <File Path="docs/architecture/capabilities.md" />
+    <File Path="docs/architecture/composition.md" />
+    <File Path="docs/architecture/files-app.md" />
+    <File Path="docs/architecture/implementation-status.md" />
     <File Path="docs/architecture/migration.md" />
+    <File Path="docs/architecture/operations.md" />
+    <File Path="docs/architecture/previews.md" />
     <File Path="docs/architecture/storage-models.md" />
+    <File Path="docs/architecture/testing.md" />
     <File Path="docs/architecture/threading.md" />
     <File Path="docs/architecture/view-settings.md" />
     <File Path="docs/architecture/windows-storage.md" />

@@ -48,11 +48,18 @@ Three values have different jobs:
 | `IStorable.Id` | Provider-defined identity within that source |
 | `StorageAddress` | An address that a source may resolve |
 
-`StorableReference` combines the source ID and item ID. `LastKnownAddress` is an optional recovery hint, not the primary identity.
+`StorableReference` combines the source ID and item ID. Its equality and hash
+code deliberately use only those two values. `LastKnownAddress` is an
+optional recovery hint and never participates in identity.
 
 Windows filesystem items use the versioned `winfs:v1:<volume>:<file-index>` identity when available. Their current `StorageAddress` uses the `file:` scheme and filesystem path, while their Shell parsing name and managed absolute PIDL remain separate locators. Items without a filesystem path use a `shell:` address. Virtual or inaccessible items use the encoded `winshell-address:v1:<address>` identity fallback when a filesystem ID is unavailable.
 
-`LastKnownAddress` remains only a recovery hint. Resolution validates the resulting identity and rejects a different file that has replaced a stale address. The prototype can cold-resolve a same-directory rename by scanning the previous parent; cross-directory reverse lookup is not implemented yet.
+Resolution validates the resulting identity and rejects a different file that
+has replaced a stale address. The Windows source can cold-resolve a
+same-directory rename by scanning the previous parent. Cross-directory cold
+lookup requires a volume file-ID index or `OpenFileById` strategy; live
+operations return the updated reference and open sessions receive the move
+through their watcher.
 
 ```mermaid
 flowchart LR
@@ -108,6 +115,10 @@ See [Capability composition](capabilities.md) for resolution, multiple providers
 
 ## Ownership
 
-`IStorableModelFactory` transfers ownership of a newly supplied CoreModel to the returned AppModel. The AppModel disposes its capability set before disposing the CoreModel. A browse session disposes replaced item models.
+`IStorableModelFactory` transfers ownership of a newly supplied CoreModel to
+the returned AppModel. The AppModel asynchronously disposes its capability set
+before disposing the CoreModel. If a capability or CoreModel supports only
+`IDisposable`, that synchronous cleanup runs inside the same ordered
+disposal. A browse session disposes replaced item models.
 
 Storage sources and shared services have a longer lifetime and are owned by `FilesDataRoot` or the application composition root. This keeps native resources bounded by the model graph rather than the visual tree.

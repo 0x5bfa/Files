@@ -32,6 +32,12 @@ flowchart TB
 
 The operation lane executes long-running Shell mutations such as rename without blocking ordered metadata work.
 
+Windows Shell preview handlers use a separate
+`WindowsShellScheduler(concurrentWorkerCount: 1)` owned by
+`FilesCoreRuntime`. Handler activation, initialization, calls, and release
+therefore cannot block storage metadata or operation lanes, and one preview
+session remains on one message-pumped STA.
+
 ## Worker behavior
 
 ```mermaid
@@ -106,6 +112,13 @@ Cancellation between batches is prompt without paying one scheduler transition p
 
 ## Shutdown and ownership
 
-`WindowsShellScheduler` is an instance service rather than a static global. Disposal atomically stops accepting work, faults queued work with `ObjectDisposedException`, wakes every worker, waits for any already-running delegate to finish, and then disposes the queue handles.
+`WindowsShellScheduler` is an instance service rather than a static global.
+Disposal atomically stops accepting work, faults queued work with
+`ObjectDisposedException`, wakes every worker, waits for any already-running
+delegate to finish, and then disposes the queue handles.
 
-The application root should dispose item models and affine streams before disposing the storage sources and shared scheduler. An injected scheduler is borrowed by `WindowsStorageSource`; a source-created scheduler is owned by that source.
+The application root disposes item models and affine streams before storage
+sources and schedulers. An injected scheduler is borrowed by
+`WindowsStorageSource`; a source-created scheduler is owned by that source.
+Source and runtime disposal are idempotent and continue through independent
+cleanup failures.

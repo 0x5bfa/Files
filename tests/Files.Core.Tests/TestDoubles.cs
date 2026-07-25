@@ -23,6 +23,10 @@ internal sealed class TestStorageSource : IStorageSource
 
 	public string DisplayName => "Test";
 
+	public bool IsDisposed { get; private set; }
+
+	public int DisposeCount { get; private set; }
+
 	public async IAsyncEnumerable<IFolder> GetRootsAsync(
 		[EnumeratorCancellation] CancellationToken cancellationToken = default)
 	{
@@ -43,7 +47,12 @@ internal sealed class TestStorageSource : IStorageSource
 		CancellationToken cancellationToken = default)
 		=> throw new NotSupportedException();
 
-	public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+	public ValueTask DisposeAsync()
+	{
+		DisposeCount++;
+		IsDisposed = true;
+		return ValueTask.CompletedTask;
+	}
 }
 
 internal class TestStorable : IStorable

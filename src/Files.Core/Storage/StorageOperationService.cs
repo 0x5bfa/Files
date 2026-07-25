@@ -23,6 +23,12 @@ public sealed class StorageOperationService : IStorageOperationService
 		}
 	}
 
+	public bool CanHandle(StorageOperationRequest request)
+	{
+		ArgumentNullException.ThrowIfNull(request);
+		return providers.Any(provider => provider.CanHandle(request));
+	}
+
 	public async ValueTask<StorageOperationResult> ExecuteAsync(
 		StorageOperationRequest request,
 		IProgress<StorageOperationProgress>? progress = null,
@@ -54,9 +60,11 @@ public sealed class StorageOperationService : IStorageOperationService
 
 		try
 		{
-			return await provider
+			StorageOperationResult? result = await provider
 				.ExecuteAsync(request, progress, cancellationToken)
 				.ConfigureAwait(false);
+			return result ?? Failed(new InvalidOperationException(
+				$"Storage operation provider '{provider.GetType().FullName}' returned null."));
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{

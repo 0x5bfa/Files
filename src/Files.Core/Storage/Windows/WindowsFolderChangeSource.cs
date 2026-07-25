@@ -72,9 +72,20 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 				Volatile.Write(ref isStarted, 1);
 				pumpTask = PumpAsync(newSubscription, lifetime.Token);
 			}
-			catch
+			catch (Exception startError)
 			{
-				await newSubscription.DisposeAsync().ConfigureAwait(false);
+				try
+				{
+					await newSubscription.DisposeAsync().ConfigureAwait(false);
+				}
+				catch (Exception cleanupError)
+				{
+					throw new AggregateException(
+						"Folder watcher startup and cleanup failed.",
+						startError,
+						cleanupError);
+				}
+
 				throw;
 			}
 		}
@@ -263,6 +274,7 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 	{
 		WindowsShellChangeProvider.WindowsShellChangeSubscription? currentSubscription;
 		Task? currentPump;
+		var errors = new List<Exception>();
 
 		await lifecycleGate.WaitAsync().ConfigureAwait(false);
 		try
@@ -279,15 +291,41 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 
 		if (currentPump is not null)
 		{
-			await currentPump.ConfigureAwait(false);
+			try
+			{
+				await currentPump.ConfigureAwait(false);
+			}
+			catch (Exception error)
+			{
+				errors.Add(error);
+			}
 		}
 
 		if (currentSubscription is not null)
 		{
-			await currentSubscription.DisposeAsync().ConfigureAwait(false);
+			try
+			{
+				await currentSubscription.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception error)
+			{
+				errors.Add(error);
+			}
 		}
 
 		lifetime.Dispose();
+		GC.SuppressFinalize(this);
+		if (errors.Count is 1)
+		{
+			throw errors[0];
+		}
+
+		if (errors.Count > 1)
+		{
+			throw new AggregateException(
+				"Folder watcher cleanup failed.",
+				errors);
+		}
 	}
 
 	private Task GetDisposeTask()

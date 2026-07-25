@@ -8,10 +8,11 @@ using Files.Core.Storage.Windows;
 
 namespace Files.Core.Capabilities.Previews;
 
-public sealed class WindowsPreviewTarget : IDisposable
+public sealed class WindowsPreviewTarget : IDisposable, IAsyncDisposable
 {
 	private readonly IStorableModel model;
-	private int isDisposed;
+	private readonly object disposalLock = new();
+	private Task? disposeTask;
 
 	public WindowsPreviewTarget(
 		IStorableModel model,
@@ -38,9 +39,15 @@ public sealed class WindowsPreviewTarget : IDisposable
 
 	public void Dispose()
 	{
-		if (Interlocked.Exchange(ref isDisposed, 1) is 0)
+		DisposeAsync().AsTask().GetAwaiter().GetResult();
+	}
+
+	public ValueTask DisposeAsync()
+	{
+		lock (disposalLock)
 		{
-			model.Dispose();
+			disposeTask ??= model.DisposeAsync().AsTask();
+			return new ValueTask(disposeTask);
 		}
 	}
 }

@@ -8,7 +8,7 @@ namespace Files.Core.Capabilities;
 /// <summary>
 /// Lazily resolves and owns the capabilities attached to one application model.
 /// </summary>
-public interface ICapabilitySet : IDisposable
+public interface ICapabilitySet : IDisposable, IAsyncDisposable
 {
 	TCapability? Get<TCapability>()
 		where TCapability : class;

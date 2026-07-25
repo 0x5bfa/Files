@@ -53,12 +53,12 @@ public abstract class WindowsStorable : IWindowsStorable, IEquatable<WindowsStor
 
 	public bool Equals(WindowsStorable? other)
 	{
-		return other is not null && StringComparer.OrdinalIgnoreCase.Equals(Id, other.Id);
+		return other is not null && StringComparer.Ordinal.Equals(Id, other.Id);
 	}
 
 	public override bool Equals(object? obj) => Equals(obj as WindowsStorable);
 
-	public override int GetHashCode() => StringComparer.OrdinalIgnoreCase.GetHashCode(Id);
+	public override int GetHashCode() => StringComparer.Ordinal.GetHashCode(Id);
 
 	public override string ToString() => ParsingName;
 }

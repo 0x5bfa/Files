@@ -70,7 +70,11 @@ Addresses and identities are intentionally independent. A filesystem model expos
 
 Windows file IDs are stable across rename. A persisted filesystem reference keeps its previous `file:` address as a recovery hint. Resolution tries that path and, when the path is missing or now identifies a different item, scans the previous parent directory for the requested file ID. A reference is accepted only when the resolved candidate has exactly the requested `ItemId`; a recreated file at a stale address is rejected.
 
-This scan is a prototype fallback for a rename within the same directory. A cold reference cannot yet recover a move to a different directory. That requires a volume-relative reverse lookup such as `OpenFileById`, or an external watcher/index that persists the item's new address.
+This scan is a bounded fallback for a rename within the same directory. A
+cold reference cannot recover a move to a different directory from the stale
+address alone. That requires a volume-relative reverse lookup such as
+`OpenFileById`, or an external watcher/index that persists the item's new
+address. Live operations return the updated reference.
 
 Using a filesystem path or parsing name as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
 
@@ -225,11 +229,17 @@ flowchart TD
     ReadOnly -->|No| Denied
 ```
 
-File-system items use `FileStream` with read/write/delete sharing. Virtual items request `IStream` through `BHID_Stream`; the prototype exposes that stream as read-only.
+File-system items use `FileStream` with read/write/delete sharing. Virtual
+items request `IStream` through `BHID_Stream`; Core exposes that private
+apartment-safe wrapper as read-only.
 
-## Rename operation
+## Windows Shell operations
 
-`StorageOperationService` selects `WindowsStorageOperationProvider` for references owned by the Windows source. The current provider intentionally supports file-system rename only. It validates one new path segment, resolves the immutable input snapshot, and schedules `IFileOperation` on the operation STA lane.
+`StorageOperationService` selects `WindowsStorageOperationProvider` for
+references owned by one Windows source. The provider supports filesystem
+create, rename, copy, and move plus Shell deletion for filesystem or virtual
+items. It validates the request, resolves immutable input snapshots, and
+schedules `IFileOperation` on the operation STA lane.
 
 ```mermaid
 sequenceDiagram
@@ -239,19 +249,31 @@ sequenceDiagram
     participant Shell as IFileOperation
     participant Source as WindowsStorageSource
 
-    Service->>Provider: ExecuteAsync(rename)
-    Provider->>STA: queue rename
-    STA->>Shell: RenameItem + PerformOperations
+    Service->>Provider: ExecuteAsync(request)
+    Provider->>STA: queue operation
+    STA->>Shell: queue item + PerformOperations
     Shell-->>STA: completion and abort state
     STA-->>Provider: operation outcome
-    Provider->>Source: Resolve original stable ItemId
-    Source-->>Provider: actual renamed snapshot
-    Provider-->>Service: verified result reference
+    Provider->>Source: Resolve actual destination
+    Source-->>Provider: result snapshot
+    Provider-->>Service: result reference
 ```
 
-The operation lane rechecks the Shell item's filesystem identity immediately before queuing the mutation, so a stale parsing name cannot silently target a replacement item. The HRESULT from `RenameItem` confirms that the work was queued, not that the individual item was renamed. After `PerformOperations`, the provider therefore does not manufacture a result from `parent + requested name`. It re-resolves the original `StorableReference` by stable filesystem identity, checks that the returned `ItemId` and actual name match the request, and returns that snapshot's actual address. This rejects an unrelated item already occupying the guessed target path.
+Rename rechecks the Shell item's filesystem identity immediately before
+queuing the mutation, so a stale parsing name cannot silently target a
+replacement item. Create/copy/move resolve the actual destination after
+completion. A queued HRESULT is never treated as proof that an individual
+item completed; `PerformOperations` and the aborted state are both checked.
 
-Cancellation is honored while resolution or the queued STA work can still be prevented. Once the Shell operation has committed, result materialization uses `CancellationToken.None`; reporting cancellation after a successful side effect would encourage an unsafe retry.
+Names are one validated Windows segment. The provider rejects traversal,
+reserved DOS devices, invalid characters, and trailing spaces/dots.
+Collisions either fail or generate `name (2).ext`. Deletion uses the Recycle
+Bin unless the request explicitly asks for permanent deletion.
+
+Cancellation is honored while resolution or queued STA work can still be
+prevented. Once the Shell operation has committed, result materialization
+uses `CancellationToken.None`; reporting cancellation after a successful side
+effect would encourage an unsafe retry.
 
 ## Lifetime
 
@@ -264,7 +286,7 @@ Cancellation is honored while resolution or the queued STA work can still be pre
 
 See [Windows Shell threading](threading.md) for lane selection, cancellation, reentrancy, and shutdown.
 
-## Current scope
+## Implemented scope
 
 Implemented:
 
@@ -280,6 +302,14 @@ Implemented:
 - Injectable message-pumped STA scheduling.
 - Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
 - Windows Shell folder change subscriptions with a source-owned notification provider and managed PIDL delivery.
-- File-system rename through `IFileOperation`, followed by stable-identity result verification.
+- Typed Shell properties for item type, size, creation time, and modification
+  time.
+- Stream preview descriptors and Windows Shell preview-handler association,
+  local-server activation, hosting sessions, and deterministic cleanup.
+- Filesystem create, rename, copy, and move plus Shell deletion through
+  `IFileOperation`.
 
-Generic capability composition now exists for thumbnails, previews, properties, folder changes, and decorators. Cross-directory move recovery, Windows-specific property extraction beyond the initial typed set, search, copy/move/delete and bulk operations, context menus, and Shell verbs remain separate vertical slices.
+Cross-directory cold recovery from only an old reference, additional
+canonical property types, search indexing, context menus, drag/drop data
+packages, and arbitrary Shell verbs remain explicit provider or Files.App
+extensions. They do not change the storage/model boundary.

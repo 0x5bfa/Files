@@ -10,6 +10,109 @@ namespace Files.Core.Tests;
 public sealed class WindowsStorageOperationTests
 {
 	[TestMethod]
+	public async Task CreateCopyMoveAndDeleteUseShellOperations()
+	{
+		var rootPath = Path.Combine(
+			Path.GetTempPath(),
+			$"Files.Core.OperationTests-{Guid.NewGuid():N}");
+		var firstDestinationPath = Path.Combine(rootPath, "first");
+		var secondDestinationPath = Path.Combine(rootPath, "second");
+		Directory.CreateDirectory(firstDestinationPath);
+		Directory.CreateDirectory(secondDestinationPath);
+
+		try
+		{
+			await using var scheduler = new WindowsShellScheduler();
+			await using var source = new WindowsStorageSource(
+				scheduler: scheduler);
+			var service = new StorageOperationService(
+				[new WindowsStorageOperationProvider(source)]);
+			var root = await ResolveReferenceAsync(source, rootPath);
+			var firstDestination = await ResolveReferenceAsync(
+				source,
+				firstDestinationPath);
+			var secondDestination = await ResolveReferenceAsync(
+				source,
+				secondDestinationPath);
+
+			var created = await service.ExecuteAsync(
+				new CreateItemOperationRequest(
+					root,
+					"created.txt",
+					StorageItemKind.File));
+			Assert.IsTrue(created.Succeeded, created.Error?.ToString());
+			Assert.IsNotNull(created.ResultItem);
+			var createdReference = created.ResultItem!;
+			Assert.IsTrue(File.Exists(Path.Combine(rootPath, "created.txt")));
+
+			var copied = await service.ExecuteAsync(
+				new CopyOperationRequest(
+					createdReference,
+					firstDestination,
+					"copied.txt"));
+			Assert.IsTrue(copied.Succeeded, copied.Error?.ToString());
+			Assert.IsNotNull(copied.ResultItem);
+			var copiedReference = copied.ResultItem!;
+			Assert.IsTrue(
+				File.Exists(
+					Path.Combine(firstDestinationPath, "copied.txt")));
+
+			var moved = await service.ExecuteAsync(
+				new MoveOperationRequest(
+					copiedReference,
+					secondDestination,
+					"moved.txt"));
+			Assert.IsTrue(moved.Succeeded, moved.Error?.ToString());
+			Assert.IsNotNull(moved.ResultItem);
+			var movedReference = moved.ResultItem!;
+			Assert.IsFalse(
+				File.Exists(
+					Path.Combine(firstDestinationPath, "copied.txt")));
+			Assert.IsTrue(
+				File.Exists(
+					Path.Combine(secondDestinationPath, "moved.txt")));
+
+			var deleted = await service.ExecuteAsync(
+				new DeleteOperationRequest(
+					movedReference,
+					permanently: true));
+			Assert.IsTrue(deleted.Succeeded, deleted.Error?.ToString());
+			Assert.IsNull(deleted.ResultItem);
+			Assert.IsFalse(
+				File.Exists(
+					Path.Combine(secondDestinationPath, "moved.txt")));
+
+			var createdFolder = await service.ExecuteAsync(
+				new CreateItemOperationRequest(
+					root,
+					"created-folder",
+					StorageItemKind.Folder));
+			Assert.IsTrue(
+				createdFolder.Succeeded,
+				createdFolder.Error?.ToString());
+			Assert.IsTrue(
+				Directory.Exists(
+					Path.Combine(rootPath, "created-folder")));
+
+			var uniqueCopy = await service.ExecuteAsync(
+				new CopyOperationRequest(
+					createdReference,
+					root,
+					conflictBehavior:
+						StorageConflictBehavior.GenerateUniqueName));
+			Assert.IsTrue(uniqueCopy.Succeeded, uniqueCopy.Error?.ToString());
+			Assert.IsNotNull(uniqueCopy.ResultItem);
+			Assert.AreEqual(
+				Path.Combine(rootPath, "created (2).txt"),
+				uniqueCopy.ResultItem.LastKnownAddress!.Value);
+		}
+		finally
+		{
+			Directory.Delete(rootPath, recursive: true);
+		}
+	}
+
+	[TestMethod]
 	public async Task RenameUsesShellOperationAndReturnsUpdatedReference()
 	{
 		var directoryPath = Path.Combine(
@@ -60,6 +163,52 @@ public sealed class WindowsStorageOperationTests
 				File.Delete(newPath);
 			}
 
+			Directory.Delete(directoryPath, recursive: true);
+		}
+	}
+
+	[TestMethod]
+	public async Task RenamePreservesARequestedCaseOnlyNameChange()
+	{
+		var directoryPath = Path.Combine(
+			Path.GetTempPath(),
+			$"Files.Core.OperationTests-{Guid.NewGuid():N}");
+		Directory.CreateDirectory(directoryPath);
+		var originalPath = Path.Combine(directoryPath, "case-name.txt");
+		var renamedPath = Path.Combine(directoryPath, "CASE-NAME.TXT");
+		File.WriteAllText(originalPath, "content");
+
+		try
+		{
+			await using var scheduler = new WindowsShellScheduler();
+			await using var source = new WindowsStorageSource(
+				scheduler: scheduler);
+			var original = await ResolveReferenceAsync(
+				source,
+				originalPath);
+			var service = new StorageOperationService(
+				[new WindowsStorageOperationProvider(source)]);
+
+			var result = await service.ExecuteAsync(
+				new RenameOperationRequest(
+					original,
+					"CASE-NAME.TXT"));
+
+			Assert.IsTrue(result.Succeeded, result.Error?.ToString());
+			Assert.IsNotNull(result.ResultItem);
+			var actualPath = Directory
+				.EnumerateFileSystemEntries(directoryPath)
+				.Single();
+			Assert.IsTrue(
+				StringComparer.Ordinal.Equals(
+					"CASE-NAME.TXT",
+					Path.GetFileName(actualPath)));
+			Assert.AreEqual(
+				renamedPath,
+				result.ResultItem.LastKnownAddress!.Value);
+		}
+		finally
+		{
 			Directory.Delete(directoryPath, recursive: true);
 		}
 	}
@@ -122,5 +271,19 @@ public sealed class WindowsStorageOperationTests
 		{
 			report(value);
 		}
+	}
+
+	private static async ValueTask<StorableReference> ResolveReferenceAsync(
+		WindowsStorageSource source,
+		string path)
+	{
+		var item = (IWindowsStorable)await source.ResolveAsync(
+			new StorageAddress(
+				WindowsStorageSource.FileAddressScheme,
+				path));
+		return new StorableReference(
+			source.SourceId,
+			item.Id,
+			item.Address);
 	}
 }

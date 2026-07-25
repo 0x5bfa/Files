@@ -54,6 +54,10 @@ public sealed class WindowsShellPreviewHandlerControllerFactory
 internal sealed unsafe class WindowsShellPreviewHandlerController
     : IWindowsPreviewHandlerController
 {
+	private const uint StorageModeRead = 0;
+	private const int PreviewHandlerVisualsSetBackgroundColorSlot = 3;
+	private const int PreviewHandlerVisualsSetTextColorSlot = 5;
+
 	private static readonly Guid IObjectWithSiteId =
 		new("00000118-0000-0000-C000-000000000046");
 	private static readonly Guid IInitializeWithStreamId =
@@ -233,7 +237,10 @@ internal sealed unsafe class WindowsShellPreviewHandlerController
 		{
 			fixed (char* path = fileSystemPath)
 			{
-				var initializeResult = CallInitializeWithFile(initializer, path);
+				var initializeResult = CallInitializeWithFile(
+					initializer,
+					path,
+					StorageModeRead);
 				if (IsOptionalInitializationFailure(initializeResult))
 				{
 					return false;
@@ -275,8 +282,14 @@ internal sealed unsafe class WindowsShellPreviewHandlerController
 
 		try
 		{
-			CallSetColor(visuals, 3, ToColorRef(background)).ThrowOnFailure();
-			CallSetColor(visuals, 4, ToColorRef(foreground)).ThrowOnFailure();
+			CallSetColor(
+				visuals,
+				PreviewHandlerVisualsSetBackgroundColorSlot,
+				ToColorRef(background)).ThrowOnFailure();
+			CallSetColor(
+				visuals,
+				PreviewHandlerVisualsSetTextColorSlot,
+				ToColorRef(foreground)).ThrowOnFailure();
 		}
 		finally
 		{
@@ -549,11 +562,14 @@ internal sealed unsafe class WindowsShellPreviewHandlerController
 		return initialize(pointer, item, mode);
 	}
 
-	private static HRESULT CallInitializeWithFile(void* pointer, char* path)
+	private static HRESULT CallInitializeWithFile(
+		void* pointer,
+		char* path,
+		uint mode)
 	{
 		var vtable = *(void***)pointer;
-		var initialize = (delegate* unmanaged[Stdcall]<void*, char*, HRESULT>)vtable[3];
-		return initialize(pointer, path);
+		var initialize = (delegate* unmanaged[Stdcall]<void*, char*, uint, HRESULT>)vtable[3];
+		return initialize(pointer, path, mode);
 	}
 
 	private static HRESULT CallSetColor(void* pointer, int slot, uint color)

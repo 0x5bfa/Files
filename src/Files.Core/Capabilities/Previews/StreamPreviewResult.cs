@@ -19,7 +19,25 @@ public sealed class StreamPreviewResult : PreviewResult
 		string? suggestedFileName = null)
 	{
 		ArgumentNullException.ThrowIfNull(content);
+		if (!content.CanRead)
+		{
+			throw new ArgumentException(
+				"The preview stream must be readable.",
+				nameof(content));
+		}
+
 		ArgumentException.ThrowIfNullOrWhiteSpace(contentType);
+		if (contentLength is not null)
+		{
+			ArgumentOutOfRangeException.ThrowIfNegative(
+				contentLength.Value);
+		}
+
+		if (suggestedFileName is not null)
+		{
+			ArgumentException.ThrowIfNullOrWhiteSpace(
+				suggestedFileName);
+		}
 
 		this.content = content;
 		ContentType = contentType;

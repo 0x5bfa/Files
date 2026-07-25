@@ -52,9 +52,20 @@ public sealed class WindowsPreviewTargetResolver : IWindowsPreviewTargetResolver
 				model,
 				(IWindowsStorable)model.CoreModel);
 		}
-		catch
+		catch (Exception resolutionError)
 		{
-			model.Dispose();
+			try
+			{
+				await model.DisposeAsync().ConfigureAwait(false);
+			}
+			catch (Exception cleanupError)
+			{
+				throw new AggregateException(
+					"Preview target resolution and model cleanup failed.",
+					resolutionError,
+					cleanupError);
+			}
+
 			throw;
 		}
 	}

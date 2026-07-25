@@ -64,6 +64,12 @@ public sealed class BrowsePreviewModel : IBrowsePreviewModel
 		PreviewHydrationPolicy hydrationPolicy = PreviewHydrationPolicy.LocalOnly,
 		CancellationToken cancellationToken = default)
 	{
+		if (hydrationPolicy is not PreviewHydrationPolicy.LocalOnly
+			and not PreviewHydrationPolicy.AllowHydration)
+		{
+			throw new ArgumentOutOfRangeException(nameof(hydrationPolicy));
+		}
+
 		return new ValueTask(BeginRefresh(hydrationPolicy, cancellationToken));
 	}
 

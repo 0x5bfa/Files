@@ -1,81 +1,105 @@
-# Files architecture prototype
+# Files.Core and Files.App architecture
 
-This directory describes the proposed UI-agnostic architecture and its prototype in `Files.Core`.
+These documents define the UI-independent Files.Core foundation and the
+WinUI architecture that consumes it. The design follows trickle-down MVVM:
+long-lived dependencies are composed once and passed down through a model
+graph; optional item behavior is composed lazily per capability.
 
-The architecture separates responsibilities logically even though most non-UI code can eventually live in one physical project.
+## System boundary
 
 ```mermaid
 flowchart TB
-    Root["Files.App composition root"]
     Views["WinUI views"]
-    ViewModels["ViewModels"]
-    AppModels["Files AppModels"]
-    Capabilities["Composed capabilities"]
-    CoreModels["Provider CoreModels"]
-    Providers["OwlCore.Storage and platform APIs"]
+    ViewModels["Files.App ViewModels"]
+    AppModels["Files.Core AppModels"]
+    Capabilities["Item capabilities"]
+    CoreModels["OwlCore.Storage CoreModels"]
+    Providers["Storage and platform providers"]
 
-    Root --> Views
-    Root --> ViewModels
-    Root --> AppModels
-    Root --> Capabilities
     Views --> ViewModels
     ViewModels --> AppModels
     AppModels --> Capabilities
     AppModels --> CoreModels
+    Capabilities --> Providers
     CoreModels --> Providers
 ```
+
+Logical layers remain separate even when WinUI-agnostic code is eventually
+merged into one physical `Files.Core` project.
 
 ## Dependency rules
 
 | Layer | Owns | May depend on |
 | --- | --- | --- |
-| Views | WinUI controls, visual state, input routing | ViewModels |
-| ViewModels | Labels, glyphs, shortcuts, command adapters | AppModels |
-| AppModels | Browse sessions, navigation state, Files-specific item behavior | CoreModels and capability contracts |
-| CoreModels | Standardized storage items | OwlCore.Storage |
-| Capability implementations | Optional thumbnails, previews, properties, watchers, or actions | CoreModels, source services, and their own platform boundary |
-| Providers | Windows Shell, FTP, archives, cloud APIs | Platform APIs and CoreModel contracts |
+| Views | Controls, visual state, input routing | Window-scoped ViewModels |
+| ViewModels | Localized presentation, commands, UI collections | Direct AppModels and UI adapters |
+| AppModels | Windows, tabs, panes, browsing, selection, history | CoreModels and capability contracts |
+| CoreModels | Standardized storage items | OwlCore.Storage and provider abstractions |
+| Capabilities | Optional thumbnail, property, preview, watcher behavior | Item context and source services |
+| Providers | Windows Shell, cloud, FTP, archives | Backend/platform APIs |
 
-The following dependencies are prohibited:
+Prohibited dependencies:
 
-- AppModels depending on WinUI, `Window`, `Frame`, or `Page`.
-- ViewModels locating dependencies through `Ioc.Default`.
-- Storage providers depending on ViewModels.
-- Views calling Windows Shell, FTP, or archive APIs directly.
-- `IStorageSource` pretending to be an `IStorable`.
-- `ICapabilitySet` being used as an application-wide dependency injection container.
+- Files.Core referencing WinUI, `Window`, `Frame`, `Page`, or
+  `DispatcherQueue`;
+- ViewModels using `IServiceProvider` or `Ioc.Default` as a service locator;
+- Views calling Windows Shell or storage providers directly;
+- providers depending on ViewModels;
+- `IStorageSource` pretending to be an `IStorable`;
+- `ICapabilitySet` being used as process dependency injection;
+- paths or `LastKnownAddress` being used as item identity.
 
-## Trickle-down composition
-
-Long-lived services are constructed at the application boundary and passed down through the model graph. Item-bound capabilities are created lazily from those registrations.
+## Trickle-down ownership
 
 ```mermaid
 flowchart TB
-    Root["Files application root"]
-    DataRoot["FilesDataRoot + shared services"]
-    Workspace["Workspace model"]
-    Tab["Tab model"]
-    Session["Browse session"]
-    Item["Storable AppModel"]
-    Set["Item CapabilitySet"]
+    Runtime["FilesCoreRuntime"]
+    App["FilesApplicationModel"]
+    Window["WindowModel"]
+    Tab["TabModel"]
+    Pane["PaneModel"]
+    Item["IStorableModel"]
 
-    Root --> DataRoot
-    Root --> Workspace
-    Workspace --> Tab
-    Tab --> Session
-    Session --> Item
-    Item --> Set
-    DataRoot -. source and services .-> Item
+    Runtime --> App
+    App --> Window
+    Window --> Tab
+    Tab --> Pane
+    Pane --> Item
 ```
 
-The prototype implements the storage-backed portion of this graph: `IFilesDataRoot`, typed browse locations, location handlers, `IBrowseSessionModel`, capability composition, and a Windows Shell storage provider. Workspace, tab, pane coordination, and WinUI ViewModels remain later slices.
+Parents own and asynchronously dispose their children. Shared providers,
+caches, and schedulers are owned at the runtime/source level. Item-bound
+adapters are owned by the item's `CapabilitySet`.
 
-## Documents
+## Document map
 
-- [Storage model boundaries](storage-models.md)
+Read these in order when starting the new Files.App:
+
+1. [Completion boundary](implementation-status.md)
+2. [Application model graph](app-models.md)
+3. [Composition root](composition.md)
+4. [New Files.App architecture](files-app.md)
+5. [Testing and performance](testing.md)
+
+Reference documents:
+
+- [Storage model boundaries and identity](storage-models.md)
 - [Capability composition](capabilities.md)
-- [Preview pipeline](previews.md)
+- [Browse view settings and projection](view-settings.md)
+- [Preview pipeline and Shell sessions](previews.md)
+- [Storage operations](operations.md)
 - [Windows storage provider](windows-storage.md)
 - [Windows Shell threading](threading.md)
-- [Browse view settings](view-settings.md)
-- [Migration to Files.Core](migration.md)
+- [Migration and physical project merge](migration.md)
+
+## Current state
+
+Files.Core now contains the complete application/window/tab/pane model graph,
+home and folder browsing, selection and projection, view settings, viewport
+prefetch, capability composition, thumbnail/property/folder-change/preview
+vertical slices, Windows Shell storage, storage mutations, composition,
+tests, benchmarks, and dedicated CI.
+
+Search/tag backends, additional providers, WinUI renderers, activation,
+context menus, drag/drop, and persistence are explicit extension or
+Files.App boundaries. They do not require changing the Core model graph.
