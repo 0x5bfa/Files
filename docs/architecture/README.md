@@ -85,6 +85,7 @@ Reference documents:
 
 - [Storage model boundaries and identity](storage-models.md)
 - [Archive browsing and SevenZip fallback](archives.md)
+- [FTP storage provider](ftp-storage.md)
 - [Capability composition](capabilities.md)
 - [Browse view settings and projection](view-settings.md)
 - [Preview pipeline and Shell sessions](previews.md)
@@ -96,11 +97,12 @@ Reference documents:
 ## Current state
 
 Files.Core now contains the complete application/window/tab/pane model graph,
-home, folder, and archive browsing, selection and projection, view settings, viewport
-prefetch, capability composition, thumbnail/property/folder-change/preview
-vertical slices, Windows Shell storage, storage mutations, composition,
-tests, benchmarks, and dedicated CI.
+home, folder, and archive browsing, selection and projection, view settings,
+viewport prefetch, capability composition,
+thumbnail/property/folder-change/preview vertical slices, Windows Shell and
+FTP storage, storage mutations, composition, tests, benchmarks, and
+dedicated CI.
 
-Search/tag backends, additional providers, WinUI renderers, activation,
-context menus, drag/drop, and persistence are explicit extension or
-Files.App boundaries. They do not require changing the Core model graph.
+Search/tag backends, cloud/MTP/SFTP providers, WinUI renderers, activation,
+context menus, drag/drop, and persistence are explicit extension or Files.App
+boundaries. They do not require changing the Core model graph.

@@ -16,6 +16,7 @@
 	</PropertyGroup>
 
 	<ItemGroup>
+		<PackageReference Include="FluentFTP" />
 		<PackageReference Include="OwlCore.Storage" />
 		<PackageReference Include="SevenZipSharp" />
 	</ItemGroup>

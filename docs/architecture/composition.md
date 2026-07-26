@@ -72,6 +72,32 @@ location handler. `AddArchiveBrowsing` can also be registered independently
 with custom backends, probe, and credential provider. The default selector
 uses Windows Shell at priority 200 and SevenZipSharp at priority 100.
 
+## FTP vertical slice
+
+Each `AddFtpStorage` call registers one configured `FtpStorageSource`, its
+operation provider, and its source-scoped property contributor. Generic
+stream previews and archive browsing are registered once and work through
+the FTP `IFile` stream.
+
+```csharp
+builder.AddFtpStorage(
+	new FtpConnectionProfile(
+		connectionId: "primary",
+		displayName: "Publishing server",
+		host: "ftp.example.com",
+		securityMode: FtpSecurityMode.ExplicitTls,
+		rootPath: "/public"),
+	ftpCredentialProvider,
+	streamPreviewPolicy: previewAccessPolicy,
+	archiveCredentialProvider: archiveCredentials);
+```
+
+The profile contains no password. Files.App supplies an
+`IFtpCredentialProvider` backed by protected application infrastructure.
+Call `AddFtpStorage` once per saved profile before `Build`; see
+[FTP storage](ftp-storage.md) for identity, stream ownership, and current
+runtime-registration limits.
+
 ## Extending Core
 
 A backend supplies three independent kinds of registration:

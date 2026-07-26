@@ -1,9 +1,9 @@
 # Files.Core completion boundary
 
 Files.Core is complete as the UI-independent foundation required to begin the
-new Files.App. “Complete” here means the architectural contracts and the
-Windows vertical slice are usable end to end; it does not mean every future
-storage provider or Files feature is implemented.
+new Files.App. “Complete” here means the architectural contracts plus the
+Windows and FTP vertical slices are usable end to end; it does not mean every
+future storage provider or Files feature is implemented.
 
 ## Ready for Files.App
 
@@ -20,6 +20,7 @@ storage provider or Files feature is implemented.
 | Folder changes | Shared `SHChangeNotifyRegister` provider and incremental updates |
 | Previews | Stream results and Windows Shell preview sessions |
 | Operations | Create, case-preserving rename, copy, move, Recycle Bin/permanent delete, collision policy |
+| FTP | FTP/FTPS resolution, streams, properties, same-source mutations, previews and archive reuse |
 | Composition | One builder/runtime with deterministic ownership |
 | Quality | Unit tests, Windows integration tests, benchmarks, Core CI |
 
@@ -29,8 +30,12 @@ These do not block the new Files.App:
 
 - Search and tag have typed `BrowseLocation` values but require a chosen
   index/backend and corresponding location handler.
-- FTP, cloud, MTP, and other sources implement the same source, capability,
+- Cloud, MTP, SFTP, and other sources implement the same source, capability,
   location, and operation contracts as later vertical slices.
+- FTP profiles are composed before `Build`. Runtime add/remove needs a mutable
+  source registry with explicit ownership semantics.
+- Cross-source copies such as Windows-to-FTP need a generic stream-transfer
+  coordinator; the FTP provider deliberately owns only same-source requests.
 - Archive browsing and read streams are implemented. Compression,
   extract-all, entry mutations, split volumes, and archive operation
   progress remain separate operation-provider work.

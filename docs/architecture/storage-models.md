@@ -54,6 +54,12 @@ optional recovery hint and never participates in identity.
 
 Windows filesystem items use the versioned `winfs:v1:<volume>:<file-index>` identity when available. Their current `StorageAddress` uses the `file:` scheme and filesystem path, while their Shell parsing name and managed absolute PIDL remain separate locators. Items without a filesystem path use a `shell:` address. Virtual or inaccessible items use the encoded `winshell-address:v1:<address>` identity fallback when a filesystem ID is unavailable.
 
+An FTP connection uses `ftp:<ConnectionId>` as its source ID and a normalized,
+case-preserving remote path as its item ID. FTP exposes no portable stable
+file ID, so rename or move produces a new reference and invalidates the old
+path identity. Its `ftp:`, `ftpes:`, or `ftps:` address contains the endpoint
+and escaped path but never credentials. See [FTP storage](ftp-storage.md).
+
 Resolution validates the resulting identity and rejects a different file that
 has replaced a stale address. The Windows source can cold-resolve a
 same-directory rename by scanning the previous parent. Cross-directory cold

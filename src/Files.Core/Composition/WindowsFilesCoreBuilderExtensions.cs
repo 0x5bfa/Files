@@ -19,8 +19,6 @@ public static class WindowsFilesCoreBuilderExtensions
 {
 	private const string WindowsCapabilitiesFeature =
 		"Files.Core.Windows.Capabilities";
-	private const string DefaultStreamPreviewsFeature =
-		"Files.Core.Previews.DefaultStreams";
 	private const string WindowsShellPreviewsFeature =
 		"Files.Core.Previews.WindowsShell";
 
@@ -86,8 +84,7 @@ public static class WindowsFilesCoreBuilderExtensions
 
 		if (enablePreviews)
 		{
-			AddDefaultStreamPreviews(
-				builder,
+			builder.AddDefaultStreamPreviews(
 				streamPreviewPolicy ?? AllowPreviewStreamAccessPolicy.Instance);
 			AddWindowsShellPreviews(
 				builder,
@@ -101,46 +98,6 @@ public static class WindowsFilesCoreBuilderExtensions
 		}
 
 		return builder;
-	}
-
-	private static void AddDefaultStreamPreviews(
-		FilesCoreBuilder builder,
-		IPreviewStreamAccessPolicy policy)
-	{
-		if (!builder.TryRegisterFeature(DefaultStreamPreviewsFeature))
-		{
-			return;
-		}
-
-		var contentTypes = new ExtensionPreviewContentTypeResolver(
-			new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
-			{
-				[".bmp"] = "image/bmp",
-				[".csv"] = "text/csv",
-				[".gif"] = "image/gif",
-				[".htm"] = "text/html",
-				[".html"] = "text/html",
-				[".jpeg"] = "image/jpeg",
-				[".jpg"] = "image/jpeg",
-				[".json"] = "application/json",
-				[".md"] = "text/markdown",
-				[".mkv"] = "video/x-matroska",
-				[".mp3"] = "audio/mpeg",
-				[".mp4"] = "video/mp4",
-				[".pdf"] = "application/pdf",
-				[".png"] = "image/png",
-				[".svg"] = "image/svg+xml",
-				[".txt"] = "text/plain",
-				[".wav"] = "audio/wav",
-				[".webm"] = "video/webm",
-				[".webp"] = "image/webp",
-				[".xml"] = "application/xml",
-			});
-		var provider = new StreamPreviewProvider(contentTypes, policy);
-		builder.Capabilities.AddContributor<IPreviewSource>(
-			new PreviewProviderCapabilityContributor(provider),
-			priority: 200,
-			origin: "Core stream preview");
 	}
 
 	private static void AddWindowsShellPreviews(

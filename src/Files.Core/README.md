@@ -59,6 +59,8 @@ Implemented areas:
 - stream previews and hosted Windows Shell preview sessions;
 - Shell-first archive browsing with SevenZip fallback and UI-independent
   credential requests;
+- FTP/FTPS sources with credential-free identity, owned remote streams,
+  listing properties, and same-source storage operations;
 - create, rename, copy, move, delete, collision, and progress contracts;
 - one composition root with deterministic asynchronous disposal;
 - Windows integration tests, architecture benchmarks, and Core CI.
@@ -80,6 +82,21 @@ Implemented areas:
 
 Files.Core targets Windows and temporarily references `Files.App.CsWin32` for
 source-generated interop. It does not reference WinUI.
+
+## FTP vertical slice
+
+`AddFtpStorage` supplies one source per saved connection:
+
+- plain FTP, explicit TLS, and implicit TLS profiles;
+- credentials supplied separately through `IFtpCredentialProvider`;
+- normalized remote identities and credential-free recovery addresses;
+- immutable files/folders, parent lookup, and one-listing enumeration;
+- data streams that retain and complete their FTP control session;
+- listing-backed properties and create/rename/copy/move/permanent-delete;
+- automatic reuse of Core stream previews and archive browsing.
+
+SFTP, runtime profile registration, polling changes, remote thumbnail policy,
+and cross-source transfer coordination remain separate extension boundaries.
 
 ## Boundaries
 

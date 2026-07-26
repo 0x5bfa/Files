@@ -19,6 +19,8 @@ model graph through public contracts.
 - operation routing, enum validation, and result/progress invariants;
 - archive path safety, backend fallback, encryption routing, credential
   retry, and logical parent navigation;
+- FTP path normalization, root containment, address resolution, stream/session
+  ownership, property composition, and same-source mutations;
 - storage identity and recovery-address equality.
 
 Use test doubles for deterministic model behavior. A test that creates an
@@ -54,6 +56,14 @@ stream. Run each supported fixture through Windows 10 and the current
 Windows 11 image because Shell eligibility is deliberately capability-based,
 not OS-version-based. Never place fixture passwords in production telemetry
 or error messages.
+
+FTP integration tests should run against an isolated disposable server rather
+than a public endpoint. Cover plain FTP, explicit and implicit TLS,
+authentication failure, servers without MLST, UTF-8 and escaped names,
+non-seekable streams, recursive operations, cancellation, and server path
+case behavior. Unit tests use `IFtpSession` doubles and never require network
+access. Do not put FTP passwords in test output, addresses, snapshots, or CI
+variables that can be printed.
 
 ## Benchmarks
 

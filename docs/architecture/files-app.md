@@ -55,6 +55,10 @@ src/Files.App/
   Archives/
     ArchiveCredentialProvider.cs
     ArchiveCredentialDialogService.cs
+  Connections/
+    FtpConnectionProfileStore.cs
+    FtpCredentialProvider.cs
+    FtpConnectionDialogService.cs
   Previews/
     PreviewPresenter.cs
     StreamPreviewPresenter.cs
@@ -123,6 +127,14 @@ public sealed class FilesAppHost : IAsyncDisposable
 The bootstrap may use `Microsoft.Extensions.DependencyInjection` to construct
 process services. That container ends at the composition root. Do not inject
 `IServiceProvider` into models or ViewModels.
+
+At startup, load every non-secret FTP profile and call `AddFtpStorage` before
+`Build`. `FtpCredentialProvider` resolves its password from Windows
+Credential Manager and may marshal an authentication request to the owning
+window. It must never add the password to a `StorageAddress`, navigation
+history, telemetry, or a ViewModel. Until Files.Core gains a mutable source
+registry, adding or removing a connection requires rebuilding the
+process-wide runtime or restarting the process.
 
 ## Window creation
 
