@@ -50,8 +50,12 @@ src/Files.App/
   Collections/
     BrowseItemCollectionAdapter.cs
   Commands/
-    StorageCommandAdapter.cs
-    NavigationCommandAdapter.cs
+    CommandRegistry.cs
+    WindowCommandManager.cs
+    CommandBindingViewModel.cs
+    Adapters/NavigationCommandAdapter.cs
+    Adapters/StorageCommandAdapter.cs
+    Adapters/ClipboardCommandAdapter.cs
   Archives/
     ArchiveCredentialProvider.cs
     ArchiveCredentialDialogService.cs
@@ -68,6 +72,10 @@ src/Files.App/
   Platform/
     WinUiDispatcher.cs
     PreviewHostWindow.cs
+    Clipboard/OleClipboardService.cs
+    DragDrop/DragDropService.cs
+    Shell/ShellContextMenuService.cs
+    Shell/ShellMenuMessageRouter.cs
   Settings/
     PersistedViewSettingsStore.cs
     WindowSessionStore.cs
@@ -311,7 +319,10 @@ to local-server activation.
 
 ## Navigation commands
 
-Command adapters call the pane directly:
+The window-scoped registry, binding, context, cancellation, and execution
+rules are defined in [Files.App command execution](commands.md). Command
+surfaces invoke a stable command ID; they do not call the pane directly.
+The navigation adapter then calls the pane:
 
 | Command | Model call |
 | --- | --- |
@@ -394,6 +405,10 @@ session; the returned result reference is useful for reveal/focus intent.
 
 Drag/drop packages, clipboard formats, elevation, conflict prompts, and undo
 UI live in this adapter layer. The storage request remains UI-independent.
+The concrete command lifecycle is defined in
+[Files.App command execution](commands.md). Native clipboard, drag/drop,
+cross-source transfer, and Shell menu ownership are defined in
+[Clipboard, drag/drop, and Shell integration](platform-interactions.md).
 
 ## View settings
 
@@ -487,3 +502,10 @@ Start the new Files.App with this narrow vertical slice:
 
 Do not begin by moving old ViewModels into the new folders. Build this slice
 against Files.Core contracts, then migrate one existing user flow at a time.
+
+## Related implementation blueprints
+
+- [Files.App command execution](commands.md)
+- [Clipboard, drag/drop, and Shell integration](platform-interactions.md)
+- [Storage operations](operations.md)
+- [New Files.Core composition](composition.md)

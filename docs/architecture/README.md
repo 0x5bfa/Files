@@ -79,7 +79,9 @@ Read these in order when starting the new Files.App:
 2. [Application model graph](app-models.md)
 3. [Composition root](composition.md)
 4. [New Files.App architecture](files-app.md)
-5. [Testing and performance](testing.md)
+5. [Files.App command execution](commands.md)
+6. [Clipboard, drag/drop, and Shell integration](platform-interactions.md)
+7. [Testing and performance](testing.md)
 
 Reference documents:
 

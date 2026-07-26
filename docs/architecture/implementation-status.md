@@ -47,7 +47,9 @@ These do not block the new Files.App:
   `WindowsPropertyProvider` without changing AppModels.
 - Context menus, Shell verbs, drag/drop data packages, sharing, and
   application activation are Files.App/platform adapters, not item storage
-  capabilities.
+  capabilities. Their command, OLE, transfer, threading, and ownership design
+  is specified in [Files.App command execution](commands.md) and
+  [Clipboard, drag/drop, and Shell integration](platform-interactions.md).
 - Durable view settings, window-session serialization, telemetry, and policy
   implementations belong to the application composition root.
 - The physical merge of `Files.Shared`, `Files.Core.Storage`,
@@ -66,6 +68,9 @@ The next session can start Files.App when:
 4. one item-collection adapter applies versioned browse changes on the UI
    dispatcher;
 5. thumbnail and preview presenters convert Core results into WinUI objects;
-6. ViewModels and preview sessions are disposed before the runtime.
+6. one window-scoped command manager adapts navigation and storage requests;
+7. clipboard, drag/drop, and Shell sessions remain window/platform adapters;
+8. ViewModels, commands, and preview/platform sessions are disposed before
+   the runtime.
 
 The concrete Files.App blueprint is in [New Files.App architecture](files-app.md).
