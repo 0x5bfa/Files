@@ -103,24 +103,102 @@ instances and `ContentPresenter` hosts. The existing `Sidebar` may remain a
 templated control, but it follows the same dependency-property boundary as
 the composed user controls.
 
-```text
-MainWindow
-  RootView (WindowViewModel)
-    TabStripView
-    NavigationToolbar
-    SidebarView
-      ShellContent
-        Toolbar
-        TabContentPresenter
-          TabContentView (TabViewModel)
-            PaneView (PaneViewModel)
-              PaneContentPresenter
-                FolderBrowserView
-                  DetailsFolderView | GridFolderView | other layouts
-                SettingsView | WebBrowserView
-        TerminalView
-        InfoPaneView
-        ShelfPaneView
+```mermaid
+classDiagram
+    direction TB
+
+    class MainWindow {
+        <<Window>>
+    }
+    class RootView {
+        <<UserControl>>
+        +WindowViewModel ViewModel
+    }
+    class TabStripView {
+        <<UserControl>>
+        +WindowViewModel ViewModel
+    }
+    class NavigationToolbar {
+        <<UserControl>>
+        +PaneViewModel Pane
+    }
+    class SidebarView {
+        <<Control>>
+        +PaneViewModel Pane
+    }
+    class Toolbar {
+        <<UserControl>>
+        +PaneViewModel Pane
+    }
+    class TabContentHost {
+        <<ContentPresenter>>
+    }
+    class TabContentView {
+        <<UserControl>>
+        +TabViewModel ViewModel
+    }
+    class PaneView {
+        <<UserControl>>
+        +PaneViewModel ViewModel
+    }
+    class PaneContentHost {
+        <<ContentPresenter>>
+    }
+    class FolderBrowserView {
+        <<UserControl>>
+        +PaneViewModel ViewModel
+    }
+    class FolderLayoutHost {
+        <<ContentPresenter>>
+    }
+    class FolderLayoutView {
+        <<UserControl>>
+        +PaneViewModel ViewModel
+    }
+    class DetailsFolderView {
+        <<UserControl>>
+    }
+    class GridFolderView {
+        <<UserControl>>
+    }
+    class SettingsView {
+        <<UserControl>>
+    }
+    class WebBrowserView {
+        <<UserControl>>
+    }
+    class TerminalView {
+        <<UserControl>>
+        +PaneViewModel Pane
+    }
+    class InfoPaneView {
+        <<UserControl>>
+        +PaneViewModel Pane
+    }
+    class ShelfPaneView {
+        <<UserControl>>
+        +PaneViewModel Pane
+    }
+
+    MainWindow *-- RootView : Content
+    RootView *-- TabStripView
+    RootView *-- NavigationToolbar
+    RootView *-- SidebarView
+    SidebarView *-- Toolbar
+    SidebarView *-- TabContentHost
+    SidebarView *-- TerminalView
+    SidebarView *-- InfoPaneView
+    SidebarView *-- ShelfPaneView
+    TabContentHost o-- TabContentView : active tab
+    TabContentView *-- "1..2" PaneView : panes
+    PaneView *-- PaneContentHost
+    PaneContentHost o-- FolderBrowserView : browse
+    PaneContentHost o-- SettingsView : settings
+    PaneContentHost o-- WebBrowserView : web
+    FolderBrowserView *-- FolderLayoutHost
+    FolderLayoutHost o-- FolderLayoutView : active layout
+    FolderLayoutView <|-- DetailsFolderView
+    FolderLayoutView <|-- GridFolderView
 ```
 
 `RootView` is the window-scoped composition view. It renders the tab
@@ -139,6 +217,80 @@ restart enumeration, or maintain another active-pane ID.
 Pass the direct ViewModel down explicitly. Do not rely on a process-global
 current window, implicit service lookup, or a serialized navigation
 parameter.
+
+ViewModels do not declare or consume dependency properties. They remain
+UI-independent objects. A parent View reads its direct ViewModel and assigns
+the corresponding child ViewModel to a dependency property on each child
+control:
+
+```mermaid
+classDiagram
+    direction TB
+
+    class WindowViewModel {
+        +Tabs
+        +ActiveTab
+        +ActivePane
+    }
+    class TabViewModel {
+        +Panes
+        +ActivePane
+    }
+    class PaneViewModel {
+        +BrowseItemCollectionAdapter Items
+        +BrowseViewSettings ViewSettings
+        +BrowseSelectionState Selection
+    }
+    class RootView {
+        +WindowViewModel ViewModel
+    }
+    class TabStripView {
+        +WindowViewModel ViewModel
+    }
+    class TabContentView {
+        +TabViewModel ViewModel
+    }
+    class SharedPaneView {
+        <<DPContract>>
+        +PaneViewModel Pane
+    }
+    class PaneView {
+        +PaneViewModel ViewModel
+    }
+    class FolderBrowserView {
+        +PaneViewModel ViewModel
+    }
+    class FolderLayoutView {
+        +PaneViewModel ViewModel
+    }
+
+    WindowViewModel *-- TabViewModel : owns Tabs
+    WindowViewModel --> TabViewModel : ActiveTab
+    WindowViewModel --> PaneViewModel : ActivePane
+    TabViewModel *-- "1..2" PaneViewModel : owns Panes
+    TabViewModel --> PaneViewModel : ActivePane
+
+    RootView --> WindowViewModel : ViewModel DP
+    RootView ..> TabStripView : ViewModel = ViewModel
+    RootView ..> TabContentView : ViewModel = ViewModel.ActiveTab
+    RootView ..> SharedPaneView : Pane = ViewModel.ActivePane
+    TabContentView --> TabViewModel : ViewModel DP
+    TabContentView ..> PaneView : ViewModel = each Panes item
+    PaneView --> PaneViewModel : ViewModel DP
+    PaneView ..> FolderBrowserView : ViewModel = ViewModel
+    FolderBrowserView ..> FolderLayoutView : ViewModel = ViewModel
+```
+
+`SharedPaneView` represents the common dependency-property contract used by
+`NavigationToolbar`, `Toolbar`, `SidebarView`, `TerminalView`,
+`InfoPaneView`, and `ShelfPaneView`; it does not require a shared CLR base
+class. Assignment labels describe data flow; Views never construct the child
+ViewModels they receive.
+
+`WindowViewModel.ActivePane` is a derived, observable projection of
+`ActiveTab?.ActivePane`. It does not own another pane or store a competing
+active-pane ID. Its purpose is to update every shared `Pane` dependency
+property when either the active tab or that tab's active pane changes.
 
 | View | Primary dependency property | Lifetime |
 | --- | --- | --- |
