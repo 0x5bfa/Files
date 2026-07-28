@@ -12,7 +12,7 @@ namespace Files.Core.Storage.Windows;
 /// <summary>
 /// Executes Windows Shell storage operations.
 /// </summary>
-[SupportedOSPlatform("windows")]
+[SupportedOSPlatform("windows6.0.6000")]
 public sealed class WindowsStorageOperationProvider : IStorageOperationProvider
 {
 	private const FILEOPERATION_FLAGS RecycleOnDeleteFlag =
@@ -520,7 +520,7 @@ public sealed class WindowsStorageOperationProvider : IStorageOperationProvider
 		};
 		var result = fileOperation.NewItem(
 			destinationFolder,
-			attributes,
+			(uint)attributes,
 			name,
 			null,
 			null);

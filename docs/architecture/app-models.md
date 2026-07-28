@@ -33,6 +33,38 @@ flowchart TB
 The model IDs are process-local correlation IDs. Storage identity comes from
 `StorableReference`, not from window, tab, or pane IDs.
 
+## Responsibility audit
+
+`BrowseSessionModel` is the aggregate root for the state of one browsable
+pane. Its public surface coordinates a navigation transaction, the active
+location context, immutable item snapshots, selection, and presentation
+state. It is not a destination for every browser-related behavior.
+
+Existing responsibility boundaries are:
+
+| Concern | Owner |
+| --- | --- |
+| Back/forward history and pane lifetime | `PaneModel` and `BrowseNavigationHistory` |
+| Location-specific opening and enumeration | `IBrowseLocationHandler` and `IBrowseLocationContext` |
+| Item ordering and granular collection changes | `BrowseItemProjection` |
+| Properties and thumbnail scheduling | `BrowsePrefetchCoordinator` |
+| Preview selection and lifetime | `BrowsePreviewModel` |
+| Create, rename, copy, move, and delete | `IStorageOperationService` |
+| Observable collections and dispatcher application | Files.App collection adapter |
+| Commands, dialogs, and visual state | Files.App |
+
+Keep `IBrowseSessionModel` stable through the first Files.App adoption slice.
+When new behavior introduces its own lifetime, queue, or consistency
+invariant, extract an internal collaborator behind this aggregate instead of
+adding another responsibility directly. Likely extraction seams are
+navigation preparation, folder-change reconciliation, and presentation
+state. Do not extract them merely to reduce the source file length; use the
+first UI consumer to prove an independently testable boundary.
+
+The following never belong in `BrowseSessionModel`: WinUI types, observable
+collections, localized strings, command implementations, dialogs, Shell
+interop, provider-specific branching, or process service lookup.
+
 ## Creating the graph
 
 Applications normally receive a ready `FilesApplicationModel` from

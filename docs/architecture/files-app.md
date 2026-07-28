@@ -81,13 +81,102 @@ src/Files.App/
     WindowSessionStore.cs
   Views/
     Windows/MainWindow.xaml
-    Tabs/TabView.xaml
+    Windows/RootView.xaml
+    Shell/NavigationToolbar.xaml
+    Shell/SidebarView.xaml
+    Tabs/TabStripView.xaml
+    Tabs/TabContentView.xaml
     Panes/PaneView.xaml
+    Browsing/FolderBrowserView.xaml
+    Browsing/Layouts/DetailsFolderView.xaml
+    Browsing/Layouts/GridFolderView.xaml
     Previews/PreviewView.xaml
 ```
 
 Folder names are boundaries, not new projects. Keep them even after the
 existing non-UI projects are physically merged into Files.Core.
+
+## UI composition and state flow
+
+Replace `Frame` and `Page` navigation with a retained tree of `UserControl`
+instances and `ContentPresenter` hosts. The existing `Sidebar` may remain a
+templated control, but it follows the same dependency-property boundary as
+the composed user controls.
+
+```text
+MainWindow
+  RootView (WindowViewModel)
+    TabStripView
+    NavigationToolbar
+    SidebarView
+      ShellContent
+        Toolbar
+        TabContentPresenter
+          TabContentView (TabViewModel)
+            PaneView (PaneViewModel)
+              PaneContentPresenter
+                FolderBrowserView
+                  DetailsFolderView | GridFolderView | other layouts
+                SettingsView | WebBrowserView
+        TerminalView
+        InfoPaneView
+        ShelfPaneView
+```
+
+`RootView` is the window-scoped composition view. It renders the tab
+membership from `WindowViewModel` and updates shared shell controls from its
+active pane. A `TabContentView` renders one or two retained `PaneView`
+instances according to `TabViewModel`. Each browse pane owns one retained
+`FolderBrowserView` for the lifetime of its `PaneViewModel`.
+
+The toolbar, sidebar, terminal, info pane, and shelf pane are instantiated
+once per window. Their pane dependency changes when focus moves between tabs
+or split panes; changing that dependency must not recreate a Core model,
+restart enumeration, or maintain another active-pane ID.
+
+### Dependency property contracts
+
+Pass the direct ViewModel down explicitly. Do not rely on a process-global
+current window, implicit service lookup, or a serialized navigation
+parameter.
+
+| View | Primary dependency property | Lifetime |
+| --- | --- | --- |
+| `RootView` | `WindowViewModel ViewModel` | One per WinUI window |
+| `TabStripView` | `WindowViewModel ViewModel` | Shared by the window |
+| `TabContentView` | `TabViewModel ViewModel` | One per model tab |
+| `NavigationToolbar`, `Toolbar`, `SidebarView` | `PaneViewModel? Pane` | Shared; follows the focused pane |
+| `TerminalView`, `InfoPaneView`, `ShelfPaneView` | `PaneViewModel? Pane` | Shared; follows the focused pane |
+| `PaneView` | `PaneViewModel ViewModel` | One per model pane |
+| `FolderBrowserView` | `PaneViewModel ViewModel` | One per browse pane |
+| Folder layout views | `PaneViewModel ViewModel` | Owned by the folder browser view |
+
+Controls treat these ViewModels as borrowed references. A property-change
+callback detaches handlers from the previous value before attaching the new
+value. The ViewModel owner remains the corresponding parent ViewModel or
+`WindowFactory`; unloading a control does not dispose the model graph.
+
+Use dependency properties and `x:Bind` at control boundaries. Ordinary
+template elements may use bindings to the control's dependency properties,
+but a nested control must receive its dependency explicitly. This keeps the
+visual tree aligned with the AppModel and ViewModel ownership trees.
+
+### Content presenters
+
+Content selection is a View responsibility:
+
+- `TabContentPresenter` selects the active retained `TabContentView`;
+- `PaneContentPresenter` selects a `UserControl` for the pane content;
+- `FolderBrowserView` selects a layout view from `BrowseViewSettings`;
+- the ViewModel exposes state and commands, never a `UIElement`, `Type`, or
+  `DataTemplate`;
+- a keyed template or window-scoped view factory may create controls, but it
+  must not resolve Core services or own AppModels.
+
+The first adoption slice supports `FolderBrowserView`. Settings and web
+content may be added later through Files.App content ViewModels without
+changing `BrowseSessionModel`. `Frame.Navigate`, page-type routing, and
+serialization of model objects for in-process navigation are prohibited.
 
 ## Process bootstrap
 
@@ -483,24 +572,31 @@ Shutdown order:
 Every event subscription must have an owner and deterministic unsubscription.
 Avoid weak events as a substitute for correct lifetime.
 
-## First implementation slice
+## Adoption slices
 
-Start the new Files.App with this narrow vertical slice:
+The first slice is a walking skeleton, not the complete browser:
 
-1. build `FilesAppHost` and production policies;
-2. create one window from `HomeLocation`;
-3. adapt one tab and one pane;
-4. display `BrowseSessionModel.Items` through the collection adapter;
-5. implement selection, viewport reporting, details/grid settings;
-6. decode `ThumbnailResult` bytes;
-7. implement back/forward/up/refresh;
-8. add stream preview rendering;
-9. add the child-HWND Shell preview presenter;
-10. add rename/create/copy/move/delete command adapters;
-11. add split pane and multiple tabs;
-12. persist view and window-session state.
+1. reference Files.Core behind a temporary Files.App feature boundary;
+2. build `FilesAppHost` and production policies;
+3. create one `MainWindow` and `RootView` from `HomeLocation`;
+4. adapt one window, one tab, and one pane;
+5. retain one `FolderBrowserView` through `PaneContentPresenter`;
+6. display `BrowseSessionModel.Items` through the collection adapter;
+7. implement selection and back/forward/up/refresh.
 
-Do not begin by moving old ViewModels into the new folders. Build this slice
+The slice is complete when Home and one filesystem folder render without a
+`Frame`, the active pane reaches shared controls only through dependency
+properties, and the Files.App x64 build succeeds.
+
+Continue in independently buildable slices:
+
+1. viewport reporting, details/grid settings, and thumbnail decoding;
+2. stream previews, then the child-HWND Shell preview presenter;
+3. rename/create/copy/move/delete command adapters;
+4. split panes and multiple tabs;
+5. persisted view and window-session state.
+
+Do not begin by moving old ViewModels into the new folders. Build each slice
 against Files.Core contracts, then migrate one existing user flow at a time.
 
 ## Related implementation blueprints

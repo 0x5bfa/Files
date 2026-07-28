@@ -31,9 +31,9 @@ public sealed class FtpPathTests
 	[TestMethod]
 	public void RejectsPathsThatEscapeTheRemoteRoot()
 	{
-		Assert.ThrowsException<ArgumentException>(
+		Assert.Throws<ArgumentException>(
 			() => FtpPath.Parse("../../outside"));
-		Assert.ThrowsException<ArgumentException>(
+		Assert.Throws<ArgumentException>(
 			() => FtpPath.Root.Combine("../outside"));
 	}
 

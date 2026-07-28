@@ -4,7 +4,15 @@
 
 CoreModels standardize one provider. For storage, the smallest CoreModels are the OwlCore.Storage interfaces such as `IStorable`, `IFile`, and `IFolder`.
 
-AppModels wrap CoreModels and add Files-specific composition. They do not expose WinUI concepts.
+Item AppModels wrap CoreModels and add Files-specific composition. They are
+implemented by `Files.Core.Models.IStorableModel` and do not expose WinUI
+concepts. `Files.Core.AppModels` contains the application-state AppModels for
+windows, tabs, and panes; browsing models complete that state graph. These
+are two scopes of AppModel, not competing architectural layers.
+
+The `Files.Core` project contains both CoreModel adapters and AppModels.
+Project placement must not be used as a substitute for the dependency
+boundaries in this document.
 
 ```mermaid
 classDiagram

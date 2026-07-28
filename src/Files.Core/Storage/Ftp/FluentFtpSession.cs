@@ -276,7 +276,7 @@ public sealed class FluentFtpSession : IFtpSession
 			FtpObjectType.Link => FtpEntryKind.SymbolicLink,
 			_ => FtpEntryKind.File,
 		};
-		var size = kind is FtpEntryKind.Folder || item.Size < 0
+		long? size = kind is FtpEntryKind.Folder || item.Size < 0
 			? null
 			: item.Size;
 

@@ -124,7 +124,7 @@ public sealed class FtpStorageTests
 		var stream = await file.OpenStreamAsync(FileAccess.Read);
 		var session = sessions.Sessions[^1];
 
-		await Assert.ThrowsExceptionAsync<IOException>(
+		await Assert.ThrowsAsync<IOException>(
 			() => stream.DisposeAsync().AsTask());
 		Assert.IsTrue(session.IsDisposed);
 		Assert.AreEqual(1, session.CompletedTransferCount);
@@ -155,7 +155,7 @@ public sealed class FtpStorageTests
 		Assert.AreEqual(
 			"/new.txt",
 			result.ResultItem!.ItemId);
-		await Assert.ThrowsExceptionAsync<FileNotFoundException>(
+		await Assert.ThrowsAsync<FileNotFoundException>(
 			() => source
 				.ResolveAsync(original)
 				.AsTask());

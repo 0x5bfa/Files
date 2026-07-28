@@ -27,6 +27,23 @@ flowchart TB
 Logical layers remain separate even when WinUI-agnostic code is eventually
 merged into one physical `Files.Core` project.
 
+## Model terminology
+
+`Files.Core` is an assembly boundary, not the name of one architectural
+layer. Use these terms consistently:
+
+| Term | Concrete types | Meaning |
+| --- | --- | --- |
+| Storage CoreModel | OwlCore.Storage `IStorable`, `IFile`, `IFolder` | Minimal provider-facing storage shape |
+| Item AppModel | `Files.Core.Models.IStorableModel` | Files identity, lifetime, and composed item capabilities |
+| Application-state AppModel | `Files.Core.AppModels.*` and browsing models | Application, window, tab, pane, and browse state |
+| ViewModel | `Files.App.ViewModels.*` | WinUI-bindable wrapper around one direct AppModel |
+
+Both item and application-state AppModels are UI-independent. The
+`Files.Core.Models` namespace predates the complete application-state graph;
+do not infer a different architectural layer from that namespace, and do not
+rename it during the first Files.App adoption slice.
+
 ## Dependency rules
 
 | Layer | Owns | May depend on |
