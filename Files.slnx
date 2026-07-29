@@ -8,38 +8,7 @@
     <File Path="Directory.Build.props" />
     <File Path="Directory.Packages.props" />
   </Folder>
-  <Folder Name="/docs/" />
-  <Folder Name="/docs/architecture/">
-    <File Path="docs/architecture/README.md" />
-    <File Path="docs/architecture/app-models.md" />
-    <File Path="docs/architecture/item-features.md" />
-    <File Path="docs/architecture/composition.md" />
-    <File Path="docs/architecture/files-app.md" />
-    <File Path="docs/architecture/implementation-status.md" />
-    <File Path="docs/architecture/migration.md" />
-    <File Path="docs/architecture/operations.md" />
-    <File Path="docs/architecture/previews.md" />
-    <File Path="docs/architecture/storage-models.md" />
-    <File Path="docs/architecture/testing.md" />
-    <File Path="docs/architecture/threading.md" />
-    <File Path="docs/architecture/view-settings.md" />
-    <File Path="docs/architecture/windows-storage.md" />
-  </Folder>
-  <Folder Name="/src/" />
-  <Folder Name="/src/core/">
-    <Project Path="src/Files.Core/Files.Core.csproj">
-      <Platform Solution="*|arm64" Project="arm64" />
-      <Platform Solution="*|x64" Project="x64" />
-      <Platform Solution="*|x86" Project="x86" />
-    </Project>
-    <Project Path="src/Files.Core.SourceGenerator/Files.Core.SourceGenerator.csproj" />
-    <Project Path="src/Files.Shared/Files.Shared.csproj">
-      <Platform Solution="*|arm64" Project="arm64" />
-      <Platform Solution="*|x64" Project="x64" />
-      <Platform Solution="*|x86" Project="x86" />
-    </Project>
-  </Folder>
-  <Folder Name="/src/platforms/">
+  <Folder Name="/src/">
     <Project Path="src/Files.App.BackgroundTasks/Files.App.BackgroundTasks.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
@@ -64,6 +33,17 @@
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
       <Deploy />
+    </Project>
+    <Project Path="src/Files.Core.SourceGenerator/Files.Core.SourceGenerator.csproj" />
+    <Project Path="src/Files.Core/Files.Core.csproj">
+      <Platform Solution="*|arm64" Project="arm64" />
+      <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|x86" Project="x86" />
+    </Project>
+    <Project Path="src/Files.Shared/Files.Shared.csproj">
+      <Platform Solution="*|arm64" Project="arm64" />
+      <Platform Solution="*|x64" Project="x64" />
+      <Platform Solution="*|x86" Project="x86" />
     </Project>
   </Folder>
   <Folder Name="/tests/">

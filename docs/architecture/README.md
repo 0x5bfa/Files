@@ -109,6 +109,7 @@ Reference documents:
 - [Browse view settings and projection](view-settings.md)
 - [Preview flow and Shell sessions](previews.md)
 - [Storage operations](operations.md)
+- [Durable operations with Files.App.Server](server-operations.md)
 - [Windows storage source](windows-storage.md)
 - [Windows Shell threading](threading.md)
 - [Migration and physical project merge](migration.md)
