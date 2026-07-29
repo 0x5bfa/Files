@@ -89,8 +89,9 @@ flowchart TB
 3. [合成ルート](composition.md)
 4. [新 Files.App アーキテクチャ](files-app.md)
 5. [Files.App のコマンド実行](commands.md)
-6. [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
-7. [テストと性能](testing.md)
+6. [Files.App の項目機能とアクティブ化](files-app-features.md)
+7. [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
+8. [テストと性能](testing.md)
 
 参照文書:
 
@@ -101,7 +102,7 @@ flowchart TB
 - [参照ビュー設定と投影](view-settings.md)
 - [プレビューの流れと Shell セッション](previews.md)
 - [ストレージ操作](operations.md)
-- [`Files.App.Server` による永続操作](server-operations.md)
+- [`Files.App.Server` によるクラッシュ耐性のある操作](server-operations.md)
 - [Windows ストレージソース](windows-storage.md)
 - [Windows Shell のスレッド処理](threading.md)
 - [移行と物理プロジェクト統合](migration.md)

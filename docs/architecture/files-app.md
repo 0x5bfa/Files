@@ -518,7 +518,7 @@ Core ファクトリが専用プレビュー STA を所有し、既定ではロ�
 
 | コマンド | モデル呼び出し |
 | --- | --- |
-| 開く | `NavigateAsync(location)` |
+| 項目を開く | `NavigateAsync(location)` または `FileLauncher.OpenAsync(target)` |
 | 更新 | `RefreshAsync()` |
 | 戻る | `GoBackAsync()` |
 | 進む | `GoForwardAsync()` |
@@ -531,9 +531,10 @@ Core ファクトリが専用プレビュー STA を所有し、既定ではロ�
 
 開くコマンドは通常のフォルダー形状より先にアーカイブ項目機能を確認します。Windows Shell が `.zip` や `.7z` を `IFolderModel` として公開しても、
 暗号化アーカイブは SevenZip フォールバックへ送らなければならないためです。
+参照可能な場所を返す分岐は次の形です。`null` の通常ファイルは `ILaunchTargetSource` と `FileLauncher` へ送ります。
 
 ```csharp
-private static BrowseLocation GetOpenLocation(
+private static BrowseLocation? GetBrowseLocation(
 	IStorableModel item)
 {
 	if (item is IFolderModel
@@ -552,8 +553,7 @@ private static BrowseLocation GetOpenLocation(
 		return new FolderLocation(folder.Reference);
 	}
 
-	throw new InvalidOperationException(
-		$"'{item.Name}' cannot be browsed.");
+	return null;
 }
 ```
 
@@ -564,6 +564,8 @@ Core のアーカイブコンテキストでは、別の `ArchiveLocation` で�
 `FolderLocation` を返します。戻る・進むでは外側の参照と正規化されたエントリパスを保持します。
 
 バックエンドの選択と所有権については、[アーカイブ参照](archives.md) を参照してください。
+通常ファイルのオープン、ダブルクリックの入力取得、Quick Look、クラウド検出、列の合成については、
+[Files.App の項目機能とアクティブ化](files-app-features.md) を参照してください。
 
 ## ストレージコマンド
 
@@ -685,6 +687,7 @@ Files.App の x64 ビルドが成功した時点で完了です。
 ## 関連する実装設計図
 
 - [Files.App のコマンド実行](commands.md)
+- [Files.App の項目機能とアクティブ化](files-app-features.md)
 - [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
 - [ストレージ操作](operations.md)
 - [新 Files.Core の合成](composition.md)

@@ -36,6 +36,10 @@ flowchart TD
 
 列 ID には `IPropertySource` が返す安定した識別子と同じものを使います。ViewModel はその ID をローカライズされたラベルと WinUI 列オブジェクトへ変換します。
 
+列定義自体は `BrowseViewSettings` に保存しません。Files.App の `ColumnCatalog` が現在の場所に対して Shell、Files 基本、Tags、Git、Cloud の列セットを合成し、
+設定はその結果に幅、順序、表示状態を適用します。保存済みの列が現在の場所で利用できなくても設定から削除しません。
+詳細な合成規則とプロパティ ID は [Files.App の項目機能とアクティブ化](files-app-features.md#列の合成) を参照してください。
+
 ## ナビゲーションフロー
 
 ```mermaid

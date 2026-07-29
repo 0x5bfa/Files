@@ -112,6 +112,10 @@ public sealed record CommandDescriptor(
 マネージャーはコマンドが呼び出された時点でコンテキストを取得します。
 
 ```csharp
+public sealed record CommandInvocation(
+	CommandInvocationSource Source,
+	StorableReference? InvokedItem = null);
+
 public sealed record CommandContext(
 	Guid WindowId,
 	Guid TabId,
@@ -119,6 +123,7 @@ public sealed record CommandContext(
 	BrowseLocation Location,
 	ImmutableArray<StorableReference> Selection,
 	StorableReference? FocusedItem,
+	StorableReference? InvokedItem,
 	long BrowseGeneration,
 	long ItemsVersion,
 	CommandInvocationSource InvocationSource);
@@ -129,6 +134,7 @@ public sealed record CommandContext(
 待機したプロンプトやプラットフォーム呼び出しの後に世代と項目バージョンを検証します。
 
 `CommandContextFactory` はウィンドウスコープで、UI dispatcher 上のアクティブなタブ、ペイン、選択、フォーカス項目をアトミックに読み取ります。
+ダブルクリックのように呼び出した項目が明確な入力だけは、型付き `CommandInvocation.InvokedItem` として受け取り、現在のペインへの所属を検証してコピーします。
 コマンドマネージャーはビューから任意の `object` パラメーターを受け付けません。
 
 ### 状態と実行
@@ -254,10 +260,12 @@ sequenceDiagram
 | `files.navigation.forward` | `GoForwardAsync` | `CanGoForward` と `IsLoading` |
 | `files.navigation.up` | `GoUpAsync` | `CanGoUp` と `IsLoading` |
 | `files.navigation.refresh` | `RefreshAsync` | ペイン所属と読み込みポリシー |
-| `files.item.open` | 適切な `BrowseLocation` を解決 | フォーカス項目と選択数 |
+| `files.item.open` | `BrowseLocation` を解決するか起動対象を開く | 呼び出し項目、フォーカス項目、選択数 |
 
 開く処理では通常のフォルダー形状より先に `IArchiveEntry` と `IArchiveSource` を確認します。これにより Shell 優先のアーカイブ動作と、
 暗号化アーカイブのフォールバックを維持できます。参照できないファイルを開く場合は、フォルダーナビゲーションではなくプラットフォーム起動アダプターへ送ります。
+ダブルクリック、Enter、単一クリック設定、コンテキストメニューはすべてこのコマンドへ集約します。
+通常ファイルの起動対象、Quick Look、クリック時の参照取得は [Files.App の項目機能とアクティブ化](files-app-features.md#ファイルを開く) で定義します。
 
 ナビゲーションのキャンセルでは、新しい場所が正常に開くまで履歴を変更しません。ペインが履歴の権威ある所有者です。
 

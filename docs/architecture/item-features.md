@@ -161,6 +161,18 @@ flowchart LR
 SevenZip ベースのフォルダーは `IArchiveEntry` を直接実装します。これにより外側アーカイブ参照と正規化されたエントリパスを子ナビゲーションのために保持します。
 Files.App は `IArchiveEntry`、次に `IArchiveSource`、最後に通常の `IFolderModel` 形状を確認します。[アーカイブ参照](archives.md)を参照してください。
 
+## Files.App 機能との境界
+
+項目に関係するすべての処理が項目機能になるわけではありません。
+
+- `ILaunchTargetSource` は 1 項目が通常のオープンまたは Quick Look に渡せる対象を返す項目機能です。
+- Quick Look アプリのインストール検出と外部プロセスとの通信は、Files.App の共有サービスです。
+- `ICloudInfoSource` は 1 項目のクラウドルート、同期状態、可用性を返す項目機能です。
+- 登録済みクラウドルートの列挙とサイドバー生成は、項目より長く生きる Files.App のカタログと ViewModel です。
+- 列値は `IPropertySource` が返しますが、利用可能な列定義の合成は一覧単位なので Files.App が所有します。
+
+具体的な契約、列の合成、ダブルクリックからファイルを開く流れは [Files.App の項目機能とアクティブ化](files-app-features.md) で定義します。
+
 ## フォルダー変更
 
 `IFolderChangeSource` は項目束縛のウォッチャー契約です。ソースが明示的に開始し、その後は管理対象の `FolderChange` 値をイベントから配信します。

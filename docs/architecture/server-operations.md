@@ -1,445 +1,1175 @@
-# `Files.App.Server` による永続操作
+# `Files.App.Server` によるクラッシュ耐性のある操作
 
-## 状態と対象範囲
+保証するのは、`Files.App` がクラッシュしても、別プロセスの `Files.App.Server` が実行中のファイル操作を継続することです。
+サーバー、Windows、マシンの停止後に中断操作を自動再開しません。安全に再開できないコピーや移動を推測で再実行してはいけません。
 
-この文書は、長時間実行するストレージ操作を `Files.App.Server` で動かす提案設計を定義します。
-新しい Files.Core のモデルグラフを前提にした目標設計であり、現在の実装を説明する文書ではありません。
+1 項目の Core 契約は [ストレージ操作](operations.md) を参照してください。
+class 内で本体を省略して `;` で終えている member は、追加するシグネチャを表します。
 
-目標は意図的に限定します。
+## 再考した構成
 
-- フォアグラウンドの `Files.App` プロセスが予期せず終了しても、コピー、移動、削除、作成、名前変更を継続できる。
-- 新しく起動した `Files.App` が、以前のプロセスが開始した操作を発見して表示できる。
-- UI は表示、プロンプト、ナビゲーション状態を担当する。
-- Files.Core は UI 非依存のまま、`IStorageOperationService` を通して 1 つのストレージ要求を実行する。
+| 以前の案 | 採用する形 |
+| --- | --- |
+| サーバーにも完全な `FilesCoreRuntime` | 操作だけを持つ `StorageRuntime` |
+| 永続 `OperationJob` とチェックポイント | メモリ内 `FileOperation` と再接続用 journal |
+| 多数の public WinRT DTO | 1 つの `FileOperationServer` と JSON message |
+| 切断で失われる WinRT event | 単調増加する `Revision` と long polling |
+| `OperationSync` + `OperationCenterModel` | アプリケーションスコープの `FileOperationsModel` |
+| Files プロセス数でサーバー終了 | active operation + active call + idle timeout |
 
-この設計は、`Files.App.Server` 自体が終了した後に操作を再開できることを保証しません。後続フェーズでバックエンドごとの復旧を追加することはできますが、
-バックエンドが冪等なトランザクションを提供しない限り、途中まで完了したファイル操作を自動再実行するのは安全ではありません。
+```text
+Files.App
+  CommandHandler -> FileOperationsModel -> IFileOperationClient
+                                      -> WinRtFileOperationClient
+                                      -> FileOperationServer
 
-## 現在の状態
+Files.App.Server
+  FileOperationServer -> FileOperationHost -> FileOperation
+                                          -> OperationJournal
+                                          -> StorageRuntime.Operations
 
-`Files.App.Server` はすでに単一インスタンスのアウトオブプロセス WinRT サーバーとしてパッケージ化されています。`Files.App` は生成された WinRT メタデータを利用し、
-サーバーは `Files.Core` を参照します。現在パッケージマニフェストが公開しているのは `Files.App.Server.AppInstanceMonitor` だけです。
-
-サーバーには現在、操作 API がありません。プロセスは `Program.ExitSignal` で待機し、`AppInstanceMonitor` は最後に監視していた Files プロセスが終了するとイベントを通知します。
-さらにフォアグラウンドの起動経路は、他の Files プロセスがないと判断すると既存サーバーを kill します。この 2 つのライフタイム規則は、クラッシュ耐性のある操作と両立しません。
-
-1. フォアグラウンドのクラッシュによって、操作実行中でもサーバーが終了する可能性がある。
-2. Files を再度開くと、まだ操作を完了していないサーバーを kill する可能性がある。
-3. 実行中の操作が安定した ID で表されず、新しい UI プロセスが問い合わせできない。
-4. 現在の WinRT サーフェスから Core の操作要求を送信できない。
-
-既存の Core 境界が正しい実行境界です。`FilesCoreRuntime` は `StorageOperations` を所有し、`WindowsStorageOperationHandler` は WinUI に依存せず安定した参照を解決して Shell 変更を実行します。
-
-## 目標とするプロセス構成
-
-フォアグラウンドプロセスとサーバープロセスは、それぞれ自分の Core グラフを所有します。Core モデル、Shell オブジェクト、ストリーム、PIDL、キャンセルトークンをプロセス間で共有しません。
-
-```mermaid
-flowchart LR
-    subgraph UI[Files.App process]
-        Command["Command adapter"]
-        Client["FileOperationClient"]
-        Sync["OperationSync"]
-        Center["OperationCenterModel"]
-        VM["StatusCenterViewModel"]
-        Browse["BrowseSessionModel"]
-        RuntimeUI["Browse 用 FilesCoreRuntime"]
-    end
-
-    subgraph Server[Files.App.Server process]
-        WinRT["FileOperationServer WinRT class"]
-        Jobs["OperationJob registry"]
-        Store["OperationStore"]
-        RuntimeServer["操作用 FilesCoreRuntime"]
-        Operations["StorageOperationService"]
-        Handler["WindowsStorageOperationHandler"]
-        Shell["Windows Shell IFileOperation"]
-    end
-
-    Command --> Client
-    Client -->|"WinRT request DTO"| WinRT
-    WinRT --> Jobs
-    Jobs --> Store
-    Jobs --> RuntimeServer
-    RuntimeServer --> Operations
-    Operations --> Handler
-    Handler --> Shell
-    WinRT -->|"snapshot DTO"| Client
-    Client --> Sync
-    Sync --> Center
-    Center --> VM
-    RuntimeUI --> Browse
-    Browse -. "folder notification" .-> Center
+Files.Core
+  FileOperation message values
+  StorageRuntime
+  IStorageOperationService
+  WindowsStorageOperationHandler
 ```
 
-サーバーランタイムは 2 つ目の UI ではなく、プロセス内の実行ホストです。最初の実装では既存 builder を使って次のように構築できます。
+## Files.Core の message 値
+
+WinRT runtime class は out-of-proc proxy です。数千個の DTO を public runtime class にすると、構築と property access が IPC になります。
+ABI は JSON `string` にし、通常の C# record を両プロセスで共有します。
 
 ```csharp
-await using var runtime = new FilesCoreBuilder()
-	.AddWindowsStorage(
-		enablePreviews: false,
-		enableArchives: false)
+namespace Files.Core.Storage.FileOperations;
+
+public static class FileOperationSchema
+{
+	public const int Current = 1;
+	public const int MaxItems = 4096;
+	public const int MaxMessageBytes = 4 * 1024 * 1024;
+	public const int MaxNameLength = 255;
+	public const int MaxErrorDetailLength = 2048;
+}
+
+public enum FileOperationKind
+{
+	Create,
+	Rename,
+	Copy,
+	Move,
+	Delete,
+}
+
+public enum FileOperationState
+{
+	Queued,
+	Running,
+	Cancelling,
+	Succeeded,
+	CompletedWithErrors,
+	Failed,
+	Cancelled,
+	Unknown,
+}
+
+public enum FileOperationItemState
+{
+	Queued,
+	Running,
+	Succeeded,
+	Failed,
+	Cancelled,
+	Unknown,
+}
+
+public enum FileOperationErrorCode
+{
+	None,
+	InvalidRequest,
+	NotFound,
+	AccessDenied,
+	NameConflict,
+	SourceUnavailable,
+	NotSupported,
+	Cancelled,
+	ServerInterrupted,
+	Unknown,
+}
+```
+
+```csharp
+public sealed record FileOperationReference(
+	string SourceId,
+	string ItemId,
+	string? AddressScheme = null,
+	string? AddressValue = null)
+{
+	public StorableReference ToReference()
+	{
+		var address = AddressScheme is not null
+			&& AddressValue is not null
+				? new StorageAddress(AddressScheme, AddressValue)
+				: null;
+
+		return new StorableReference(
+			new StorageSourceId(SourceId),
+			ItemId,
+			address);
+	}
+
+	public static FileOperationReference FromReference(
+		StorableReference reference) =>
+		new(
+			reference.SourceId.Value,
+			reference.ItemId,
+			reference.LastKnownAddress?.Scheme,
+			reference.LastKnownAddress?.Value);
+}
+
+public sealed record FileOperationRequest(
+	int SchemaVersion,
+	string OperationId,
+	FileOperationKind Kind,
+	ImmutableArray<FileOperationReference> Items,
+	FileOperationReference? DestinationFolder,
+	string? Name,
+	StorageItemKind? CreatedItemKind,
+	StorageConflictBehavior ConflictBehavior,
+	bool Permanently);
+```
+
+一覧取得では軽い summary、詳細画面では項目結果を含む snapshot を使います。
+
+```csharp
+public sealed record FileOperationItemSnapshot(
+	int Index,
+	FileOperationReference Input,
+	FileOperationItemState State,
+	FileOperationReference? Result,
+	FileOperationErrorCode ErrorCode,
+	string? ErrorDetail);
+
+public sealed record FileOperationSummary(
+	string OperationId,
+	FileOperationKind Kind,
+	FileOperationState State,
+	int CompletedItems,
+	int FailedItems,
+	int TotalItems,
+	FileOperationReference? CurrentItem,
+	FileOperationErrorCode ErrorCode,
+	DateTimeOffset CreatedAt,
+	DateTimeOffset UpdatedAt);
+
+public sealed record FileOperationSnapshot(
+	FileOperationSummary Summary,
+	ImmutableArray<FileOperationItemSnapshot> Items);
+
+public sealed record FileOperationList(
+	long Revision,
+	ImmutableArray<FileOperationSummary> Operations);
+```
+
+```csharp
+[JsonSourceGenerationOptions(
+	PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+	WriteIndented = false)]
+[JsonSerializable(typeof(FileOperationRequest))]
+[JsonSerializable(typeof(FileOperationSummary))]
+[JsonSerializable(typeof(FileOperationSnapshot))]
+[JsonSerializable(typeof(FileOperationList))]
+public sealed partial class FileOperationJsonContext
+	: JsonSerializerContext;
+
+public static class FileOperationMessages
+{
+	public static string Write<T>(
+		T value,
+		JsonTypeInfo<T> typeInfo) =>
+		JsonSerializer.Serialize(value, typeInfo);
+
+	public static T Read<T>(
+		string json,
+		JsonTypeInfo<T> typeInfo)
+	{
+		ArgumentException.ThrowIfNullOrWhiteSpace(json);
+		if (Encoding.UTF8.GetByteCount(json)
+			> FileOperationSchema.MaxMessageBytes)
+		{
+			throw new InvalidDataException(
+				"The operation message is too large.");
+		}
+
+		return JsonSerializer.Deserialize(json, typeInfo)
+			?? throw new InvalidDataException(
+				"The operation message is empty.");
+	}
+}
+```
+
+## 操作専用 `StorageRuntime`
+
+`Files.App.Server` はウィンドウ、AppModel、項目機能、サムネイル、プレビュー、アーカイブを構築しません。
+
+```csharp
+namespace Files.Core.Storage.Runtime;
+
+public sealed class StorageRuntime : IAsyncDisposable
+{
+	private readonly IReadOnlyList<IAsyncDisposable> ownedServices;
+
+	internal StorageRuntime(
+		IStorageOperationService operations,
+		IReadOnlyList<IAsyncDisposable> ownedServices)
+	{
+		Operations = operations;
+		this.ownedServices = ownedServices;
+	}
+
+	public IStorageOperationService Operations { get; }
+
+	public async ValueTask DisposeAsync()
+	{
+		foreach (var service in ownedServices.Reverse())
+		{
+			await service.DisposeAsync().ConfigureAwait(false);
+		}
+	}
+}
+
+public sealed class StorageRuntimeBuilder : IAsyncDisposable
+{
+	public StorageRuntimeBuilder AddHandler(
+		IStorageOperationHandler handler);
+
+	internal void Own(IAsyncDisposable service);
+
+	public StorageRuntime Build();
+
+	public ValueTask DisposeAsync();
+}
+
+public static class WindowsStorageRuntimeBuilderExtensions
+{
+	public static StorageRuntimeBuilder AddWindowsOperations(
+		this StorageRuntimeBuilder builder,
+		WindowsStorageSource? source = null)
+	{
+		var windowsSource = source ?? new WindowsStorageSource();
+		builder.AddHandler(
+			new WindowsStorageOperationHandler(windowsSource));
+
+		if (source is null)
+		{
+			builder.Own(windowsSource);
+		}
+
+		return builder;
+	}
+}
+```
+
+```csharp
+await using var storage = new StorageRuntimeBuilder()
+	.AddWindowsOperations()
 	.Build();
 
-var operations = runtime.StorageOperations;
+var operations = storage.Operations;
 ```
 
-プレビューとアーカイブを無効にしても `AddWindowsStorage` は Windows ソースと操作ハンドラーを登録します。追加の項目機能ファクトリは構築時の登録であり、サーバーを UI ホストにはしません。
-サーバーの起動コストが後で問題になった場合は、`WindowsStorageSource` と `WindowsStorageOperationHandler` だけを登録する小さな `AddWindowsOperations` 合成メソッドを追加します。
-この最適化のために Windows Shell コードを `Files.App.Server` へ移してはいけません。
+`FilesCoreBuilder.AddWindowsStorage()` はブラウザー用です。操作サーバーでは使いません。
 
-## 責務
+## WinRT ABI
 
-### Files.Core
+public WinRT class は 1 つです。event と public DTO class は作りません。
 
-Files.Core はストレージの意味を所有します。
+```csharp
+namespace Files.App.Server;
 
-- `StorageOperationRequest` 型。
-- `IStorageOperationService` とハンドラー選択。
-- `StorageOperationProgress` と `StorageOperationResult`。
-- 安定した `StorableReference` の解決。
-- Windows Shell のスレッド処理と `IFileOperation` の実行。
-- バックエンド固有の検証と結果の具象化。
+public sealed class FileOperationServer
+{
+	public IAsyncOperation<string> StartAsync(string requestJson);
 
-Core サービスは単一要求の実行器のままにします。呼び出し元が ViewModel、ローカルコマンドアダプター、アウトオブプロセスサーバーのどれであるかを知ってはいけません。
+	public IAsyncOperation<string> GetAsync(string operationId);
 
-### Files.App.Server
+	public IAsyncOperation<string> ListAsync();
 
-サーバーはプロセスライフタイムと永続ジョブの調整を所有します。
+	public IAsyncOperation<string> WaitForChangeAsync(
+		long knownRevision);
 
-- WinRT 互換 API を公開する。
-- 信頼できない DTO を検証して正規化する。
-- `OperationJob` を作成または復旧する。
-- 副作用を開始する前にジョブ状態を永続化する。
-- DTO を Core 要求へ対応付ける。
-- バッチを Core 要求の上限付き順序処理として実行する。
-- 進行状況と項目単位の失敗を集約する。
-- クライアントプロキシが消えてもジョブを存続させる。
-- 後から起動した Files プロセスが問い合わせできるスナップショットを公開する。
+	public IAsyncAction CancelAsync(string operationId);
 
-サーバーはダイアログを表示したり、WinUI コレクションを更新したり、タブを所有したり、`IStorableModel` を返したりしてはいけません。
+	public IAsyncAction ForgetAsync(string operationId);
+}
+```
 
-### Files.App
+実装は薄い ABI adapter です。
 
-Files.App は表示とユーザーポリシーを所有します。
+```csharp
+public IAsyncOperation<string> StartAsync(string requestJson)
+{
+	return AsyncInfo.Run(async _ =>
+	{
+		using var call = ServerProcess.Current.Lifetime.EnterCall();
+		var request = FileOperationMessages.Read(
+			requestJson,
+			FileOperationJsonContext.Default.FileOperationRequest);
+		var snapshot = await ServerProcess.Current.Operations.StartAsync(
+			request,
+			ServerProcess.Current.ShutdownToken);
+		return FileOperationMessages.Write(
+			snapshot,
+			FileOperationJsonContext.Default.FileOperationSnapshot);
+	});
+}
 
-- 現在の選択から参照を集める。
-- 送信前に競合、削除、認証情報、昇格のプロンプトを表示する。
-- ジョブを送信して操作 ID を保持する。
-- スナップショットをローカルの操作モデルへ同期する。
-- 進行状況とエラーを表示する。
-- 通常のウォッチャー/セッションフローで表示フォルダーを調整する。
-- 返された参照を最後のフォーカスまたは表示にだけ使う。
+public IAsyncOperation<string> WaitForChangeAsync(
+	long knownRevision)
+{
+	return AsyncInfo.Run(async cancellationToken =>
+	{
+		using var call = ServerProcess.Current.Lifetime.EnterCall();
+		var list = await ServerProcess.Current.Operations
+			.WaitForChangeAsync(
+				knownRevision,
+				cancellationToken);
+		return FileOperationMessages.Write(
+			list,
+			FileOperationJsonContext.Default.FileOperationList);
+	});
+}
+```
 
-フォアグラウンドコマンドは、サーバー操作の完了後に表示項目コレクションを直接更新してはいけません。
+`StartAsync` は client token を操作 token に使いません。受理後の処理は server-owned token で継続します。
+`WaitForChangeAsync` のキャンセルは待機だけを止めます。
 
-## WinRT 契約
+## サーバー合成ルート
 
-公開するサーバーサーフェスは小さくし、WinRT 互換の sealed class、enum、string、array、async operation で構成します。
-Core の record、`Exception`、`Task`、`CancellationToken`、ポインター、COM インターフェースを公開してはいけません。
+WinRT activation は constructor injection を使えないため、`ServerProcess.Current` だけを明示的な process root とします。
 
-次は概念的な契約です。正確な C# シグネチャは、サーバープロジェクトで使う CsWinRT authoring ルールに従って決めます。
+```csharp
+internal sealed class ServerProcess : IAsyncDisposable
+{
+	private static ServerProcess? current;
+	private readonly CancellationTokenSource shutdown = new();
+	private readonly StorageRuntime storage;
+
+	public static ServerProcess Current =>
+		current ?? throw new InvalidOperationException(
+			"The server process has not been initialized.");
+
+	public FileOperationHost Operations { get; }
+
+	public ServerLifetime Lifetime { get; }
+
+	public CancellationToken ShutdownToken => shutdown.Token;
+
+	public static async Task<ServerProcess> CreateAsync(
+		string dataPath,
+		CancellationToken cancellationToken);
+
+	public static void SetCurrent(ServerProcess process);
+
+	public async ValueTask DisposeAsync()
+	{
+		shutdown.Cancel();
+		await Operations.DisposeAsync();
+		await storage.DisposeAsync();
+		shutdown.Dispose();
+		current = null;
+	}
+}
+```
+
+```csharp
+static async Task Main()
+{
+	using var shutdown = new CancellationTokenSource();
+	var dataPath = ApplicationData.Current.LocalFolder.Path;
+
+	await using var process = await ServerProcess.CreateAsync(
+		dataPath,
+		shutdown.Token);
+	ServerProcess.SetCurrent(process);
+
+	using var registration = RegisterActivationFactories(
+		[typeof(FileOperationServer)]);
+
+	AppDomain.CurrentDomain.ProcessExit +=
+		(_, _) => shutdown.Cancel();
+
+	await process.Lifetime.WaitForExitAsync(shutdown.Token);
+}
+```
+
+現在の public sealed class 全走査を explicit allowlist に置き換えます。
+`AppInstanceMonitor` と `Files.App/Program.cs` の server kill は削除します。
+
+```xml
+<OutOfProcessServer
+	ServerName="Files.App.Server"
+	uap5:IdentityType="activateAsPackage"
+	uap5:RunFullTrust="true">
+	<Path>Files.App.Server\Files.App.Server.exe</Path>
+	<Instancing>singleInstance</Instancing>
+	<ActivatableClass
+		ActivatableClassId="Files.App.Server.FileOperationServer" />
+</OutOfProcessServer>
+```
+
+## request から Core request への変換
+
+1 回のユーザー操作を、順序付きの Core request へ展開します。
+
+```csharp
+internal sealed record FileOperationStep(
+	FileOperationReference Input,
+	StorageOperationRequest Request);
+
+internal sealed record FileOperationPlan(
+	string OperationId,
+	string RequestHash,
+	FileOperationKind Kind,
+	ImmutableArray<FileOperationStep> Steps);
+
+internal static class FileOperationRequestReader
+{
+	public static FileOperationPlan Read(
+		FileOperationRequest request);
+}
+```
+
+```csharp
+var steps = request.Kind switch
+{
+	FileOperationKind.Create =>
+	[
+		new FileOperationStep(
+			request.DestinationFolder!,
+			new CreateItemOperationRequest(
+				destination!,
+				request.Name!,
+				request.CreatedItemKind!.Value,
+				request.ConflictBehavior)),
+	],
+
+	FileOperationKind.Rename =>
+	[
+		new FileOperationStep(
+			request.Items[0],
+			new RenameOperationRequest(
+				items[0],
+				request.Name!)),
+	],
+
+	FileOperationKind.Copy =>
+		items.Select((item, index) =>
+			new FileOperationStep(
+				request.Items[index],
+				new CopyOperationRequest(
+					item,
+					destination!,
+					request.Name,
+					request.ConflictBehavior)))
+			.ToImmutableArray(),
+
+	FileOperationKind.Move =>
+		items.Select((item, index) =>
+			new FileOperationStep(
+				request.Items[index],
+				new MoveOperationRequest(
+					item,
+					destination!,
+					request.Name,
+					request.ConflictBehavior)))
+			.ToImmutableArray(),
+
+	FileOperationKind.Delete =>
+		items.Select((item, index) =>
+			new FileOperationStep(
+				request.Items[index],
+				new DeleteOperationRequest(
+					item,
+					request.Permanently)))
+			.ToImmutableArray(),
+
+	_ => throw new InvalidDataException(
+		"Unknown operation kind."),
+};
+```
+
+`FileOperationRequestReader.Read` は Core request を作る前に次を検証します。
+
+```csharp
+request.SchemaVersion == FileOperationSchema.Current
+Guid.TryParseExact(request.OperationId, "N", out _)
+request.Items.Length <= FileOperationSchema.MaxItems
+request.Name?.Length <= FileOperationSchema.MaxNameLength
+
+Create: Items.Length == 0 && DestinationFolder != null
+Rename: Items.Length == 1 && DestinationFolder == null
+Copy:   Items.Length >= 1 && DestinationFolder != null
+Move:   Items.Length >= 1 && DestinationFolder != null
+Delete: Items.Length >= 1 && DestinationFolder == null
+
+Name != null for Create/Rename
+Name == null || Items.Length == 1 for Copy/Move
+```
+
+意味のない余分な field も拒否します。request hash は操作種別、`SourceId`、`ItemId`、宛先、名前、競合動作、完全削除を canonical order で hash します。
+`LastKnownAddress` は識別情報ではないため hash に含めません。
+
+```csharp
+internal static class FileOperationRequestHasher
+{
+	public static string Hash(FileOperationRequest request);
+}
+```
+
+## `FileOperationHost`
+
+`FileOperationHost` はサーバープロセスに 1 つです。dictionary の値を WinRT 境界へ返さず、不変 snapshot を返します。
+
+```csharp
+internal sealed class FileOperationHost : IAsyncDisposable
+{
+	private readonly Dictionary<string, Entry> entries =
+		new(StringComparer.Ordinal);
+	private readonly SemaphoreSlim stateGate = new(1, 1);
+	private readonly SemaphoreSlim windowsExecutionGate =
+		new(1, 1);
+	private readonly IStorageOperationService operations;
+	private readonly IOperationJournal journal;
+	private readonly RevisionSignal changes;
+	private readonly ServerLifetime lifetime;
+
+	public static Task<FileOperationHost> CreateAsync(
+		IStorageOperationService operations,
+		IOperationJournal journal,
+		ServerLifetime lifetime,
+		CancellationToken cancellationToken);
+
+	public Task<FileOperationSnapshot> StartAsync(
+		FileOperationRequest request,
+		CancellationToken serverToken);
+
+	public Task<FileOperationSnapshot> GetAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+
+	public Task<FileOperationList> ListAsync(
+		CancellationToken cancellationToken);
+
+	public Task<FileOperationList> WaitForChangeAsync(
+		long knownRevision,
+		CancellationToken cancellationToken);
+
+	public Task CancelAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+
+	public Task ForgetAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+
+	public ValueTask DisposeAsync();
+
+	private sealed class Entry
+	{
+		public required string RequestHash { get; init; }
+		public required FileOperationSnapshot Snapshot { get; set; }
+		public FileOperation? ActiveOperation { get; set; }
+	}
+}
+```
+
+`StartAsync` の順序を変えてはいけません。
+
+```csharp
+var plan = FileOperationRequestReader.Read(request);
+
+await stateGate.WaitAsync(serverToken);
+try
+{
+	if (entries.TryGetValue(plan.OperationId, out var existing))
+	{
+		if (existing.RequestHash != plan.RequestHash)
+		{
+			throw new InvalidDataException(
+				"OperationId is already used.");
+		}
+
+		return existing.Snapshot;
+	}
+
+	var operation = new FileOperation(
+		plan,
+		operations,
+		windowsExecutionGate,
+		OnOperationChangedAsync,
+		serverToken);
+
+	await journal.WriteAsync(
+		new OperationJournalEntry(
+			plan.RequestHash,
+			operation.Snapshot),
+		serverToken);
+
+	entries.Add(
+		plan.OperationId,
+		new Entry
+		{
+			RequestHash = plan.RequestHash,
+			Snapshot = operation.Snapshot,
+			ActiveOperation = operation,
+		});
+	PublishState();
+	operation.Start();
+	return operation.Snapshot;
+}
+finally
+{
+	stateGate.Release();
+}
+```
+
+同じ ID と同じ hash は既存 snapshot を返します。異なる hash は拒否します。
+journal へ `Queued` を書く前に副作用を開始しません。
+
+```csharp
+private async ValueTask OnOperationChangedAsync(
+	FileOperation operation,
+	FileOperationSnapshot snapshot,
+	bool isTerminal)
+{
+	await stateGate.WaitAsync();
+	try
+	{
+		var entry = entries[snapshot.Summary.OperationId];
+		if (!ReferenceEquals(entry.ActiveOperation, operation))
+		{
+			return;
+		}
+
+		entry.Snapshot = snapshot;
+		if (isTerminal)
+		{
+			entry.ActiveOperation = null;
+			await journal.WriteAsync(
+				new OperationJournalEntry(
+					entry.RequestHash,
+					snapshot),
+				CancellationToken.None);
+		}
+
+		changes.Pulse();
+		lifetime.SetActiveOperationCount(
+			entries.Values.Count(
+				static value =>
+					value.ActiveOperation is not null));
+	}
+	finally
+	{
+		stateGate.Release();
+	}
+}
+```
+
+`ForgetAsync` は terminal 状態だけを削除できます。`CancelAsync` は `FileOperation` の token だけを signal し、client call の token を保存しません。
+
+## `FileOperation`
+
+`FileOperation` は server-owned cancellation と 1 logical operation の状態を所有します。
+
+```csharp
+internal sealed class FileOperation
+{
+	private readonly FileOperationPlan plan;
+	private readonly IStorageOperationService operations;
+	private readonly SemaphoreSlim executionGate;
+	private readonly SemaphoreSlim snapshotGate = new(1, 1);
+	private readonly CancellationTokenSource cancellation;
+	private readonly Func<
+		FileOperation,
+		FileOperationSnapshot,
+		bool,
+		ValueTask> publish;
+	private Task? execution;
+
+	public FileOperationSnapshot Snapshot { get; private set; }
+
+	public Task Completion =>
+		execution ?? Task.CompletedTask;
+
+	public void Start() =>
+		execution = RunAsync();
+
+	public async ValueTask CancelAsync()
+	{
+		await UpdateAsync(
+			snapshot =>
+				FileOperationSnapshots.RequestCancellation(
+					snapshot),
+			isTerminal: false);
+		cancellation.Cancel();
+	}
+
+	private async Task RunAsync()
+	{
+		var ownsGate = false;
+		try
+		{
+			await executionGate.WaitAsync(cancellation.Token);
+			ownsGate = true;
+			await UpdateAsync(
+				FileOperationSnapshots.Start,
+				isTerminal: false);
+
+			for (var index = 0;
+				index < plan.Steps.Length;
+				index++)
+			{
+				cancellation.Token.ThrowIfCancellationRequested();
+				await UpdateAsync(
+					value => FileOperationSnapshots.StartItem(
+						value,
+						index),
+					isTerminal: false);
+
+				var result = await operations.ExecuteAsync(
+					plan.Steps[index].Request,
+					cancellationToken: cancellation.Token);
+
+				await UpdateAsync(
+					value => FileOperationSnapshots.ApplyResult(
+						value,
+						index,
+						result),
+					isTerminal: false);
+			}
+
+			await UpdateAsync(
+				FileOperationSnapshots.Complete,
+				isTerminal: true);
+		}
+		catch (OperationCanceledException)
+			when (cancellation.IsCancellationRequested)
+		{
+			await UpdateAsync(
+				FileOperationSnapshots.Cancel,
+				isTerminal: true);
+		}
+		catch (Exception error)
+		{
+			await UpdateAsync(
+				value => FileOperationSnapshots.Fail(
+					value,
+					error),
+				isTerminal: true);
+		}
+		finally
+		{
+			if (ownsGate)
+			{
+				executionGate.Release();
+			}
+
+			cancellation.Dispose();
+		}
+	}
+
+	private async ValueTask UpdateAsync(
+		Func<FileOperationSnapshot, FileOperationSnapshot> update,
+		bool isTerminal)
+	{
+		await snapshotGate.WaitAsync();
+		try
+		{
+			Snapshot = update(Snapshot);
+			await publish(this, Snapshot, isTerminal);
+		}
+		finally
+		{
+			snapshotGate.Release();
+		}
+	}
+}
+```
+
+snapshot の更新規則は 1 class に閉じ込めます。
+
+```csharp
+internal static class FileOperationSnapshots
+{
+	public static FileOperationSnapshot CreateQueued(
+		FileOperationPlan plan);
+
+	public static FileOperationSnapshot Start(
+		FileOperationSnapshot snapshot);
+
+	public static FileOperationSnapshot RequestCancellation(
+		FileOperationSnapshot snapshot);
+
+	public static FileOperationSnapshot StartItem(
+		FileOperationSnapshot snapshot,
+		int index);
+
+	public static FileOperationSnapshot ApplyResult(
+		FileOperationSnapshot snapshot,
+		int index,
+		StorageOperationResult result);
+
+	public static FileOperationSnapshot Complete(
+		FileOperationSnapshot snapshot);
+
+	public static FileOperationSnapshot Cancel(
+		FileOperationSnapshot snapshot);
+
+	public static FileOperationSnapshot Fail(
+		FileOperationSnapshot snapshot,
+		Exception error);
+
+	public static FileOperationSnapshot MarkUnknown(
+		FileOperationSnapshot snapshot);
+}
+```
+
+- 成功済み/失敗済みの項目結果を後のキャンセルで消さない。
+- `Succeeded` は全項目成功、`CompletedWithErrors` は部分成功、`Failed` は成功なし。
+- Shell が変更を確定した項目は、キャンセル要求後でも `Succeeded`。
+- UI は `ErrorCode` をローカライズし、`ErrorDetail` を条件判定に使わない。
+
+## revision、journal、サーバーライフタイム
+
+```csharp
+internal sealed class RevisionSignal
+{
+	public long Current { get; }
+
+	public void Pulse();
+
+	public Task<long> WaitAsync(
+		long knownRevision,
+		TimeSpan timeout,
+		CancellationToken cancellationToken);
+}
+```
+
+`Pulse` は revision を増やし、待機中の `TaskCompletionSource<long>` を完了させます。
+`WaitForChangeAsync` は変更または 20 秒の timeout 後に完全な summary list を返します。
+
+```csharp
+internal sealed record OperationJournalEntry(
+	string RequestHash,
+	FileOperationSnapshot Snapshot);
+
+internal interface IOperationJournal
+{
+	ValueTask<IReadOnlyList<OperationJournalEntry>> ReadAllAsync(
+		CancellationToken cancellationToken);
+
+	ValueTask WriteAsync(
+		OperationJournalEntry entry,
+		CancellationToken cancellationToken);
+
+	ValueTask DeleteAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+}
+
+internal sealed class JsonOperationJournal
+	: IOperationJournal
+{
+	public JsonOperationJournal(string rootPath);
+
+	public ValueTask<IReadOnlyList<OperationJournalEntry>>
+		ReadAllAsync(CancellationToken cancellationToken);
+
+	public ValueTask WriteAsync(
+		OperationJournalEntry entry,
+		CancellationToken cancellationToken);
+
+	public ValueTask DeleteAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+}
+```
+
+保存先は `operations/v2/{operationId}.json` です。一時ファイルへ書き、同じ volume 上で atomic replace します。
+書くのは受理時と terminal 状態だけです。実行 plan、資格情報、PIDL、stream、token は保存しません。
+
+```csharp
+private static FileOperationSnapshot Recover(
+	FileOperationSnapshot snapshot) =>
+	snapshot.Summary.State is
+		FileOperationState.Succeeded
+		or FileOperationState.CompletedWithErrors
+		or FileOperationState.Failed
+		or FileOperationState.Cancelled
+		or FileOperationState.Unknown
+			? snapshot
+			: FileOperationSnapshots.MarkUnknown(snapshot);
+```
+
+`Unknown` を同じ ID で再送しても再実行しません。再試行には新しい `OperationId` が必要です。
+
+```csharp
+internal sealed class ServerLifetime
+{
+	public ServerLifetime(TimeSpan idleDelay);
+
+	public IDisposable EnterCall();
+
+	public void SetActiveOperationCount(int count);
+
+	public Task WaitForExitAsync(
+		CancellationToken cancellationToken);
+}
+```
+
+終了条件:
+
+```csharp
+activeCalls == 0
+	&& activeOperations == 0
+	&& idleGenerationIsStillCurrent
+```
+
+新しい call または operation は idle timer の generation を無効化します。
+
+## Files.App client と model
+
+ViewModel は生成された WinRT class を直接保持しません。
+
+```csharp
+public interface IFileOperationClient : IAsyncDisposable
+{
+	ValueTask<FileOperationSnapshot> StartAsync(
+		FileOperationRequest request,
+		CancellationToken cancellationToken);
+
+	ValueTask<FileOperationSnapshot> GetAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+
+	ValueTask<FileOperationList> ListAsync(
+		CancellationToken cancellationToken);
+
+	IAsyncEnumerable<FileOperationList> WatchAsync(
+		long knownRevision,
+		CancellationToken cancellationToken);
+
+	ValueTask CancelAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+
+	ValueTask ForgetAsync(
+		string operationId,
+		CancellationToken cancellationToken);
+}
+```
+
+```csharp
+internal sealed class WinRtFileOperationClient
+	: IFileOperationClient
+{
+	private Server.FileOperationServer server = new();
+
+	public async ValueTask<FileOperationSnapshot> StartAsync(
+		FileOperationRequest request,
+		CancellationToken cancellationToken)
+	{
+		var requestJson = FileOperationMessages.Write(
+			request,
+			FileOperationJsonContext.Default.FileOperationRequest);
+		var resultJson = await server
+			.StartAsync(requestJson)
+			.AsTask(cancellationToken);
+		return FileOperationMessages.Read(
+			resultJson,
+			FileOperationJsonContext.Default.FileOperationSnapshot);
+	}
+
+	public async IAsyncEnumerable<FileOperationList> WatchAsync(
+		long knownRevision,
+		[EnumeratorCancellation]
+		CancellationToken cancellationToken)
+	{
+		var revision = knownRevision;
+		while (!cancellationToken.IsCancellationRequested)
+		{
+			var json = await server
+				.WaitForChangeAsync(revision)
+				.AsTask(cancellationToken);
+			var list = FileOperationMessages.Read(
+				json,
+				FileOperationJsonContext.Default.FileOperationList);
+			revision = list.Revision;
+			yield return list;
+		}
+	}
+}
+```
+
+実装では server disconnect を分類し、`new FileOperationServer()`、`ListAsync()`、上限付き backoff の順で再接続します。
+
+```csharp
+public sealed class FileOperationsModel : IAsyncDisposable
+{
+	private readonly IFileOperationClient client;
+	private readonly CancellationTokenSource lifetime = new();
+	private ImmutableDictionary<string, FileOperationSummary> items =
+		ImmutableDictionary<string, FileOperationSummary>.Empty
+			.WithComparers(StringComparer.Ordinal);
+	private Task? watchTask;
+	private long revision;
+
+	public event EventHandler? Changed;
+
+	public ImmutableArray<FileOperationSummary> Items { get; }
+
+	public async Task StartAsync(
+		CancellationToken cancellationToken)
+	{
+		Apply(await client.ListAsync(cancellationToken));
+		watchTask ??= WatchAsync(lifetime.Token);
+	}
+
+	public async ValueTask<FileOperationSummary> SubmitAsync(
+		FileOperationRequest request,
+		CancellationToken cancellationToken)
+	{
+		var snapshot = await client.StartAsync(
+			request,
+			cancellationToken);
+		Upsert(snapshot.Summary);
+		return snapshot.Summary;
+	}
+
+	public ValueTask CancelAsync(
+		string operationId,
+		CancellationToken cancellationToken) =>
+		client.CancelAsync(operationId, cancellationToken);
+
+	private async Task WatchAsync(
+		CancellationToken cancellationToken)
+	{
+		await foreach (var list in client.WatchAsync(
+			revision,
+			cancellationToken))
+		{
+			Apply(list);
+		}
+	}
+
+	public ValueTask DisposeAsync();
+}
+```
+
+`FileOperationsModel` は Files.App のアプリケーションスコープです。WinUI、observable collection、ローカライズ文字列を持ちません。
+各ウィンドウの `FileOperationsViewModel` が dispatcher 上で observable collection へ適応し、Status Center へ依存関係プロパティで trickle down します。
+
+```csharp
+public sealed partial class FileOperationsViewModel
+	: ObservableObject,
+		IDisposable
+{
+	public FileOperationsViewModel(
+		FileOperationsModel model,
+		IUiDispatcher dispatcher);
+
+	public ReadOnlyObservableCollection<FileOperationViewModel>
+		Items { get; }
+
+	public void Dispose();
+}
+```
+
+## コマンドからの開始
+
+削除確認、完全削除、競合動作、新しい名前、昇格、資格情報は Files.App で確定してから送信します。
+
+```csharp
+public async ValueTask ExecuteAsync(
+	CommandContext context,
+	CancellationToken cancellationToken)
+{
+	var destination = await folderPicker.PickAsync(
+		context.WindowId,
+		cancellationToken);
+	if (destination is null)
+	{
+		return;
+	}
+
+	var request = new FileOperationRequest(
+		SchemaVersion: FileOperationSchema.Current,
+		OperationId: Guid.NewGuid().ToString("N"),
+		Kind: FileOperationKind.Copy,
+		Items: context.Selection
+			.Select(FileOperationReference.FromReference)
+			.ToImmutableArray(),
+		DestinationFolder:
+			FileOperationReference.FromReference(destination),
+		Name: null,
+		CreatedItemKind: null,
+		ConflictBehavior:
+			StorageConflictBehavior.GenerateUniqueName,
+		Permanently: false);
+
+	await operations.SubmitAsync(
+		request,
+		cancellationToken);
+}
+```
+
+開始後にコマンドハンドラーが `BrowseSessionModel.Items` を変更してはいけません。
+`IFolderChangeSource` と通常の参照セッション更新が表示を調整します。
+
+## 最初の対応範囲
 
 ```text
-FileOperationServer
-  StartAsync(OperationRequestData request) -> operationId
-  GetAsync(operationId) -> OperationSnapshotData
-  ListAsync() -> OperationSnapshotData[]
-  CancelAsync(operationId)
-  ForgetAsync(operationId)
-  event Changed(OperationSnapshotData snapshot)
+Operation: copy, move, delete, create, rename
+Source:    WindowsStorageSource
+Queue:     Windows logical operation を 1 つずつ
+Progress:  項目数。偽の byte percentage は出さない
+History:   terminal snapshot を期限付きで保持
 ```
 
-イベントは最適化であり、source of truth ではありません。イベント中に切断したクライアントは、再起動後に `ListAsync` または `GetAsync` を呼び出さなければなりません。
+FTP はサーバーが保護された資格情報を自分で解決できるようになってから追加します。
+アーカイブ変更、Quick Look、プレビュー、通常のファイルオープンはこのサーバーの責務ではありません。
 
-### 要求データ
+## 実装順序
 
-`OperationRequestData` には次を含めます。
+1. message record、JSON context、round-trip tests。
+2. `StorageRuntimeBuilder.AddWindowsOperations()`。
+3. request reader、hash、validation tests。
+4. `FileOperationSnapshots`、`FileOperation`、`FileOperationHost`。
+5. journal、revision、lifetime。
+6. `FileOperationServer` と explicit activation allowlist。
+7. WinRT client、`FileOperationsModel`、Status Center。
+8. copy 1 本を end-to-end で移行。
+9. move/delete/create/rename、複数選択。
+10. `AppInstanceMonitor`、server kill、古い直接実行経路を削除。
 
-| フィールド | 目的 |
-| --- | --- |
-| `SchemaVersion` | 未知の wire format を安全に拒否する |
-| `OperationId` | クライアントが生成する冪等性キー |
-| `Kind` | create、rename、copy、move、delete |
-| `Items` | 1 つ以上の安定した項目参照 |
-| `DestinationFolder` | copy/move の宛先参照 |
-| `Name` | 必要に応じた新しい項目名 |
-| `ItemKind` | 作成する file または folder |
-| `ConflictBehavior` | 失敗または一意な名前の生成 |
-| `Permanently` | 完全削除の明示的な選択 |
-
-各参照は次を含みます。
+## 受け入れ条件
 
 ```text
-SourceId
-ItemId
-LastKnownAddressScheme (optional)
-LastKnownAddressValue (optional)
+1. Files.App が StartAsync を呼ぶ。
+2. server が Queued を journal へ書く。
+3. server-owned token で Windows 操作を開始する。
+4. Files.App を強制終了する。
+5. Files.App.Server が操作を完了する。
+6. 新しい Files.App が ListAsync で結果を取得する。
+7. 表示中フォルダーは watcher から更新される。
 ```
-
-`SourceId` と `ItemId` が識別情報です。`LastKnownAddress` は復旧ヒントにすぎません。サーバーはパスだけを根拠に、要求された項目が同じものだと扱ってはいけません。
-
-### スナップショットデータ
-
-`OperationSnapshotData` には次を含めます。
-
-| フィールド | 目的 |
-| --- | --- |
-| `OperationId` | すべての更新を相関させる |
-| `State` | pending、running、cancelling、succeeded、failed、cancelled |
-| `CompletedItems` | 集約した完了数 |
-| `TotalItems` | 集約した項目数 |
-| `CurrentItem` | 任意の現在の安定参照 |
-| `ResultItems` | 成功した結果参照 |
-| `ErrorCode` | 安定した機械可読エラーカテゴリ |
-| `ErrorMessage` | 可能なら Files.App でローカライズする |
-| `CreatedAt` / `UpdatedAt` | 復旧と保持期間 |
-
-Core の `Exception` はシリアライズしません。安定したエラーカテゴリへ対応付け、元の例外はサーバーログへ残します。
-UI に返すエラーテキストは診断データであり、プログラム上の条件判定に使ってはいけません。
-
-## ジョブのライフサイクル
-
-### 開始
-
-1. コマンドアダプターが安定した参照を集め、必要な UI の判断を解決する。
-2. 新しい操作 ID を作る。再試行では同じ ID を使う。
-3. `FileOperationClient` が `OperationRequestData` を送る。
-4. サーバーがスキーマ、制限、enum 値、参照、操作 ID を検証する。
-5. サーバーが操作 ID の存在を確認する。
-   - 同じ request hash なら既存ジョブのスナップショットを返す。
-   - 異なる request hash なら要求を拒否する。
-   - ジョブがなければ、処理をキューに入れる前に `Pending` を永続化する。
-6. サーバーはファイル変更の完了を待たずに操作 ID を返す。
-
-キューに入れる前に永続化することで、サーバーが要求を受け入れた後、記録する前に UI がクラッシュする窓を閉じます。
-
-### 実行
-
-サーバーはバッチの各項目を既存の Core 要求 1 つへ変換します。
-
-```mermaid
-sequenceDiagram
-    participant Client as FileOperationClient
-    participant Server as FileOperationServer
-    participant Job as OperationJob
-    participant Core as IStorageOperationService
-    participant Handler as StorageOperationHandler
-    participant Shell as Windows Shell
-
-    Client->>Server: StartAsync(request DTO)
-    Server->>Job: Pending を検証して永続化
-    Server-->>Client: operationId
-    Job->>Core: CanHandle(request)
-    Core->>Handler: ExecuteAsync(request, progress, token)
-    Handler->>Shell: PerformOperations
-    Shell-->>Handler: completion
-    Handler-->>Core: StorageOperationResult
-    Core-->>Job: result または failure
-    Job->>Job: snapshot を永続化
-    Server-->>Client: Changed(snapshot)
-```
-
-最初の Windows 実装では、Windows ソースごとにアクティブな要求を 1 つにします。これにより Shell 変更の競合を避け、順序を予測しやすくします。
-後続のバックエンドは安全な同時実行数の上限を別に宣言できます。バッチコーディネーターは項目ごとの結果を保持し、部分的な失敗が 1 つの Boolean に潰れないようにします。
-
-現在の Core 進行状況契約は項目単位です。そのため Windows 操作は要求ごとに `0/1` と `1/1` を報告できます。サーバーはそれらを集約します。
-バイト単位の進行状況を推測してはいけません。パーセンテージとして公開する前に、本物の Shell 進行状況ソースを追加してください。
-
-### キャンセル
-
-`CancelAsync` はジョブを `Cancelling` へ変更し、サーバーが所有する `CancellationTokenSource` へ signal します。クライアント呼び出しのライフタイムに結び付けてはいけません。
-
-キャンセルでは、まだ開始していない処理を止められますが、実行中の同期 Shell 拡張を中断することはできません。変更が確定した後は、サーバーは結果の具象化を完了し、
-キャンセルを報告して安全でない再試行を促すのではなく成功を報告しなければなりません。
-
-### フォアグラウンドクラッシュ後の再接続
-
-クライアントプロセスが消えたとき:
-
-- サーバーはジョブと Core ランタイムを存続させる。
-- クライアント切断コールバックでジョブをキャンセルしない。
-- 進行状況は永続化し続け、必要ならブロードキャストする。
-- 新しい Files プロセスは起動時に `ListAsync` を呼ぶ。
-- `OperationSync` がローカル `OperationCenterModel` を再水和する。
-- 完了したジョブは通常の保持ポリシーで削除されるまで表示可能にする。
-
-サーバーは、アクティブなジョブがなく、最近のクライアントリースもない場合にだけアイドル終了タイマーを使います。フォアグラウンドプロセス数を操作のライフタイムに使ってはいけません。
-
-## 永続化と復旧
-
-最小限有用なストアは、パッケージのローカルアプリケーションデータディレクトリに操作ごとのレコードを 1 つ置くことです。例えば次の場所です。
 
 ```text
-operations/v1/{operationId}.json
+same OperationId + same hash      -> existing snapshot
+same OperationId + different hash -> rejected
+client disconnect                 -> operation continues
+server restart + non-terminal     -> Unknown, never auto-resumed
+partial failure                   -> per-item result remains
+active operation                  -> idle exit is impossible
 ```
-
-ストアは次を満たさなければなりません。
-
-- 一時ファイルへ書き、前のスナップショットをアトミックに置き換える。
-- 読み取り時にスキーマを検証する。
-- 項目数、文字列長、ファイル全体のサイズを制限する。
-- 完了したレコードを上限付きの期間保持する。
-- パスワード、アクセストークン、サムネイルバイト列、PIDL、ストリームを除外する。
-- 冪等な再試行のため request hash を記録する。
-
-サーバー起動時、以前のサーバープロセスから残った `Running` レコードは、安全なチェックポイントをバックエンドが提供しない限り `Unknown` に変更します。黙って再実行してはいけません。
-フォアグラウンドアプリはその状態を表示し、ユーザーがファイルシステムを確認してから新しい操作を選べるようにします。
-
-この復旧規則は主要求とは別です。フォアグラウンドのクラッシュでは、実行中のサーバープロセスは停止しません。
-
-## Files.App のモデルと ViewModel の流れ
-
-操作一覧はウィンドウ単位ではなくアプリケーション全体のものです。Files のアプリケーションモデルグラフに UI 非依存の `OperationCenterModel` を追加します。
-これは不変の操作スナップショットを保存してモデル状態変更を発生させますが、WinUI コレクション、ローカライズ文字列、WinRT 型は持ちません。
-
-```mermaid
-flowchart TB
-    Runtime["FilesCoreRuntime"]
-    App["FilesApplicationModel"]
-    Operations["OperationCenterModel"]
-    Sync["OperationSync"]
-    VM["OperationCenterViewModel"]
-    Status["StatusCenter control"]
-
-    Runtime --> App
-    App --> Operations
-    Sync --> Operations
-    Operations --> VM
-    VM --> Status
-```
-
-`OperationSync` は `FileOperationClient` をラップする Files.App アダプターです。
-
-1. 可能ならサーバーの変更を購読する。
-2. 起動時と再接続後に `ListAsync` を呼ぶ。
-3. WinRT スナップショットを Core 非依存の操作スナップショットへ対応付ける。
-4. モデルの同期コンテキスト上で `OperationCenterModel` を更新する。
-5. サーバージョブをキャンセルせず、購読を破棄する。
-
-ViewModel はローカライズされたヘッダー、コマンド、observable collection を所有します。コントロールは通常の trickle-down DP 経路から ViewModel を受け取ります。
-下位 ViewModel は `Ioc.Default` を呼んだり、サーバーを検索したり、WinRT オブジェクトを隠れたサービスロケーターとして使ったりしてはいけません。
-
-コマンドアダプターは次のポリシーを使います。
-
-```text
-selection -> stable references -> UI policy の prompt
-          -> FileOperationClient.StartAsync
-          -> operation ID -> OperationCenterModel
-          -> watcher/session reconciliation
-```
-
-返却された結果参照はフォーカスまたは表示に便利ですが、参照セッションが持つ権威ある項目投影の代わりにはなりません。
-
-## UI だけが決めることと未対応ケース
-
-サーバーは WinUI ダイアログを表示できません。ジョブを送信する前に、Files.App が人の判断を必要とする事項を解決します。
-
-- 削除確認と完全削除の選択。
-- 競合ポリシーまたはユーザーが選んだ新しい名前。
-- アーカイブまたは FTP の認証情報。
-- 昇格の同意。
-- 外部ドラッグ/ドロップまたはクリップボードの動作。
-
-開始後にも入力が必要な操作が将来生じた場合は、明示的な `NeedsInput` スナップショット状態と応答メソッドを追加します。
-決して UI コールバックを待ってサーバーワーカーをブロックしません。UI は到着しない可能性があるためです。
-
-最初のサーバー対応スライスは、既存の `WindowsStorageOperationHandler` による Windows ファイルシステム操作を対象にします。
-FTP ではサーバーが同じ保存済み接続プロファイルと保護された認証情報リゾルバーを読み込む必要があり、認証情報を要求 DTO に入れてはいけません。
-アーカイブ参照がそのままアーカイブ変更を意味するわけではありません。
-
-## 既存サーバーに必要なライフタイム変更
-
-実装では次の規則を置き換えます。
-
-1. アクティブなジョブがある間、`AppInstanceMonitor` をサーバー終了の条件にしない。
-2. 既存 `Files.App.Server` を kill する起動コードを削除するか、アクティブなジョブを決して kill しないヘルスチェックへ変更する。
-3. `Program` がアクティブなジョブ数、クライアントリース、アイドルタイムアウトでサーバーホストのライフタイム信号を所有する。
-4. 互換性のために必要なクラスに加え、新しい操作サーバー WinRT クラスをマニフェストへ公開する。
-5. Files.App からサーバーサーフェスへのコンパイル時依存関係は、既存 `Files.App.csproj` の生成 `.winmd` フローだけにする。
-
-新しい public 型を追加するときは、サーバーの動的 activation-factory 登録を見直します。意図した WinRT クラスだけをアクティブ化可能にし、DTO ヘルパー型を誤って public activation entry point にしないでください。
-
-## セキュリティと検証
-
-パッケージ境界があるからといって入力を信頼してはいけません。Core 要求を構築する前に、すべての要求を検証します。
-
-- サポートしているスキーマバージョン。
-- 項目数の最大値とシリアライズサイズの最大値。
-- 空でなく上限のある操作 ID。
-- 既知の操作と競合 enum 値。
-- サーバーランタイムに登録されたソース ID。
-- 必須の宛先と名前フィールド。
-- 意味のない重複がある場合の重複項目エントリ。
-- アドレスフィールドに認証情報や不透明なハンドルがないこと。
-
-項目識別情報、パス検証、競合チェック、権限の権威は Core に残します。特にサーバーは、信頼できないアドレスを新しい識別情報に変換したり、`WindowsStorageSource` の参照解決を回避したりしてはいけません。
-
-操作 ID、状態遷移、バックエンドのエラーカテゴリ、タイミングをログに記録します。認証情報や機密アドレスを含む完全な要求ペイロードはログに記録しません。
-
-## 実装フェーズ
-
-### フェーズ 1: 契約とサーバーホスト
-
-- WinRT 互換の要求、参照、スナップショット、enum 型を追加する。
-- `FileOperationServer` と内部 `OperationJob` を追加する。
-- プレビューなしの Windows ストレージと、サーバー所有 Core ランタイムを構築する。
-- 単一項目の start、status、list、キャンセルを実装する。
-- 最初はメモリ内にジョブを保持してよいが、実行前にスナップショットを永続化する。
-
-### フェーズ 2: フォアグラウンドクライアントと再接続
-
-- Files.App に `FileOperationClient` を追加する。
-- `OperationCenterModel` と `OperationSync` を追加する。
-- アプリケーション起動時にジョブを再水和する。
-- Status Center をサーバースナップショットの表示へ適応する。
-- まずコピーまたは移動を 1 つ選び、エンドツーエンドで移行する。
-
-### フェーズ 3: バッチと残りの Windows コマンド
-
-- 複数選択のスケジュールをサーバージョブへ移す。
-- 作成、名前変更、削除、ごみ箱動作を追加する。
-- 項目ごとの失敗を保持し、進行状況を集約する。
-- 影響する各参照セッションをフォルダーウォッチャーが調整することを検証する。
-- 保持期間と明示的な `ForgetAsync` 動作を追加する。
-
-### フェーズ 4: ライフタイムの堅牢化
-
-- プロセス数による終了を、アクティブなジョブとアイドルライフタイムの規則に置き換える。
-- 起動時にサーバーを kill する処理を削除する。
-- すべてのジョブ状態で UI 終了をテストする。
-- pending、running、cancelling、succeeded、failed の各状態で、新しい Files プロセスからの再接続をテストする。
-- 古い `Running` レコードのサーバー起動処理を追加する。
-
-### フェーズ 5: 追加ソース
-
-- 保存済み FTP ソースをサーバーランタイムへ登録する。
-- 保護されたストレージからサーバー内部で認証情報を解決する。
-- 未サポートのソース間転送の動作を明示する。
-- バックエンドが安全な操作ハンドラーを提供した場合だけアーカイブ変更を追加する。
-
-## テストと受け入れ条件
-
-Core の操作テストはプロセス内のまま、識別情報、競合、キャンセル、結果の具象化を引き続き検証します。サーバーテストには次を追加します。
-
-- DTO 検証とスキーマ拒否。
-- 同じ操作 ID を使う冪等な再試行。
-- 異なる request hash で同じ ID を使った場合の拒否。
-- 実行前の永続化。
-- スナップショット遷移と項目ごとの部分失敗。
-- 上限付き同時実行。
-- 要求開始前と実行中のキャンセル。
-- クライアント切断でジョブをキャンセルしないこと。
-- 新しいクライアントプロセスからの再接続。
-- 保持期間と `ForgetAsync`。
-
-Windows 統合テストでは次のシナリオを証明します。
-
-1. WinRT サーフェスからジョブを開始する。
-2. フォアグラウンド Files プロセスを終了させる。
-3. サーバーが継続し、ファイルシステムの変更が完了することを確認する。
-4. 新しい Files プロセスを起動する。
-5. 完了したスナップショットが一覧表示され、参照セッションが調整されることを確認する。
-6. 起動時に古いサーバーが kill されないことを確認する。
-
-次のシナリオが、`IStorableModel`、パスだけの識別情報、UI dispatcher、クライアント所有のキャンセルトークンを `Files.App.Server` へ渡さずに動作したとき、実装完了とします。
