@@ -143,23 +143,6 @@
 				</ToggleSwitch>
 			</wctcontrols:SettingsCard>
 
-			<!--  Replace Open File Dialog  -->
-			<wctcontrols:SettingsCard
-				x:Name="ReplaceOpenFileDialogSetting"
-				x:Load="{x:Bind ViewModel.IsAppEnvironmentDev}"
-				Header="{helpers:ResourceString Name=SettingsSetAsOpenDialog}">
-				<wctcontrols:SettingsCard.HeaderIcon>
-					<FontIcon Glyph="&#xE8E5;" />
-				</wctcontrols:SettingsCard.HeaderIcon>
-				<ToggleSwitch IsEnabled="{x:Bind ViewModel.IsSetAsDefaultFileManager, Mode=OneWay}" IsOn="{x:Bind ViewModel.IsSetAsOpenFileDialog, Mode=TwoWay}">
-					<i:Interaction.Behaviors>
-						<i:EventTriggerBehavior EventName="Toggled">
-							<i:InvokeCommandAction Command="{x:Bind ViewModel.SetAsOpenFileDialogCommand, Mode=OneWay}" />
-						</i:EventTriggerBehavior>
-					</i:Interaction.Behaviors>
-				</ToggleSwitch>
-			</wctcontrols:SettingsCard>
-
 			<!--  Thumbnail Caching  -->
 			<wctcontrols:SettingsExpander
 				x:Name="CacheSettings"

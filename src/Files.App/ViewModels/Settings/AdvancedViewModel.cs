@@ -24,7 +24,6 @@ namespace Files.App.ViewModels.Settings
 		private readonly IFileTagsSettingsService fileTagsSettingsService = Ioc.Default.GetRequiredService<IFileTagsSettingsService>();
 
 		public ICommand SetAsDefaultExplorerCommand { get; }
-		public ICommand SetAsOpenFileDialogCommand { get; }
 		public ICommand ExportSettingsCommand { get; }
 		public ICommand ImportSettingsCommand { get; }
 		public AsyncRelayCommand OpenFilesOnWindowsStartupCommand { get; }
@@ -34,10 +33,8 @@ namespace Files.App.ViewModels.Settings
 		public AdvancedViewModel()
 		{
 			IsSetAsDefaultFileManager = DetectIsSetAsDefaultFileManager();
-			IsSetAsOpenFileDialog = DetectIsSetAsOpenFileDialog();
 
 			SetAsDefaultExplorerCommand = new AsyncRelayCommand(SetAsDefaultExplorerAsync);
-			SetAsOpenFileDialogCommand = new AsyncRelayCommand(SetAsOpenFileDialogAsync);
 			ExportSettingsCommand = new AsyncRelayCommand(ExportSettingsAsync);
 			ImportSettingsCommand = new AsyncRelayCommand(ImportSettingsAsync);
 			OpenFilesOnWindowsStartupCommand = new AsyncRelayCommand(OpenFilesOnWindowsStartupAsync);
@@ -100,54 +97,7 @@ namespace Files.App.ViewModels.Settings
 		private Task DetectResult()
 		{
 			IsSetAsDefaultFileManager = DetectIsSetAsDefaultFileManager();
-			if (!IsSetAsDefaultFileManager)
-			{
-				IsSetAsOpenFileDialog = false;
-				return SetAsOpenFileDialogAsync();
-			}
-
 			return Task.CompletedTask;
-		}
-
-		private async Task SetAsOpenFileDialogAsync()
-		{
-			// Make sure IsSetAsDefaultFileManager is updated
-			await Task.Yield();
-			if (IsSetAsOpenFileDialog == DetectIsSetAsOpenFileDialog())
-				return;
-
-			var destFolder = Path.Combine(ApplicationData.Current.LocalFolder.Path, "FilesOpenDialog");
-			Directory.CreateDirectory(destFolder);
-			foreach (var file in Directory.GetFiles(Path.Combine(Package.Current.InstalledLocation.Path, "Assets", "FilesOpenDialog")))
-			{
-				if (!SafetyExtensions.IgnoreExceptions(() => File.Copy(file, Path.Combine(destFolder, Path.GetFileName(file)), true), App.Logger))
-				{
-					// Error copying files
-					goto DetectResult;
-				}
-			}
-
-			try
-			{
-				using (var regProc = Process.Start("regsvr32.exe", @$"/s /n {(!IsSetAsOpenFileDialog ? "/u" : "")} /i:user ""{Path.Combine(destFolder, "Files.App.OpenDialog32.dll")}"""))
-					await regProc.WaitForExitAsync();
-				using (var regProc = Process.Start("regsvr32.exe", @$"/s /n {(!IsSetAsOpenFileDialog ? "/u" : "")} /i:user ""{Path.Combine(destFolder, "Files.App.OpenDialog64.dll")}"""))
-					await regProc.WaitForExitAsync();
-				using (var regProc = Process.Start("regsvr32.exe", @$"/s /n {(!IsSetAsOpenFileDialog ? "/u" : "")} /i:user ""{Path.Combine(destFolder, "Files.App.OpenDialogARM64.dll")}"""))
-					await regProc.WaitForExitAsync();
-				using (var regProc = Process.Start("regsvr32.exe", @$"/s /n {(!IsSetAsOpenFileDialog ? "/u" : "")} /i:user ""{Path.Combine(destFolder, "Files.App.SaveDialog32.dll")}"""))
-					await regProc.WaitForExitAsync();
-				using (var regProc = Process.Start("regsvr32.exe", @$"/s /n {(!IsSetAsOpenFileDialog ? "/u" : "")} /i:user ""{Path.Combine(destFolder, "Files.App.SaveDialog64.dll")}"""))
-					await regProc.WaitForExitAsync();
-				using (var regProc = Process.Start("regsvr32.exe", @$"/s /n {(!IsSetAsOpenFileDialog ? "/u" : "")} /i:user ""{Path.Combine(destFolder, "Files.App.SaveDialogARM64.dll")}"""))
-					await regProc.WaitForExitAsync();
-			}
-			catch
-			{
-			}
-
-		DetectResult:
-			IsSetAsOpenFileDialog = DetectIsSetAsOpenFileDialog();
 		}
 
 		private async Task ImportSettingsAsync()
@@ -259,29 +209,11 @@ namespace Files.App.ViewModels.Settings
 			return !string.IsNullOrEmpty(command) && command.Contains("Files.App.Launcher.exe");
 		}
 
-		private bool DetectIsSetAsOpenFileDialog()
-		{
-			using var subkeyOpen = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Classes\CLSID\{DC1C5A9C-E88A-4DDE-A5A1-60F82A20AEF7}");
-			using var subkeySave = Registry.CurrentUser.OpenSubKey(@"SOFTWARE\Classes\CLSID\{C0B4E2F3-BA21-4773-8DBA-335EC946EB8B}");
-
-			var isSetAsOpenDialog = subkeyOpen?.GetValue(string.Empty) as string == "FilesOpenDialog class";
-			var isSetAsSaveDialog = subkeySave?.GetValue(string.Empty) as string == "FilesSaveDialog class";
-
-			return isSetAsOpenDialog || isSetAsSaveDialog;
-		}
-
 		private bool isSetAsDefaultFileManager;
 		public bool IsSetAsDefaultFileManager
 		{
 			get => isSetAsDefaultFileManager;
 			set => SetProperty(ref isSetAsDefaultFileManager, value);
-		}
-
-		private bool isSetAsOpenFileDialog;
-		public bool IsSetAsOpenFileDialog
-		{
-			get => isSetAsOpenFileDialog;
-			set => SetProperty(ref isSetAsOpenFileDialog, value);
 		}
 
 		public bool IsAppEnvironmentDev
