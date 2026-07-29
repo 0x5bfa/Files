@@ -443,3 +443,7 @@ K32EmptyWorkingSet
 GetDoubleClickTime
 SHChangeNotify
 VkKeyScan
+CoRegisterClassObject
+CoRevokeClassObject
+IClassFactory
+CLASS_E_NOAGGREGATION

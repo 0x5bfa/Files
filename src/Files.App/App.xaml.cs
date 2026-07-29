@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.Helpers.BackgroundTasks;
 using Files.App.Helpers.Application;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -10,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.Windows.AppLifecycle;
 using Windows.ApplicationModel;
+using Windows.ApplicationModel.Background;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 using Windows.Win32;
@@ -55,6 +57,7 @@ namespace Files.App
 		public App()
 		{
 			InitializeComponent();
+			BackgroundTaskComServer.Register();
 
 			// Configure exception handlers
 			AppLifecycleHelper.RecordFirstChanceExceptions();
@@ -153,6 +156,7 @@ namespace Files.App
 				HistoryWrapper = Ioc.Default.GetRequiredService<StorageHistoryWrapper>();
 				FileTagsManager = Ioc.Default.GetRequiredService<FileTagsManager>();
 				LibraryManager = Ioc.Default.GetRequiredService<LibraryManager>();
+				_ = RegisterBackgroundTaskAsync();
 				AppModel = Ioc.Default.GetRequiredService<AppModel>();
 
 				MainWindow.Instance.Closed += Window_Closed;
@@ -196,6 +200,61 @@ namespace Files.App
 
 				await telemetryInitialization;
 				await AppLifecycleHelper.InitializeAppComponentsAsync();
+			}
+		}
+
+		private static async Task RegisterBackgroundTaskAsync()
+		{
+			try
+			{
+				var isRegistered = false;
+				WithBackgroundTaskRegistrationMutex(() =>
+					isRegistered = BackgroundTaskRegistration.AllTasks.Values.Any(x => x.Name == "Files.UpdateTask"));
+				if (isRegistered)
+					return;
+
+				await BackgroundExecutionManager.RequestAccessAsync();
+
+				WithBackgroundTaskRegistrationMutex(() =>
+				{
+					if (BackgroundTaskRegistration.AllTasks.Values.Any(x => x.Name == "Files.UpdateTask"))
+						return;
+
+					var builder = new Microsoft.Windows.ApplicationModel.Background.BackgroundTaskBuilder
+					{
+						Name = "Files.UpdateTask",
+					};
+
+					builder.SetTrigger(new SystemTrigger(SystemTriggerType.ServicingComplete, false));
+					builder.SetTaskEntryPointClsid(typeof(UpdateTask).GUID);
+					builder.Register();
+				});
+			}
+			catch (Exception ex)
+			{
+				Logger.LogError(ex, "Failed to register the background task.");
+			}
+
+			static void WithBackgroundTaskRegistrationMutex(Action action)
+			{
+				using var mutex = new Mutex(false, $"Files-{AppLifecycleHelper.AppEnvironment}-UpdateTaskRegistration");
+				try
+				{
+					mutex.WaitOne();
+				}
+				catch (AbandonedMutexException)
+				{
+					// WaitOne grants ownership even when the previous owner exited without releasing the mutex.
+				}
+
+				try
+				{
+					action();
+				}
+				finally
+				{
+					mutex.ReleaseMutex();
+				}
 			}
 		}
 
