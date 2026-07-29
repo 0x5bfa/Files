@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.BackgroundTasks;
 using Files.App.Helpers.Application;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -9,6 +10,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.Windows.AppLifecycle;
 using Windows.Win32;
 using Windows.ApplicationModel;
+using Windows.ApplicationModel.Background;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 
@@ -50,6 +52,7 @@ namespace Files.App
 		public App()
 		{
 			InitializeComponent();
+			BackgroundTaskComServer.Register();
 
 			// Configure exception handlers
 			UnhandledException += (sender, e) => AppLifecycleHelper.HandleAppUnhandledException(e.Exception, true);
@@ -111,6 +114,7 @@ namespace Files.App
 				FileTagsManager = Ioc.Default.GetRequiredService<FileTagsManager>();
 				LibraryManager = Ioc.Default.GetRequiredService<LibraryManager>();
 				Logger = Ioc.Default.GetRequiredService<ILogger<App>>();
+				_ = RegisterBackgroundTaskAsync();
 				AppModel = Ioc.Default.GetRequiredService<AppModel>();
 
 				// Hook events for the window
@@ -153,6 +157,30 @@ namespace Files.App
 				}
 
 				await AppLifecycleHelper.InitializeAppComponentsAsync();
+			}
+		}
+
+		private static async Task RegisterBackgroundTaskAsync()
+		{
+			try
+			{
+				if (BackgroundTaskRegistration.AllTasks.Values.Any(x => x.Name == "Files.UpdateTask"))
+					return;
+
+				await BackgroundExecutionManager.RequestAccessAsync();
+
+				var builder = new Microsoft.Windows.ApplicationModel.Background.BackgroundTaskBuilder
+				{
+					Name = "Files.UpdateTask",
+				};
+
+				builder.SetTrigger(new SystemTrigger(SystemTriggerType.ServicingComplete, false));
+				builder.SetTaskEntryPointClsid(typeof(UpdateTask).GUID);
+				builder.Register();
+			}
+			catch (Exception ex)
+			{
+				Logger.LogError(ex, "Failed to register the background task.");
 			}
 		}
 

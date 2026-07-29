@@ -27,6 +27,7 @@
         <WindowsAppSDKSelfContained>false</WindowsAppSDKSelfContained>
         <UseWinUI>true</UseWinUI>
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+        <WindowsAppSDKBackgroundTask>true</WindowsAppSDKBackgroundTask>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <CETCompat>false</CETCompat>
         <Configurations>Debug;Release</Configurations>
@@ -125,7 +126,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Files.App.CsWin32\Files.App.CsWin32.csproj" />
-        <ProjectReference Include="..\Files.App.BackgroundTasks\Files.App.BackgroundTasks.csproj" />
         <ProjectReference Include="..\Files.App.Controls\Files.App.Controls.csproj" />
         <ProjectReference Include="..\Files.App.Storage\Files.App.Storage.csproj" />
         <ProjectReference Include="..\Files.Core.Storage\Files.Core.Storage.csproj" />
@@ -134,7 +134,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <TrimmerRootAssembly Include="Files.App.BackgroundTasks" />
         <TrimmerRootAssembly Include="Files" />
         <TrimmerRootAssembly Include="Files.App.Storage" />
         <TrimmerRootAssembly Include="Files.Core" />

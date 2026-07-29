@@ -7,6 +7,7 @@
     xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
     xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
     xmlns:desktop6="http://schemas.microsoft.com/appx/manifest/desktop/windows10/6"
+    xmlns:com="http://schemas.microsoft.com/appx/manifest/com/windows10"
     xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
     xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
     xmlns:uap4="http://schemas.microsoft.com/appx/manifest/uap/windows10/4"
@@ -138,7 +139,20 @@
                       DisplayName="Files" />
                 </uap5:Extension>
 
-                <Extension Category="windows.updateTask" EntryPoint="Files.App.BackgroundTasks.UpdateTask" />
+                <Extension Category="windows.backgroundTasks" EntryPoint="Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.Task">
+                    <BackgroundTasks>
+                        <Task Type="general" />
+                    </BackgroundTasks>
+                </Extension>
+
+                <com:Extension Category="windows.comServer">
+                    <com:ComServer>
+                        <com:ExeServer Executable="Files.exe" Arguments="-RegisterForBGTaskServer" DisplayName="Files"
+                                       LaunchAndActivationPermission="O:PSG:BUD:(A;;11;;;IU)(A;;11;;;S-1-15-2-1)S:(ML;;NX;;;LW)">
+                            <com:Class Id="B3A8E4D4-3B9C-4D49-9D4A-3DA7F1D8B9F3" DisplayName="Files background task" />
+                        </com:ExeServer>
+                    </com:ComServer>
+                </com:Extension>
 
                 <uap:Extension Category="windows.fileTypeAssociation">
                     <uap:FileTypeAssociation Name="archives">
@@ -164,8 +178,8 @@
     <Extensions>
         <Extension Category="windows.activatableClass.inProcessServer">
             <InProcessServer>
-                <Path>WinRT.Host.dll</Path>
-                <ActivatableClass ActivatableClassId="Files.App.BackgroundTasks.UpdateTask" ThreadingModel="both" />
+                <Path>Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.dll</Path>
+                <ActivatableClass ActivatableClassId="Microsoft.Windows.ApplicationModel.Background.UniversalBGTask.Task" ThreadingModel="both" />
             </InProcessServer>
         </Extension>
         <Extension Category="windows.activatableClass.outOfProcessServer">
