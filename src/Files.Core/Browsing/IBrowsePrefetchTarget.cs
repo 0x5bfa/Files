@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.Models;
 
 namespace Files.Core.Browsing;

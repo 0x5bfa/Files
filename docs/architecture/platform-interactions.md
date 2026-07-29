@@ -102,20 +102,20 @@ public interface IStorageTransferService
 between arbitrary storage sources without knowing whether the request came
 from paste, drop, or another UI. Its routing rules are:
 
-1. use the source's native `IStorageOperationProvider` for a supported
+1. use the source's native `IStorageOperationHandler` for a supported
    same-source copy or move;
 2. otherwise copy through readable and writable OwlCore storage streams;
-3. write to a provider-owned temporary sibling when possible;
+3. write to a source-owned temporary sibling when possible;
 4. flush, close, and publish the temporary item before reporting success;
 5. for a cross-source move, delete the source only after the copy commits;
 6. report copy success plus delete failure as partial success;
-7. never claim transactionality across two providers.
+7. never claim transactionality across two sources.
 
-Link is handled only when the destination provider explicitly supports a link
+Link is handled only when the destination source explicitly supports a link
 operation. It never silently degrades to copy.
 
 Conflict prompting remains in Files.App. Core receives a resolved policy or a
-provider-neutral callback contract; it does not display UI.
+source-neutral callback contract; it does not display UI.
 
 ## Clipboard architecture
 
@@ -138,7 +138,7 @@ The payload contains:
   "items": [
     {
       "sourceId": "windows",
-      "itemId": "provider-defined-stable-id",
+      "itemId": "source-defined-stable-id",
       "lastKnownAddress": "C:\\Example\\item.txt"
     }
   ]
@@ -248,7 +248,7 @@ subset.
 
 The process may call `OleFlushClipboard` for small, fully materialized
 formats so copied local files remain available after Files exits. It must not
-pretend that delayed FTP or archive streams can outlive their provider and
+pretend that delayed FTP or archive streams can outlive their source and
 runtime. For virtual files, either materialize to an owned temporary export
 with an explicit cleanup lifetime or keep the process serving the data
 object.
@@ -274,7 +274,7 @@ borrowed PIDLs.
 
 The same native data object builder used by the clipboard supplies drag
 formats. `DoDragDrop` and the OLE modal loop stay on the owning UI STA.
-Provider stream reads may execute asynchronously behind delayed rendering,
+Source stream reads may execute asynchronously behind delayed rendering,
 but COM callbacks are marshaled through the data object's owning apartment.
 
 ### Drop negotiation
@@ -283,7 +283,7 @@ but COM callbacks are marshaled through the data object's owning apartment.
 
 - whether the target is a folder-like destination;
 - source and destination source IDs;
-- provider-declared operation support;
+- source-declared operation support;
 - allowed source effects;
 - keyboard modifiers;
 - application policy.
@@ -295,14 +295,14 @@ Default intent follows Windows conventions:
 
 | Condition | Default |
 | --- | --- |
-| Same provider and native move supported | Move |
-| Different providers | Copy |
+| Same source and native move supported | Move |
+| Different sources | Copy |
 | Ctrl held | Copy |
 | Shift held and move is safe | Move |
 | Alt held and link supported | Link |
 
 The cursor effect is advisory. The drop handler may still reject execution if
-strict resolution or provider capability changes.
+strict resolution or source item feature changes.
 
 ### Drop flow
 
@@ -347,7 +347,7 @@ Folders require an explicit recursive packaging policy; the first
 implementation may disable dragging remote folders to other applications
 rather than silently materializing an unbounded tree.
 
-Cancellation closes provider streams and completes the COM async-operation
+Cancellation closes source streams and completes the COM async-operation
 contract. It does not delete a destination item that the transfer service did
 not create.
 
@@ -441,7 +441,7 @@ Their validity is scoped to one selection and one popup session.
 
 Use one of two deliberate surfaces:
 
-- a Files XAML menu for built-in and provider-contributed commands, with a
+- a Files XAML menu for built-in and source-contributed commands, with a
   “Show more options” item that opens the native Shell menu; or
 - a native menu where Files reserves its own non-overlapping command IDs and
   then lets `IContextMenu` populate the Shell range.
@@ -465,7 +465,7 @@ IDs.
 | `IDataObject` format callbacks | Data object's owning apartment |
 | Shell menu creation and tracking | Owner window STA |
 | Shell menu message forwarding | Owner window procedure |
-| Provider stream I/O | Backend scheduler or async worker |
+| Source stream I/O | Backend scheduler or async worker |
 | Core transfer execution | UI-independent async path |
 
 Do not use the general Windows Shell metadata scheduler to display an
@@ -477,13 +477,13 @@ STA waiting synchronously for FTP or archive streams.
 - Treat every external format as hostile and enforce size and count limits.
 - Strictly resolve Files references; never trust `LastKnownAddress` alone.
 - Reject paths containing traversal when creating destination child names.
-- Never serialize credentials, tokens, raw pointers, or provider session IDs.
+- Never serialize credentials, tokens, raw pointers, or source session IDs.
 - Do not hydrate, download, execute, or invoke a Shell verb during drag-over.
 - Show destructive and elevation prompts through the owning window.
 - Release every `STGMEDIUM`, COM interface, PIDL, `HMENU`, and temporary
   subclass on every success, cancellation, and failure path.
 - Do not invoke a command ID after its menu session has closed.
-- Record format and provider categories in telemetry, not paths or clipboard
+- Record format and source categories in telemetry, not paths or clipboard
   contents.
 
 ## Ownership and shutdown
@@ -495,7 +495,7 @@ flowchart TB
     Drag["Active drag session"]
     Drop["Drop target"]
     Menu["Shell menu session"]
-    Streams["Delayed provider streams"]
+    Streams["Delayed source streams"]
 
     Window --> Clipboard
     Window --> Drag
@@ -506,7 +506,7 @@ flowchart TB
 
 The process owns the clipboard service. Each window owns its drop target and
 active drag or menu session. The data object owns delayed streams and
-provider leases until OLE signals completion.
+source leases until OLE signals completion.
 
 Window shutdown:
 
@@ -595,7 +595,7 @@ Do not:
 - store an `IDataObject`, PIDL pointer, `IContextMenu`, or `HMENU` on an item
   model;
 - treat a path or `CF_HDROP` entry as stable item identity;
-- put FTP credentials or provider handles in a clipboard format;
+- put FTP credentials or source handles in a clipboard format;
 - run network or Shell work during drag-over;
 - copy dynamic Shell menu labels into XAML and discard their native behavior;
 - perform a cross-source move by deleting before the destination commits;

@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Previews;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Previews;
 using Files.Core.Models;
 
 namespace Files.Core.Browsing;

@@ -3,8 +3,8 @@
 
 using Files.Core.AppModels;
 using Files.Core.Browsing;
-using Files.Core.Capabilities.Previews;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Previews;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.Data;
 using Files.Core.Storage;
 using Files.Core.ViewSettings;

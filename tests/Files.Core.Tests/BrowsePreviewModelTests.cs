@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 using Files.Core.Browsing;
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Previews;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Previews;
 using Files.Core.Models;
 using Files.Core.Storage;
 
@@ -178,22 +178,22 @@ public sealed class BrowsePreviewModelTests
 	}
 
 	[TestMethod]
-	public async Task ProviderContributorBindsContextToItemSource()
+	public async Task LoaderFactoryBindsContextToItemSource()
 	{
 		var storageSource = new TestStorageSource();
 		var coreModel = new TestStorable("item", "Item");
-		var context = new CapabilityContext(
+		var context = new ItemContext(
 			storageSource,
 			coreModel,
 			new StorableReference(storageSource.SourceId, coreModel.Id));
-		var provider = new TestPreviewProvider();
-		var source = new PreviewProviderCapabilityContributor(provider).Create(context);
+		var loader = new TestPreviewLoader();
+		var source = new PreviewSourceFactory(loader).Create(context);
 
 		Assert.IsNotNull(source);
 		await using var result = await source!.GetPreviewAsync(new PreviewRequest());
 
-		Assert.AreSame(context, provider.Context);
-		Assert.AreSame(provider.Result, result);
+		Assert.AreSame(context, loader.Context);
+		Assert.AreSame(loader.Result, result);
 	}
 
 	private static async Task WaitUntilAsync(Func<bool> condition)
@@ -251,17 +251,17 @@ public sealed class BrowsePreviewModelTests
 		}
 	}
 
-	private sealed class TestPreviewProvider : IPreviewProvider
+	private sealed class TestPreviewLoader : IPreviewLoader
 	{
-		public CapabilityContext? Context { get; private set; }
+		public ItemContext? Context { get; private set; }
 
 		public TestPreviewResult Result { get; } = new();
 
-		public bool CanProvide(CapabilityContext context) => true;
+		public bool CanLoad(ItemContext context) => true;
 
 		public ValueTask<PreviewResult?> GetPreviewAsync(
 			PreviewRequest request,
-			CapabilityContext context,
+			ItemContext context,
 			CancellationToken cancellationToken = default)
 		{
 			Context = context;

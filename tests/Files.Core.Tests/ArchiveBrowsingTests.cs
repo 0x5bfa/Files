@@ -3,8 +3,8 @@
 
 using System.Runtime.CompilerServices;
 using Files.Core.Browsing;
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Archives;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Archives;
 using Files.Core.Data;
 using Files.Core.Models;
 using Files.Core.Storage;
@@ -118,7 +118,7 @@ public sealed class ArchiveBrowsingTests
 						attempt: 1,
 						previousCredentialRejected: false))
 				: new ArchiveMountResult.Success(mount));
-		var credentials = new TestArchiveCredentialProvider();
+		var credentials = new TestArchiveCredentialResolver();
 		var handler = new ArchiveBrowseLocationHandler(
 			dataRoot,
 			new ArchiveBackendSelector([backend]),
@@ -188,17 +188,17 @@ public sealed class ArchiveBrowsingTests
 	}
 
 	[TestMethod]
-	public void ArchiveSourceCapabilityIncludesArchiveFiles()
+	public void ArchiveSourceFeatureIncludesArchiveFiles()
 	{
 		var source = new TestStorageSource();
 		var coreModel = new TestArchiveFile(
 			"archive",
 			"example.zip");
-		var pipeline = new CapabilityPipelineBuilder()
-			.AddContributor<IArchiveSource>(
-				new ArchiveSourceCapabilityContributor())
+		var featureRegistry = new ItemFeatureBuilder()
+			.Add<IArchiveSource>(
+				new ArchiveSourceFactory())
 			.Build();
-		using var model = new StorableModelFactory(pipeline)
+		using var model = new StorableModelFactory(featureRegistry)
 			.Create(source, coreModel);
 
 		var archiveSource = model.Get<IArchiveSource>();
@@ -217,11 +217,11 @@ public sealed class ArchiveBrowsingTests
 			"archive",
 			"example",
 			@"C:\Data\example.zip");
-		var pipeline = new CapabilityPipelineBuilder()
-			.AddContributor<IArchiveSource>(
-				new ArchiveSourceCapabilityContributor())
+		var featureRegistry = new ItemFeatureBuilder()
+			.Add<IArchiveSource>(
+				new ArchiveSourceFactory())
 			.Build();
-		using var model = new StorableModelFactory(pipeline)
+		using var model = new StorableModelFactory(featureRegistry)
 			.Create(source, coreModel);
 
 		Assert.IsNotNull(model.Get<IArchiveSource>());
@@ -325,12 +325,12 @@ public sealed class ArchiveBrowsingTests
 		}
 	}
 
-	private sealed class TestArchiveCredentialProvider
-		: IArchiveCredentialProvider
+	private sealed class TestArchiveCredentialResolver
+		: IArchiveCredentialResolver
 	{
 		public int CallCount { get; private set; }
 
-		public ValueTask<ArchiveCredential?> GetCredentialAsync(
+		public ValueTask<ArchiveCredential?> ResolveAsync(
 			ArchiveCredentialChallenge challenge,
 			CancellationToken cancellationToken = default)
 		{
@@ -485,7 +485,7 @@ public sealed class ArchiveBrowsingTests
 		public StorageSourceId SourceId { get; } =
 			new("archive-test");
 
-		public string ProviderId => "archive-test";
+		public string SourceType => "archive-test";
 
 		public string DisplayName => "Archive test";
 

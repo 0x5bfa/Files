@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.Core.Browsing;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.ViewSettings;
 
 namespace Files.Core.AppModels;

@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities.Previews;
+using Files.Core.ItemFeatures.Previews;
 
 namespace Files.Core.Browsing;
 

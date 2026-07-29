@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Runtime.Versioning;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Thumbnails;
 using Windows.Win32.UI.Shell;
 
 namespace Files.Core.Storage.Windows;

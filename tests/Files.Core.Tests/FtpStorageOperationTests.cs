@@ -26,14 +26,14 @@ public sealed class FtpStorageOperationTests
 		await using var source = new FtpStorageSource(
 			profile,
 			sessionFactory: sessions);
-		var provider = new FtpStorageOperationProvider(source);
+		var handler = new FtpStorageOperationHandler(source);
 		var root = source.CreateReference(FtpPath.Root);
 		var first = source.CreateReference(
 			FtpPath.Parse("/first"));
 		var second = source.CreateReference(
 			FtpPath.Parse("/second"));
 
-		var created = await provider.ExecuteAsync(
+		var created = await handler.ExecuteAsync(
 			new CreateItemOperationRequest(
 				root,
 				"created",
@@ -41,7 +41,7 @@ public sealed class FtpStorageOperationTests
 		Assert.IsTrue(created.Succeeded, created.Error?.ToString());
 		Assert.IsTrue(sessions.Contains("/created"));
 
-		var copied = await provider.ExecuteAsync(
+		var copied = await handler.ExecuteAsync(
 			new CopyOperationRequest(
 				source.CreateReference(
 					FtpPath.Parse("/source.txt")),
@@ -57,7 +57,7 @@ public sealed class FtpStorageOperationTests
 					".files-copy-",
 					StringComparison.Ordinal)));
 
-		var moved = await provider.ExecuteAsync(
+		var moved = await handler.ExecuteAsync(
 			new MoveOperationRequest(
 				copied.ResultItem!,
 				second,
@@ -66,7 +66,7 @@ public sealed class FtpStorageOperationTests
 		Assert.IsFalse(sessions.Contains("/first/copy.txt"));
 		Assert.IsTrue(sessions.Contains("/second/moved.txt"));
 
-		var recycled = await provider.ExecuteAsync(
+		var recycled = await handler.ExecuteAsync(
 			new DeleteOperationRequest(
 				moved.ResultItem!));
 		Assert.IsFalse(recycled.Succeeded);
@@ -74,7 +74,7 @@ public sealed class FtpStorageOperationTests
 			recycled.Error);
 		Assert.IsTrue(sessions.Contains("/second/moved.txt"));
 
-		var deleted = await provider.ExecuteAsync(
+		var deleted = await handler.ExecuteAsync(
 			new DeleteOperationRequest(
 				moved.ResultItem!,
 				permanently: true));
@@ -94,9 +94,9 @@ public sealed class FtpStorageOperationTests
 		await using var source = new FtpStorageSource(
 			profile,
 			sessionFactory: sessions);
-		var provider = new FtpStorageOperationProvider(source);
+		var handler = new FtpStorageOperationHandler(source);
 
-		var result = await provider.ExecuteAsync(
+		var result = await handler.ExecuteAsync(
 			new CopyOperationRequest(
 				source.CreateReference(
 					FtpPath.Parse("/report.txt")),
@@ -125,9 +125,9 @@ public sealed class FtpStorageOperationTests
 		await using var source = new FtpStorageSource(
 			profile,
 			sessionFactory: sessions);
-		var provider = new FtpStorageOperationProvider(source);
+		var handler = new FtpStorageOperationHandler(source);
 
-		var result = await provider.ExecuteAsync(
+		var result = await handler.ExecuteAsync(
 			new CopyOperationRequest(
 				source.CreateReference(
 					FtpPath.Parse("/source")),

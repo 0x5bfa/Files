@@ -1,6 +1,6 @@
-# Windows storage provider
+# Windows storage source
 
-The Windows provider maps the Windows Shell namespace to OwlCore.Storage without introducing WinUI dependencies or leaking apartment-affine COM interfaces into ordinary models.
+The Windows source maps the Windows Shell namespace to OwlCore.Storage without introducing WinUI dependencies or leaking apartment-affine COM interfaces into ordinary models.
 
 ## Object model
 
@@ -46,7 +46,7 @@ classDiagram
 ```csharp
 await using var dataRoot = new FilesDataRoot(
 	[new WindowsStorageSource()],
-	new StorableModelFactory(capabilities));
+	new StorableModelFactory(item features));
 
 var windows = dataRoot.Sources.Single();
 
@@ -61,7 +61,7 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 
 `WindowsStorableDescriptor` copies these values while still on the ordered Shell STA:
 
-- `ItemId` is created by one `IWindowsItemIdentityProvider`. File-system items use the versioned `winfs:v1:<volume>:<file-index>` identity; virtual or inaccessible items use the versioned, encoded `winshell-address:v1:<address>` fallback.
+- `ItemId` is created by one `IWindowsItemIdReader`. File-system items use the versioned `winfs:v1:<volume>:<file-index>` identity; virtual or inaccessible items use the versioned, encoded `winshell-address:v1:<address>` fallback.
 - `WindowsItemLocator` contains a managed copy of the absolute PIDL and the `SIGDN_DESKTOPABSOLUTEPARSING` fallback locator. The PIDL is copied before the Shell STA operation returns.
 - `Name` uses a UI-friendly Shell display name with a normal-display fallback.
 - `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
@@ -70,7 +70,7 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
   distinguishes a file-like Shell container such as an archive from a normal
   filesystem directory without synchronous filesystem probing.
 
-Addresses and identities are intentionally independent. A filesystem model exposes a `file:` address containing its current filesystem path. An item without a filesystem path exposes a `shell:` address containing its desktop-absolute parsing name. Either kind may still use a provider-defined identity.
+Addresses and identities are intentionally independent. A filesystem model exposes a `file:` address containing its current filesystem path. An item without a filesystem path exposes a `shell:` address containing its desktop-absolute parsing name. Either kind may still use a source-defined identity.
 
 Windows file IDs are stable across rename. A persisted filesystem reference keeps its previous `file:` address as a recovery hint. Resolution tries that path and, when the path is missing or now identifies a different item, scans the previous parent directory for the requested file ID. A reference is accepted only when the resolved candidate has exactly the requested `ItemId`; a recreated file at a stale address is rejected.
 
@@ -106,7 +106,7 @@ flowchart TD
     Match -->|No| Missing
 ```
 
-The identity provider is stateless. Recovery works after the original `WindowsStorageSource` has been disposed and recreated; it does not rely on a process-local item-ID-to-path dictionary.
+The identity source is stateless. Recovery works after the original `WindowsStorageSource` has been disposed and recreated; it does not rely on a process-local item-ID-to-path dictionary.
 
 ## Snapshot boundary
 
@@ -140,7 +140,7 @@ All Shell item materialization is routed through `WindowsShellItemResolver`. It 
 
 ```mermaid
 flowchart LR
-    Capability["Thumbnail / property capability"] --> Resolver["WindowsShellItemResolver"]
+    ItemFeature["Thumbnail / property item feature"] --> Resolver["WindowsShellItemResolver"]
     Resolver --> Pidl{"Managed absolute PIDL available?"}
     Pidl -->|Yes| FromPidl["SHCreateItemFromIDList"]
     Pidl -->|No or failed| FromName["SHCreateItemFromParsingName"]
@@ -149,33 +149,33 @@ flowchart LR
     STA --> Managed["PNG bytes / property dictionary"]
 ```
 
-Capability sources receive the locator, never an `IShellItem` or a raw PIDL pointer. This keeps COM affinity inside the resolver and gives filesystem, virtual Shell, thumbnail, and property paths one materialization boundary.
+Item feature sources receive the locator, never an `IShellItem` or a raw PIDL pointer. This keeps COM affinity inside the resolver and gives filesystem, virtual Shell, thumbnail, and property paths one materialization boundary.
 
-## Folder change capability
+## Folder change item feature
 
-`WindowsStorageSource` owns one `WindowsShellChangeProvider`. Each `WindowsFolderChangeSource` created for a model owns one logical source subscription and exposes a `Changed` event. Identical folder registrations are shared by the provider, so multiple event handlers do not create extra native registrations; watching several folders still uses the same hidden window.
+`WindowsStorageSource` owns one `WindowsShellChangeWatcher`. Each `WindowsFolderChangeSource` created for a model owns one logical source subscription and exposes a `Changed` event. Identical folder registrations are shared by the source, so multiple event handlers do not create extra native registrations; watching several folders still uses the same hidden window.
 
 ```mermaid
 sequenceDiagram
-    participant Model as Folder change source
-    participant Provider as Source-owned provider
+    participant Model as IFolderChangeSource
+    participant Watcher as WindowsShellChangeWatcher
     participant STA as Ordered Shell STA
     participant Window as Hidden notification window
     participant Shell as Windows Shell
 
-    Model->>Provider: StartAsync(folder locator)
-    Provider->>STA: Create window and register PIDL
+    Model->>Watcher: StartAsync(folder locator)
+    Watcher->>STA: Create window and register PIDL
     STA->>Window: Own WNDPROC and Shell registration
     Shell-->>Window: Notification message
     Window->>STA: Lock notification and copy PIDLs
-    Window->>Provider: Publish managed change after unlock
-    Provider-->>Model: Changed event
-    Model->>Provider: DisposeAsync source
-    Provider->>STA: Deregister PIDL
-    Provider->>STA: Destroy window when last subscription ends
+    Window->>Watcher: Publish managed change after unlock
+    Watcher-->>Model: Changed event
+    Model->>Watcher: DisposeAsync subscription
+    Watcher->>STA: Deregister PIDL
+    Watcher->>STA: Destroy window when last subscription ends
 ```
 
-The provider filters absolute PIDLs for non-recursive folder subscriptions using Shell parent checks with a managed-PIDL and Shell-item fallback. Rename notifications preserve the old and new PIDLs. `SHCNE_UPDATEDIR` and notifications without usable item PIDLs become `DirectoryUpdated` or a change with `RequiresRefresh`, allowing the consumer to re-enumerate safely. Each source subscription uses a bounded channel; overflow discards stale detail and emits one directory refresh. No notification is converted to a filesystem path, so virtual Shell items and paths longer than `MAX_PATH` remain supported.
+The source filters absolute PIDLs for non-recursive folder subscriptions using Shell parent checks with a managed-PIDL and Shell-item fallback. Rename notifications preserve the old and new PIDLs. `SHCNE_UPDATEDIR` and notifications without usable item PIDLs become `DirectoryUpdated` or a change with `RequiresRefresh`, allowing the consumer to re-enumerate safely. Each source subscription uses a bounded channel; overflow discards stale detail and emits one directory refresh. No notification is converted to a filesystem path, so virtual Shell items and paths longer than `MAX_PATH` remain supported.
 
 ## Browse flow
 
@@ -239,8 +239,8 @@ apartment-safe wrapper as read-only.
 
 ## Windows Shell operations
 
-`StorageOperationService` selects `WindowsStorageOperationProvider` for
-references owned by one Windows source. The provider supports filesystem
+`StorageOperationService` selects `WindowsStorageOperationHandler` for
+references owned by one Windows source. The handler supports filesystem
 create, rename, copy, and move plus Shell deletion for filesystem or virtual
 items. It validates the request, resolves immutable input snapshots, and
 schedules `IFileOperation` on the operation STA lane.
@@ -248,19 +248,19 @@ schedules `IFileOperation` on the operation STA lane.
 ```mermaid
 sequenceDiagram
     participant Service as StorageOperationService
-    participant Provider as Windows operation provider
+    participant Handler as WindowsStorageOperationHandler
     participant STA as Operation STA
     participant Shell as IFileOperation
     participant Source as WindowsStorageSource
 
-    Service->>Provider: ExecuteAsync(request)
-    Provider->>STA: queue operation
+    Service->>Handler: ExecuteAsync(request)
+    Handler->>STA: queue operation
     STA->>Shell: queue item + PerformOperations
     Shell-->>STA: completion and abort state
-    STA-->>Provider: operation outcome
-    Provider->>Source: Resolve actual destination
-    Source-->>Provider: result snapshot
-    Provider-->>Service: result reference
+    STA-->>Handler: operation outcome
+    Handler->>Source: Resolve actual destination
+    Source-->>Handler: result snapshot
+    Handler-->>Service: result reference
 ```
 
 Rename rechecks the Shell item's filesystem identity immediately before
@@ -269,7 +269,7 @@ replacement item. Create/copy/move resolve the actual destination after
 completion. A queued HRESULT is never treated as proof that an individual
 item completed; `PerformOperations` and the aborted state are both checked.
 
-Names are one validated Windows segment. The provider rejects traversal,
+Names are one validated Windows segment. The handler rejects traversal,
 reserved DOS devices, invalid characters, and trailing spaces/dots.
 Collisions either fail or generate `name (2).ext`. Deletion uses the Recycle
 Bin unless the request explicitly asks for permanent deletion.
@@ -296,16 +296,16 @@ Implemented:
 
 - Parsing file-system and virtual Shell items.
 - Resolving known folders, addresses, and persisted references.
-- Versioned provider-defined identity from volume serial and file index, with an encoded address fallback for items that cannot expose a stable filesystem ID.
+- Versioned source-defined identity from volume serial and file index, with an encoded address fallback for items that cannot expose a stable filesystem ID.
 - Strict reference resolution that refuses to return a different item occupying a stale address.
 - Cold same-directory rename recovery from a filesystem reference.
-- Managed PIDL descriptors and one shared Shell item resolver for storage and capabilities.
+- Managed PIDL descriptors and one shared Shell item resolver for storage and item features.
 - Parent lookup.
 - Streaming child enumeration in bounded batches.
 - File-system streams and apartment-safe virtual read streams.
 - Injectable message-pumped STA scheduling.
 - Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
-- Windows Shell folder change subscriptions with a source-owned notification provider and managed PIDL delivery.
+- Windows Shell folder change subscriptions with a source-owned notification watcher and managed PIDL delivery.
 - Typed Shell properties for item type, size, creation time, and modification
   time.
 - Stream preview descriptors and Windows Shell preview-handler association,
@@ -315,5 +315,5 @@ Implemented:
 
 Cross-directory cold recovery from only an old reference, additional
 canonical property types, search indexing, context menus, drag/drop data
-packages, and arbitrary Shell verbs remain explicit provider or Files.App
+packages, and arbitrary Shell verbs remain explicit source or Files.App
 extensions. They do not change the storage/model boundary.

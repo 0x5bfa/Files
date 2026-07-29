@@ -12,7 +12,7 @@ public interface IStorageSource : IAsyncDisposable
 {
 	StorageSourceId SourceId { get; }
 
-	string ProviderId { get; }
+	string SourceType { get; }
 
 	string DisplayName { get; }
 

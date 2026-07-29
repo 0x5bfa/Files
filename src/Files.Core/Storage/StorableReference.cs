@@ -4,7 +4,7 @@
 namespace Files.Core.Storage;
 
 /// <summary>
-/// Stable provider identity and an optional recovery locator for an item.
+/// Stable storage-source identity and an optional recovery locator for an item.
 /// </summary>
 public sealed record StorableReference
 {

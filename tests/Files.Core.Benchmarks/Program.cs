@@ -32,7 +32,7 @@ var config = ManualConfig
 
 if (smoke)
 {
-	BenchmarkRunner.Run<CapabilityResolutionBenchmarks>(config);
+	BenchmarkRunner.Run<ItemFeatureResolutionBenchmarks>(config);
 }
 else
 {

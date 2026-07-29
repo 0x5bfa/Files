@@ -1,11 +1,11 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
+using Files.Core.ItemFeatures;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.Storage.Windows;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Thumbnails;
 using OwlCore.Storage;
 
 namespace Files.Core.Tests;
@@ -30,15 +30,15 @@ public sealed class WindowsThumbnailTests
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, filePath));
 
 			var cache = new MemoryThumbnailCache();
-			var pipeline = new CapabilityPipelineBuilder()
-				.AddContributor<IThumbnailSource>(
-					new WindowsThumbnailCapabilityContributor(new WindowsShellThumbnailBackend()),
+			var featureRegistry = new ItemFeatureBuilder()
+				.Add<IThumbnailSource>(
+					new WindowsThumbnailSourceFactory(new WindowsShellThumbnailBackend()),
 					origin: "Windows Shell")
-				.SetComposer<IThumbnailSource>(new ThumbnailSourceComposer())
-				.AddDecorator<IThumbnailSource>(new ThumbnailCacheDecorator(cache))
+				.SetCombiner<IThumbnailSource>(new ThumbnailSourceCombiner())
+				.AddWrapper<IThumbnailSource>(new ThumbnailCacheWrapper(cache))
 				.Build();
 
-			using var model = new StorableModelFactory(pipeline).Create(source, coreModel);
+			using var model = new StorableModelFactory(featureRegistry).Create(source, coreModel);
 			var thumbnailSource = model.Get<IThumbnailSource>();
 			Assert.IsNotNull(thumbnailSource);
 

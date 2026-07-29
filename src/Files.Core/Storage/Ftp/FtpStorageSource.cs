@@ -12,7 +12,7 @@ namespace Files.Core.Storage.Ftp;
 /// </summary>
 public sealed class FtpStorageSource : IStorageSource
 {
-	public const string DefaultProviderId = "ftp";
+	public const string DefaultSourceType = "ftp";
 	public const string FtpAddressScheme = "ftp";
 	public const string ExplicitTlsAddressScheme = "ftpes";
 	public const string ImplicitTlsAddressScheme = "ftps";
@@ -25,7 +25,7 @@ public sealed class FtpStorageSource : IStorageSource
 
 	public FtpStorageSource(
 		FtpConnectionProfile profile,
-		IFtpCredentialProvider? credentialProvider = null,
+		IFtpCredentialResolver? credentialResolver = null,
 		IFtpSessionFactory? sessionFactory = null,
 		StorageSourceId? sourceId = null)
 	{
@@ -34,11 +34,11 @@ public sealed class FtpStorageSource : IStorageSource
 		Profile = profile;
 		SourceId = sourceId
 			?? new StorageSourceId(
-				$"{DefaultProviderId}:{profile.ConnectionId}");
+				$"{DefaultSourceType}:{profile.ConnectionId}");
 		connection = new FtpConnection(
 			profile,
-			credentialProvider
-				?? AnonymousFtpCredentialProvider.Instance,
+			credentialResolver
+				?? AnonymousFtpCredentialResolver.Instance,
 			sessionFactory
 				?? FluentFtpSessionFactory.Instance);
 		resolver = new FtpItemResolver(profile, connection);
@@ -51,7 +51,7 @@ public sealed class FtpStorageSource : IStorageSource
 
 	public StorageSourceId SourceId { get; }
 
-	public string ProviderId => DefaultProviderId;
+	public string SourceType => DefaultSourceType;
 
 	public string DisplayName => Profile.DisplayName;
 

@@ -6,7 +6,7 @@ window-scoped UI intent to the navigation and storage use cases already
 implemented by Files.Core.
 
 This is an application boundary. Files.Core continues to own navigation
-state, storage operation requests, provider selection, and result contracts.
+state, storage operation requests, source selection, and result contracts.
 Files.App owns localized presentation, input gestures, prompts, progress UI,
 and error policy.
 
@@ -23,7 +23,7 @@ and error policy.
   registry into a service locator.
 
 The command system does not replace `PaneModel`,
-`IStorageOperationService`, provider capability composition, or WinUI input
+`IStorageOperationService`, source item feature composition, or WinUI input
 routing. It coordinates those existing boundaries.
 
 ## Dependency boundary
@@ -72,7 +72,7 @@ src/Files.App/Commands/
     StorageCommandAdapter.cs
     ClipboardCommandAdapter.cs
   Contributions/
-    ICommandContributionProvider.cs
+    ISelectionCommandSource.cs
     CommandContribution.cs
 ```
 
@@ -173,7 +173,7 @@ public interface ICommandHandler
 
 `GetState` may inspect AppModel state and call cheap methods such as
 `IStorageOperationService.CanHandle`. It must not enumerate a folder, query a
-network provider, activate COM, read the clipboard, or display UI. Unknown
+network source, activate COM, read the clipboard, or display UI. Unknown
 expensive state remains enabled when execution can provide a useful failure,
 or is supplied by an asynchronously refreshed cache.
 
@@ -319,8 +319,8 @@ Folder change notifications reconcile the session. If a source does not
 provide change notifications, the adapter requests one bounded refresh after
 the operation completes.
 
-The existing provider request is intentionally single-item. Multi-selection
-uses bounded scheduling and preserves every item result. A future provider
+The existing operation request is intentionally single-item. Multi-selection
+uses bounded scheduling and preserves every item result. A future handler
 may add a specialized batch request, but Files.App must not claim atomicity
 when a backend cannot provide it.
 
@@ -332,10 +332,11 @@ transfer coordinator described in
 ## Dynamic command contributions
 
 Built-in commands have stable process registrations. Context-dependent
-commands from plugins or non-Shell providers use a selection-scoped provider:
+commands from extensions or non-Shell integrations use a selection-scoped
+command source:
 
 ```csharp
-public interface ICommandContributionProvider
+public interface ISelectionCommandSource
 {
 	ValueTask<IReadOnlyList<CommandContribution>> GetCommandsAsync(
 		CommandContext context,
@@ -348,13 +349,13 @@ public interface ICommandContributionProvider
 }
 ```
 
-Contributions contain a descriptor, provider-owned opaque token, and the
+Contributions contain a descriptor, source-owned opaque token, and the
 generation for which they were created. The manager discards them when the
 selection or browse generation changes.
 
 This is not `item.Get<ICommand>()`. Commands often depend on multiple selected
 items, their common parent, the destination, and window policy. An item
-capability cannot represent that context correctly.
+feature cannot represent that context correctly.
 
 Windows Shell verbs use a native menu session rather than this contribution
 contract because owner-drawn, dynamic, and nested Shell extensions cannot be
@@ -488,6 +489,6 @@ Do not:
 - use labels, indexes, or enum ordinals as persisted command identity;
 - perform network, COM, or enumeration work in `GetState`;
 - mutate `BrowseSessionModel.Items` after an operation;
-- represent a multi-selection command as an item capability;
+- represent a multi-selection command as an item feature;
 - copy native Shell menu items into XAML and assume all extensions still work;
 - let an `async void` method own execution or error handling.

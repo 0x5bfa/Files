@@ -26,7 +26,7 @@ public sealed class WindowsStorageOperationTests
 			await using var source = new WindowsStorageSource(
 				scheduler: scheduler);
 			var service = new StorageOperationService(
-				[new WindowsStorageOperationProvider(source)]);
+				[new WindowsStorageOperationHandler(source)]);
 			var root = await ResolveReferenceAsync(source, rootPath);
 			var firstDestination = await ResolveReferenceAsync(
 				source,
@@ -134,7 +134,7 @@ public sealed class WindowsStorageOperationTests
 				"new.txt");
 			var progress = new List<StorageOperationProgress>();
 			var service = new StorageOperationService(
-				[new WindowsStorageOperationProvider(source)]);
+				[new WindowsStorageOperationHandler(source)]);
 
 			var result = await service.ExecuteAsync(
 				request,
@@ -187,7 +187,7 @@ public sealed class WindowsStorageOperationTests
 				source,
 				originalPath);
 			var service = new StorageOperationService(
-				[new WindowsStorageOperationProvider(source)]);
+				[new WindowsStorageOperationHandler(source)]);
 
 			var result = await service.ExecuteAsync(
 				new RenameOperationRequest(
@@ -218,7 +218,7 @@ public sealed class WindowsStorageOperationTests
 	{
 		await using var scheduler = new WindowsShellScheduler();
 		await using var source = new WindowsStorageSource(scheduler: scheduler);
-		var provider = new WindowsStorageOperationProvider(source);
+		var handler = new WindowsStorageOperationHandler(source);
 		var request = new RenameOperationRequest(
 			new StorableReference(
 				source.SourceId,
@@ -226,7 +226,7 @@ public sealed class WindowsStorageOperationTests
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, "C:\\missing.txt")),
 			"..\\escape.txt");
 
-		var result = await provider.ExecuteAsync(request);
+		var result = await handler.ExecuteAsync(request);
 
 		Assert.IsFalse(result.Succeeded);
 		Assert.IsInstanceOfType<ArgumentException>(result.Error);
@@ -237,7 +237,7 @@ public sealed class WindowsStorageOperationTests
 	{
 		await using var scheduler = new WindowsShellScheduler();
 		await using var source = new WindowsStorageSource(scheduler: scheduler);
-		var provider = new WindowsStorageOperationProvider(source);
+		var handler = new WindowsStorageOperationHandler(source);
 
 		foreach (var newName in new[] { "trailing.", "trailing ", "CON.txt", "LPT9" })
 		{
@@ -250,7 +250,7 @@ public sealed class WindowsStorageOperationTests
 						"C:\\missing.txt")),
 				newName);
 
-			var result = await provider.ExecuteAsync(request);
+			var result = await handler.ExecuteAsync(request);
 
 			Assert.IsFalse(result.Succeeded);
 			Assert.IsInstanceOfType<ArgumentException>(result.Error);

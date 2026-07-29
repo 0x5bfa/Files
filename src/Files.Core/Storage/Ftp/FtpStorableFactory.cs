@@ -6,7 +6,7 @@ using System.IO;
 namespace Files.Core.Storage.Ftp;
 
 /// <summary>
-/// Creates immutable FTP CoreModels from provider-neutral entry snapshots.
+/// Creates immutable FTP CoreModels from source-neutral entry snapshots.
 /// </summary>
 internal sealed class FtpStorableFactory
 {

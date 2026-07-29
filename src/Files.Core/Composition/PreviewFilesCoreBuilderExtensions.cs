@@ -1,16 +1,16 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities.Previews;
+using Files.Core.ItemFeatures.Previews;
 
 namespace Files.Core.Composition;
 
 /// <summary>
-/// Adds storage-independent stream preview capabilities.
+/// Adds storage-independent stream preview features.
 /// </summary>
 public static class PreviewFilesCoreBuilderExtensions
 {
-	private const string DefaultStreamPreviewsFeature =
+	private const string DefaultStreamPreviewsModule =
 		"Files.Core.Previews.DefaultStreams";
 
 	public static FilesCoreBuilder AddDefaultStreamPreviews(
@@ -18,7 +18,7 @@ public static class PreviewFilesCoreBuilderExtensions
 		IPreviewStreamAccessPolicy? policy = null)
 	{
 		ArgumentNullException.ThrowIfNull(builder);
-		if (!builder.TryRegisterFeature(DefaultStreamPreviewsFeature))
+		if (!builder.TryAddModule(DefaultStreamPreviewsModule))
 		{
 			return builder;
 		}
@@ -48,11 +48,11 @@ public static class PreviewFilesCoreBuilderExtensions
 				[".webp"] = "image/webp",
 				[".xml"] = "application/xml",
 			});
-		var provider = new StreamPreviewProvider(
+		var loader = new StreamPreviewLoader(
 			contentTypes,
 			policy ?? AllowPreviewStreamAccessPolicy.Instance);
-		builder.Capabilities.AddContributor<IPreviewSource>(
-			new PreviewProviderCapabilityContributor(provider),
+		builder.ItemFeatures.Add<IPreviewSource>(
+			new PreviewSourceFactory(loader),
 			priority: 200,
 			origin: "Core stream preview");
 		return builder;

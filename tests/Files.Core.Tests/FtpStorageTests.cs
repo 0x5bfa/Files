@@ -26,7 +26,7 @@ public sealed class FtpStorageTests
 			userNameHint: "files-user");
 		await using var source = new FtpStorageSource(
 			profile,
-			new StaticFtpCredentialProvider(
+			new StaticFtpCredentialResolver(
 				new FtpCredential(
 					"files-user",
 					"secret")),
@@ -144,9 +144,9 @@ public sealed class FtpStorageTests
 			sessionFactory: sessions);
 		var original = source.CreateReference(
 			FtpPath.Parse("/old.txt"));
-		var provider = new FtpStorageOperationProvider(source);
+		var handler = new FtpStorageOperationHandler(source);
 
-		var result = await provider.ExecuteAsync(
+		var result = await handler.ExecuteAsync(
 			new RenameOperationRequest(
 				original,
 				"new.txt"));
@@ -166,7 +166,7 @@ public sealed class FtpStorageTests
 	{
 		var sessions = new InMemoryFtpSessionFactory();
 		sessions.AddFile("/secured.txt", [1]);
-		var credentials = new SequenceCredentialProvider(
+		var credentials = new SequenceCredentialResolver(
 			new FtpCredential("user", "wrong"),
 			new FtpCredential("user", "correct"));
 		var checkingFactory =
@@ -190,12 +190,12 @@ public sealed class FtpStorageTests
 		Assert.IsTrue(credentials.Requests[1].IsRetry);
 	}
 
-	private sealed class SequenceCredentialProvider :
-		IFtpCredentialProvider
+	private sealed class SequenceCredentialResolver :
+		IFtpCredentialResolver
 	{
 		private readonly Queue<FtpCredential> credentials;
 
-		public SequenceCredentialProvider(
+		public SequenceCredentialResolver(
 			params FtpCredential[] credentials)
 		{
 			this.credentials = new Queue<FtpCredential>(
@@ -204,7 +204,7 @@ public sealed class FtpStorageTests
 
 		public IList<FtpCredentialRequest> Requests { get; } = [];
 
-		public ValueTask<FtpCredential?> GetCredentialAsync(
+		public ValueTask<FtpCredential?> ResolveAsync(
 			FtpCredentialRequest request,
 			CancellationToken cancellationToken = default)
 		{

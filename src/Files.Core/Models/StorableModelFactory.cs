@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
+using Files.Core.ItemFeatures;
 using Files.Core.Storage;
 using OwlCore.Storage;
 
@@ -9,11 +9,11 @@ namespace Files.Core.Models;
 
 public sealed class StorableModelFactory : IStorableModelFactory
 {
-	private readonly CapabilityPipeline capabilityPipeline;
+	private readonly ItemFeatureRegistry itemFeatureRegistry;
 
-	public StorableModelFactory(CapabilityPipeline? capabilityPipeline = null)
+	public StorableModelFactory(ItemFeatureRegistry? itemFeatureRegistry = null)
 	{
-		this.capabilityPipeline = capabilityPipeline ?? CapabilityPipeline.Empty;
+		this.itemFeatureRegistry = itemFeatureRegistry ?? ItemFeatureRegistry.Empty;
 	}
 
 	public IStorableModel Create(IStorageSource source, IStorable coreModel)
@@ -21,7 +21,7 @@ public sealed class StorableModelFactory : IStorableModelFactory
 		ArgumentNullException.ThrowIfNull(source);
 		ArgumentNullException.ThrowIfNull(coreModel);
 
-		ICapabilitySet? capabilities = null;
+		IItemFeatures? features = null;
 
 		try
 		{
@@ -29,22 +29,22 @@ public sealed class StorableModelFactory : IStorableModelFactory
 				source.SourceId,
 				coreModel.Id,
 				(coreModel as IStorageAddressSource)?.Address);
-			var context = new CapabilityContext(source, coreModel, reference);
-			capabilities = capabilityPipeline.CreateSet(context);
+			var context = new ItemContext(source, coreModel, reference);
+			features = itemFeatureRegistry.CreateFeatures(context);
 
 			return coreModel switch
 			{
-				IFile file => new FileModel(file, reference, capabilities),
-				IFolder folder => new FolderModel(source, folder, this, reference, capabilities),
-				_ => new StorableModel(coreModel, reference, capabilities),
+				IFile file => new FileModel(file, reference, features),
+				IFolder folder => new FolderModel(source, folder, this, reference, features),
+				_ => new StorableModel(coreModel, reference, features),
 			};
 		}
 		catch (Exception creationError)
 		{
 			var cleanupErrors = new List<Exception>();
-			if (capabilities is not null)
+			if (features is not null)
 			{
-				TryDisposeSynchronously(capabilities, cleanupErrors);
+				TryDisposeSynchronously(features, cleanupErrors);
 			}
 
 			TryDisposeSynchronously(coreModel, cleanupErrors);

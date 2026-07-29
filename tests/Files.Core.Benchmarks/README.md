@@ -8,7 +8,7 @@ Run the benchmark project in Release mode on a stable machine:
 dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj -c Release -- --filter '*'
 ```
 
-Use `--smoke` for a one-iteration validation run of the capability pipeline:
+Use `--smoke` for a one-iteration validation run of the item feature registry:
 
 ```powershell
 dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj -c Release -- --smoke

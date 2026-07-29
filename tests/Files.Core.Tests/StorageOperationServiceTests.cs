@@ -9,11 +9,11 @@ namespace Files.Core.Tests;
 public sealed class StorageOperationServiceTests
 {
 	[TestMethod]
-	public async Task SelectsFirstProviderThatCanHandleTheRequest()
+	public async Task SelectsFirstHandlerThatCanHandleTheRequest()
 	{
 		var request = CreateRenameRequest();
-		var first = new TestOperationProvider(canHandle: false);
-		var second = new TestOperationProvider(canHandle: true);
+		var first = new TestOperationHandler(canHandle: false);
+		var second = new TestOperationHandler(canHandle: true);
 		var service = new StorageOperationService([first, second]);
 
 		Assert.IsTrue(service.CanHandle(request));
@@ -28,7 +28,7 @@ public sealed class StorageOperationServiceTests
 	public async Task ReportsUnsupportedRequestAsFailedResult()
 	{
 		var service = new StorageOperationService(
-			[new TestOperationProvider(canHandle: false)]);
+			[new TestOperationHandler(canHandle: false)]);
 
 		Assert.IsFalse(service.CanHandle(new UnknownOperationRequest()));
 		var result = await service.ExecuteAsync(new UnknownOperationRequest());
@@ -39,13 +39,13 @@ public sealed class StorageOperationServiceTests
 	}
 
 	[TestMethod]
-	public async Task MapsProviderExceptionToFailedResult()
+	public async Task MapsHandlerExceptionToFailedResult()
 	{
 		var expected = new IOException("operation failed");
-		var provider = new TestOperationProvider(
+		var handler = new TestOperationHandler(
 			canHandle: true,
 			exception: expected);
-		var service = new StorageOperationService([provider]);
+		var service = new StorageOperationService([handler]);
 
 		var result = await service.ExecuteAsync(CreateRenameRequest());
 
@@ -54,26 +54,26 @@ public sealed class StorageOperationServiceTests
 	}
 
 	[TestMethod]
-	public async Task PropagatesCancellationBeforeProviderExecution()
+	public async Task PropagatesCancellationBeforeHandlerExecution()
 	{
 		using var cancellation = new CancellationTokenSource();
 		cancellation.Cancel();
-		var provider = new TestOperationProvider(canHandle: true);
-		var service = new StorageOperationService([provider]);
+		var handler = new TestOperationHandler(canHandle: true);
+		var service = new StorageOperationService([handler]);
 
 		await Assert.ThrowsAsync<OperationCanceledException>(
 			async () => await service.ExecuteAsync(
 				CreateRenameRequest(),
 				cancellationToken: cancellation.Token));
 
-		Assert.AreEqual(0, provider.ExecuteCount);
+		Assert.AreEqual(0, handler.ExecuteCount);
 	}
 
 	[TestMethod]
-	public async Task MapsNullProviderResultToFailedResult()
+	public async Task MapsNullHandlerResultToFailedResult()
 	{
 		var service = new StorageOperationService(
-			[new NullOperationProvider()]);
+			[new NullOperationHandler()]);
 
 		var result = await service.ExecuteAsync(CreateRenameRequest());
 
@@ -131,7 +131,7 @@ public sealed class StorageOperationServiceTests
 
 	private sealed record UnknownOperationRequest : StorageOperationRequest;
 
-	private sealed class NullOperationProvider : IStorageOperationProvider
+	private sealed class NullOperationHandler : IStorageOperationHandler
 	{
 		public bool CanHandle(StorageOperationRequest request) => true;
 
@@ -144,12 +144,12 @@ public sealed class StorageOperationServiceTests
 		}
 	}
 
-	private sealed class TestOperationProvider : IStorageOperationProvider
+	private sealed class TestOperationHandler : IStorageOperationHandler
 	{
 		private readonly bool canHandle;
 		private readonly Exception? exception;
 
-		public TestOperationProvider(bool canHandle, Exception? exception = null)
+		public TestOperationHandler(bool canHandle, Exception? exception = null)
 		{
 			this.canHandle = canHandle;
 			this.exception = exception;

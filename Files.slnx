@@ -12,7 +12,7 @@
   <Folder Name="/docs/architecture/">
     <File Path="docs/architecture/README.md" />
     <File Path="docs/architecture/app-models.md" />
-    <File Path="docs/architecture/capabilities.md" />
+    <File Path="docs/architecture/item-features.md" />
     <File Path="docs/architecture/composition.md" />
     <File Path="docs/architecture/files-app.md" />
     <File Path="docs/architecture/implementation-status.md" />

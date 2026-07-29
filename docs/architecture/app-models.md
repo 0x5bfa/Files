@@ -63,7 +63,7 @@ first UI consumer to prove an independently testable boundary.
 
 The following never belong in `BrowseSessionModel`: WinUI types, observable
 collections, localized strings, command implementations, dialogs, Shell
-interop, provider-specific branching, or process service lookup.
+interop, source-specific branching, or process service lookup.
 
 ## Creating the graph
 

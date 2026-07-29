@@ -11,7 +11,7 @@ namespace Files.Core.Storage.Windows;
 internal sealed class ShellFolderEnumerator : IAsyncDisposable
 {
 	private readonly IWindowsShellScheduler scheduler;
-	private readonly IWindowsItemIdentityProvider identityProvider;
+	private readonly IWindowsItemIdReader itemIdReader;
 	private IEnumShellItems? enumerator;
 	private bool isCompleted;
 	private int isDisposed;
@@ -19,15 +19,15 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 	public ShellFolderEnumerator(
 		IWindowsShellScheduler scheduler,
 		IEnumShellItems enumerator,
-		IWindowsItemIdentityProvider identityProvider)
+		IWindowsItemIdReader itemIdReader)
 	{
 		ArgumentNullException.ThrowIfNull(scheduler);
 		ArgumentNullException.ThrowIfNull(enumerator);
-		ArgumentNullException.ThrowIfNull(identityProvider);
+		ArgumentNullException.ThrowIfNull(itemIdReader);
 
 		this.scheduler = scheduler;
 		this.enumerator = enumerator;
-		this.identityProvider = identityProvider;
+		this.itemIdReader = itemIdReader;
 	}
 
 	public unsafe Task<IReadOnlyList<WindowsStorableDescriptor>> ReadNextAsync(
@@ -63,7 +63,7 @@ internal sealed class ShellFolderEnumerator : IAsyncDisposable
 					}
 
 					result.ThrowOnFailure();
-					descriptors.Add(ShellItemHelpers.CreateDescriptor(children[0], identityProvider));
+					descriptors.Add(ShellItemHelpers.CreateDescriptor(children[0], itemIdReader));
 				}
 
 				return descriptors;

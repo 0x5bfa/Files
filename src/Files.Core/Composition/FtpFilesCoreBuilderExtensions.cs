@@ -1,8 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities.Previews;
-using Files.Core.Capabilities.Properties;
+using Files.Core.ItemFeatures.Previews;
+using Files.Core.ItemFeatures.Properties;
 using Files.Core.Storage.Archives;
 using Files.Core.Storage.Ftp;
 
@@ -16,19 +16,19 @@ public static class FtpFilesCoreBuilderExtensions
 	public static FilesCoreBuilder AddFtpStorage(
 		this FilesCoreBuilder builder,
 		FtpConnectionProfile profile,
-		IFtpCredentialProvider? credentialProvider = null,
+		IFtpCredentialResolver? credentialResolver = null,
 		IFtpSessionFactory? sessionFactory = null,
 		IPreviewStreamAccessPolicy? streamPreviewPolicy = null,
 		bool enablePreviews = true,
 		bool enableArchives = true,
-		IArchiveCredentialProvider? archiveCredentialProvider = null)
+		IArchiveCredentialResolver? archiveCredentialResolver = null)
 	{
 		ArgumentNullException.ThrowIfNull(builder);
 		ArgumentNullException.ThrowIfNull(profile);
 
 		var source = new FtpStorageSource(
 			profile,
-			credentialProvider,
+			credentialResolver,
 			sessionFactory);
 		try
 		{
@@ -55,13 +55,13 @@ public static class FtpFilesCoreBuilderExtensions
 			throw;
 		}
 
-		return AddFtpCapabilities(
+		return AddFtpItemFeatures(
 			builder,
 			source,
 			streamPreviewPolicy,
 			enablePreviews,
 			enableArchives,
-			archiveCredentialProvider);
+			archiveCredentialResolver);
 	}
 
 	public static FilesCoreBuilder AddFtpStorage(
@@ -70,19 +70,19 @@ public static class FtpFilesCoreBuilderExtensions
 		IPreviewStreamAccessPolicy? streamPreviewPolicy = null,
 		bool enablePreviews = true,
 		bool enableArchives = true,
-		IArchiveCredentialProvider? archiveCredentialProvider = null)
+		IArchiveCredentialResolver? archiveCredentialResolver = null)
 	{
 		ArgumentNullException.ThrowIfNull(builder);
 		ArgumentNullException.ThrowIfNull(source);
 
 		RegisterStorage(builder, source);
-		return AddFtpCapabilities(
+		return AddFtpItemFeatures(
 			builder,
 			source,
 			streamPreviewPolicy,
 			enablePreviews,
 			enableArchives,
-			archiveCredentialProvider);
+			archiveCredentialResolver);
 	}
 
 	private static void RegisterStorage(
@@ -91,21 +91,21 @@ public static class FtpFilesCoreBuilderExtensions
 	{
 		builder
 			.AddStorageSource(source)
-			.AddStorageOperationProvider(
-				new FtpStorageOperationProvider(source));
+			.AddStorageOperationHandler(
+				new FtpStorageOperationHandler(source));
 	}
 
-	private static FilesCoreBuilder AddFtpCapabilities(
+	private static FilesCoreBuilder AddFtpItemFeatures(
 		FilesCoreBuilder builder,
 		FtpStorageSource source,
 		IPreviewStreamAccessPolicy? streamPreviewPolicy,
 		bool enablePreviews,
 		bool enableArchives,
-		IArchiveCredentialProvider? archiveCredentialProvider)
+		IArchiveCredentialResolver? archiveCredentialResolver)
 	{
-		builder.Capabilities.AddContributor<IPropertySource>(
-			new PropertyProviderCapabilityContributor(
-				new FtpPropertyProvider(source)),
+		builder.ItemFeatures.Add<IPropertySource>(
+			new PropertySourceFactory(
+				new FtpPropertyReader(source)),
 			priority: 100,
 			origin: $"FTP:{source.Profile.ConnectionId}");
 
@@ -118,7 +118,7 @@ public static class FtpFilesCoreBuilderExtensions
 
 		if (enableArchives)
 		{
-			builder.AddArchiveBrowsing(archiveCredentialProvider);
+			builder.AddArchiveBrowsing(archiveCredentialResolver);
 		}
 
 		return builder;

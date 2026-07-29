@@ -1,6 +1,6 @@
 # Files.Core
 
-Files.Core is the UI-independent model, storage, capability, and application
+Files.Core is the UI-independent model, storage, item feature, and application
 state foundation for the next Files.App.
 
 ## Public entry point
@@ -35,7 +35,7 @@ flowchart TB
     Tab["TabModel"]
     Pane["PaneModel"]
     Session["BrowseSessionModel"]
-    Items["IStorableModel + capabilities"]
+    Items["IStorableModel + item features"]
 
     Runtime --> App
     App --> Window
@@ -47,9 +47,9 @@ flowchart TB
 
 Implemented areas:
 
-- stable provider/source/item identity and recovery addresses;
+- stable source and item identity with recovery addresses;
 - OwlCore.Storage CoreModels wrapped by Files AppModels;
-- lazy per-capability contributors, composers, decorators, and ownership;
+- lazy per-item feature factories, combiners, wrappers, and ownership;
 - application, window, tab, split-pane, navigation-history, and browse models;
 - home/folder/archive locations plus extensible search/tag location contracts;
 - immutable item snapshots, selection, sorting, granular changes, and
@@ -75,7 +75,7 @@ Implemented areas:
 - parent lookup, bounded folder enumeration, and affine virtual streams;
 - message-pumped STA lanes for metadata, extraction, operations, and preview;
 - PNG thumbnails, typed Shell properties, and shared folder notifications;
-- stream and Shell preview providers;
+- stream and Shell preview loaders;
 - `IFileOperation` create/rename/copy/move/delete.
 - Windows Shell archive folders with SevenZipSharp fallback on Windows 10,
   encrypted archives, unsupported Shell formats, and remote streams.
@@ -88,7 +88,7 @@ source-generated interop. It does not reference WinUI.
 `AddFtpStorage` supplies one source per saved connection:
 
 - plain FTP, explicit TLS, and implicit TLS profiles;
-- credentials supplied separately through `IFtpCredentialProvider`;
+- credentials supplied separately through `IFtpCredentialResolver`;
 - normalized remote identities and credential-free recovery addresses;
 - immutable files/folders, parent lookup, and one-listing enumeration;
 - data streams that retain and complete their FTP control session;
@@ -104,7 +104,7 @@ and cross-source transfer coordination remain separate extension boundaries.
   rendering, the preview child HWND, activation, drag/drop, and context menus
   belong to Files.App.
 - Search/tag behavior needs a selected backend and custom location handler.
-- Additional storage providers plug into the same source, capability,
+- Additional storage sources plug into the same storage, item feature,
   location, and operation contracts.
 - Durable settings and window-session serialization are application policy.
 - The eventual merge of `Files.Shared`, `Files.Core.Storage`,

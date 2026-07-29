@@ -8,13 +8,13 @@ produces one owned `FilesCoreRuntime`.
 flowchart TB
     Builder["FilesCoreBuilder"]
     Sources["Storage sources"]
-    Pipeline["Capability pipeline"]
+    Registry["ItemFeatureRegistry"]
     Handlers["Location handlers"]
-    Operations["Operation providers"]
+    Operations["Operation handlers"]
     Runtime["FilesCoreRuntime"]
 
     Sources --> Builder
-    Pipeline --> Builder
+    Registry --> Builder
     Handlers --> Builder
     Operations --> Builder
     Builder --> Runtime
@@ -26,14 +26,14 @@ The builder always installs:
 
 | Service | Default |
 | --- | --- |
-| Thumbnail composition | Priority fallback through `ThumbnailSourceComposer` |
-| Property composition | Priority merge through `PropertySourceComposer` |
-| Preview composition | Priority routing through `PreviewSourceComposer` |
-| Thumbnail decorator | Shared `MemoryThumbnailCache` |
+| Thumbnail composition | Priority fallback through `ThumbnailSourceCombiner` |
+| Property composition | Priority merge through `PropertySourceCombiner` |
+| Preview composition | Priority routing through `PreviewSourceCombiner` |
+| Thumbnail wrapper | Shared `MemoryThumbnailCache` |
 | View settings | `InMemoryViewSettingsStore` |
 | Locations | `HomeBrowseLocationHandler` and `FolderBrowseLocationHandler` |
 | AppModels | `BrowsePaneFactory` and `FilesApplicationModel` |
-| Operations | `StorageOperationService` over registered providers |
+| Operations | `StorageOperationService` over registered handlers |
 
 Files.App should inject its persisted `IViewSettingsStore` and any durable or
 instrumented `IThumbnailCache` before `Build`.
@@ -41,8 +41,8 @@ instrumented `IThumbnailCache` before `Build`.
 ## Windows vertical slice
 
 `AddWindowsStorage` registers one `WindowsStorageSource`, its operation
-provider, Windows thumbnail/property/folder-change contributors, stream
-preview providers, the Windows Shell preview provider, and default archive
+handler, Windows thumbnail/property/folder-change factories, stream
+preview loaders, the Windows Shell preview loader, and default archive
 browsing.
 
 ```csharp
@@ -53,29 +53,29 @@ var builder = new FilesCoreBuilder(
 builder.AddWindowsStorage(
 	streamPreviewPolicy: previewAccessPolicy,
 	shellPreviewPolicy: shellPreviewPolicy,
-	archiveCredentialProvider: archiveCredentials);
+	archiveCredentialResolver: archiveCredentials);
 
 await using var runtime = builder.Build();
 ```
 
 Known stream formats have priority 200. Windows Shell preview descriptors
-have priority 100. A stream provider that returns `null` falls through to the
-Shell provider; a blocked stream result is terminal.
+have priority 100. A stream loader that returns `null` falls through to the
+Shell loader; a blocked stream result is terminal.
 
 `AddWindowsStorage(enablePreviews: false)` omits both preview paths. The
 permissive policy defaults are useful for tests and early integration.
 Production Files.App should inject policies that account for cloud hydration,
 trust, managed policy, and user settings.
 
-`AddWindowsStorage(enableArchives: false)` omits archive capabilities and its
+`AddWindowsStorage(enableArchives: false)` omits archive item features and its
 location handler. `AddArchiveBrowsing` can also be registered independently
-with custom backends, probe, and credential provider. The default selector
+with custom backends, probe, and credential resolver. The default selector
 uses Windows Shell at priority 200 and SevenZipSharp at priority 100.
 
 ## FTP vertical slice
 
 Each `AddFtpStorage` call registers one configured `FtpStorageSource`, its
-operation provider, and its source-scoped property contributor. Generic
+operation handler, and its source-scoped property factory. Generic
 stream previews and archive browsing are registered once and work through
 the FTP `IFile` stream.
 
@@ -87,13 +87,13 @@ builder.AddFtpStorage(
 		host: "ftp.example.com",
 		securityMode: FtpSecurityMode.ExplicitTls,
 		rootPath: "/public"),
-	ftpCredentialProvider,
+	ftpCredentialResolver,
 	streamPreviewPolicy: previewAccessPolicy,
-	archiveCredentialProvider: archiveCredentials);
+	archiveCredentialResolver: archiveCredentials);
 ```
 
 The profile contains no password. Files.App supplies an
-`IFtpCredentialProvider` backed by protected application infrastructure.
+`IFtpCredentialResolver` backed by protected application infrastructure.
 Call `AddFtpStorage` once per saved profile before `Build`; see
 [FTP storage](ftp-storage.md) for identity, stream ownership, and current
 runtime-registration limits.
@@ -105,24 +105,24 @@ A backend supplies three independent kinds of registration:
 ```csharp
 builder
 	.AddStorageSource(source)
-	.AddStorageOperationProvider(operationProvider)
+	.AddStorageOperationHandler(operationHandler)
 	.AddBrowseLocationHandler(
 		dataRoot => new SearchBrowseLocationHandler(dataRoot, searchService));
 
-builder.Capabilities.AddContributor<IPropertySource>(
-	new PropertyProviderCapabilityContributor(provider),
+builder.ItemFeatures.Add<IPropertySource>(
+	new PropertySourceFactory(propertyReader),
 	priority: 50,
 	origin: "Git");
 ```
 
-- Storage sources resolve CoreModels and own provider connections.
-- Capability contributors create optional item-bound behavior.
+- Storage sources resolve CoreModels and own their connections.
+- Item feature factories create optional item-bound behavior.
 - Location handlers open an owned context for a typed `BrowseLocation`.
-- Operation providers execute mutations for references they own.
+- Operation handlers execute mutations for references they own.
 
-Registering a capability does not register a process-wide service locator
-entry. `model.Get<T>()` can resolve only item capability contracts from that
-model's pipeline and context.
+Registering an item feature does not register a process-wide service locator
+entry. `model.Get<T>()` can resolve only item feature contracts from that
+model's registry and context.
 
 ## Runtime surface
 
@@ -181,9 +181,9 @@ after an error and final disposal is idempotent.
 Do not:
 
 - call `Build` once per window;
-- create a scheduler, cache, or provider once per item;
+- create a scheduler, cache, or source once per item;
 - resolve dependencies from a global IoC container inside a model;
-- register WinUI renderers as item capabilities;
+- register WinUI renderers as item features;
 - let Files.App dispose a source borrowed from `FilesDataRoot`;
 - keep a `WindowsStorable` model alive as a substitute for a
   `StorableReference`.

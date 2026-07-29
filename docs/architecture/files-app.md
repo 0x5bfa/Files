@@ -28,10 +28,10 @@ Allowed dependencies:
 | Views | ViewModels and WinUI-only behaviors |
 | ViewModels | AppModels, UI adapter interfaces, command adapters |
 | WinUI adapters | Files.Core result contracts and WinUI/platform APIs |
-| AppModels | CoreModels and capability contracts |
-| Providers | Their backend APIs and Core contracts |
+| AppModels | CoreModels and item feature contracts |
+| Storage sources | Their backend APIs and Core contracts |
 
-Files.Core never references Files.App. ViewModels never call provider or
+Files.Core never references Files.App. ViewModels never call storage sources or
 Windows Shell APIs directly.
 
 ## Proposed source layout
@@ -57,11 +57,11 @@ src/Files.App/
     Adapters/StorageCommandAdapter.cs
     Adapters/ClipboardCommandAdapter.cs
   Archives/
-    ArchiveCredentialProvider.cs
+    ArchiveCredentialResolver.cs
     ArchiveCredentialDialogService.cs
   Connections/
     FtpConnectionProfileStore.cs
-    FtpCredentialProvider.cs
+    FtpCredentialResolver.cs
     FtpConnectionDialogService.cs
   Previews/
     PreviewPresenter.cs
@@ -356,7 +356,7 @@ public sealed class FilesAppHost : IAsyncDisposable
 			.AddWindowsStorage(
 				streamPreviewPolicy: services.StreamPreviewPolicy,
 				shellPreviewPolicy: services.ShellPreviewPolicy,
-				archiveCredentialProvider:
+				archiveCredentialResolver:
 					services.ArchiveCredentials)
 			.Build();
 
@@ -378,7 +378,7 @@ process services. That container ends at the composition root. Do not inject
 `IServiceProvider` into models or ViewModels.
 
 At startup, load every non-secret FTP profile and call `AddFtpStorage` before
-`Build`. `FtpCredentialProvider` resolves its password from Windows
+`Build`. `FtpCredentialResolver` resolves its password from Windows
 Credential Manager and may marshal an authentication request to the owning
 window. It must never add the password to a `StorageAddress`, navigation
 history, telemetry, or a ViewModel. Until Files.Core gains a mutable source
@@ -580,7 +580,7 @@ Can-execute state comes from `CanGoBack`, `CanGoForward`, `CanGoUp`,
 
 ### Opening archives
 
-The open command checks archive capabilities before ordinary folder shape.
+The open command checks archive item features before ordinary folder shape.
 This matters because Windows Shell can expose `.zip` or `.7z` as an
 `IFolderModel`, while an encrypted archive must still be routed to the
 SevenZip fallback.
@@ -610,7 +610,7 @@ private static BrowseLocation GetOpenLocation(
 }
 ```
 
-`ArchiveCredentialProvider` is window-aware application infrastructure. It
+`ArchiveCredentialResolver` is window-aware application infrastructure. It
 marshals to the owning window dispatcher, shows localized WinUI content, and
 returns `ArchiveCredential` or `null` when canceled. It does not store the
 password in navigation history or the item ViewModel.

@@ -1,8 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.Storage;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
@@ -71,7 +71,7 @@ public sealed class MemoryThumbnailCacheTests
 	}
 
 	[TestMethod]
-	public async Task DecoratorDoesNotRepopulateAfterInFlightExtractionIsInvalidated()
+	public async Task WrapperDoesNotRepopulateAfterInFlightExtractionIsInvalidated()
 	{
 		var factory = new TestModelFactory();
 		var coreModel = new TestStorable("item", "Item");
@@ -95,8 +95,8 @@ public sealed class MemoryThumbnailCacheTests
 			},
 		};
 		var cache = new MemoryThumbnailCache();
-		var decorated = new ThumbnailCacheDecorator(cache).Decorate(
-			new CapabilityContext(factory.Source, coreModel, reference),
+		var decorated = new ThumbnailCacheWrapper(cache).Wrap(
+			new ItemContext(factory.Source, coreModel, reference),
 			source);
 		var request = new ThumbnailRequest(64, ThumbnailMode.Content);
 

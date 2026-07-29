@@ -16,16 +16,16 @@ namespace Files.Core.Storage.Windows;
 internal sealed class WindowsStorableFactory
 {
 	private readonly IWindowsShellScheduler scheduler;
-	private readonly IWindowsItemIdentityProvider identityProvider;
+	private readonly IWindowsItemIdReader itemIdReader;
 	private readonly WindowsShellItemResolver resolver;
 
 	public WindowsStorableFactory(
 		IWindowsShellScheduler scheduler,
-		IWindowsItemIdentityProvider? identityProvider = null)
+		IWindowsItemIdReader? itemIdReader = null)
 	{
 		ArgumentNullException.ThrowIfNull(scheduler);
 		this.scheduler = scheduler;
-		this.identityProvider = identityProvider ?? new WindowsItemIdentityProvider();
+		this.itemIdReader = itemIdReader ?? new WindowsItemIdReader();
 		resolver = new WindowsShellItemResolver(scheduler);
 	}
 
@@ -39,7 +39,7 @@ internal sealed class WindowsStorableFactory
 
 		return resolver.InvokeAsync<WindowsStorable>(
 			parsingName,
-			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider)),
+			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, itemIdReader)),
 			cancellationToken);
 	}
 
@@ -56,7 +56,7 @@ internal sealed class WindowsStorableFactory
 					null,
 					out IShellItem shellItem);
 				result.ThrowOnFailure();
-				return Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider));
+				return Create(ShellItemHelpers.CreateDescriptor(shellItem, itemIdReader));
 			},
 			cancellationToken);
 	}
@@ -72,7 +72,7 @@ internal sealed class WindowsStorableFactory
 
 		return resolver.InvokeConcurrentAsync<WindowsStorable?>(
 			parsingName,
-			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider)),
+			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, itemIdReader)),
 			cancellationToken);
 	}
 
@@ -87,7 +87,7 @@ internal sealed class WindowsStorableFactory
 
 		return resolver.InvokeAsync<WindowsStorable?>(
 			absolutePidl,
-			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, identityProvider)),
+			shellItem => Create(ShellItemHelpers.CreateDescriptor(shellItem, itemIdReader)),
 			cancellationToken);
 	}
 
@@ -106,14 +106,14 @@ internal sealed class WindowsStorableFactory
 		StorageAddress? lastKnownAddress,
 		CancellationToken cancellationToken)
 	{
-		if (identityProvider.TryGetParsingName(itemId, out var parsingName))
+		if (itemIdReader.TryGetParsingName(itemId, out var parsingName))
 		{
 			var addressCandidate = await TryCreateAsync(parsingName, cancellationToken)
 				.ConfigureAwait(false);
 			return IsMatchingItem(addressCandidate, itemId) ? addressCandidate : null;
 		}
 
-		if (!identityProvider.IsFileSystemIdentity(itemId))
+		if (!itemIdReader.IsFileSystemIdentity(itemId))
 		{
 			return null;
 		}
@@ -184,7 +184,7 @@ internal sealed class WindowsStorableFactory
 					return null;
 				}
 
-				return Create(ShellItemHelpers.CreateDescriptor(parent, identityProvider)) as WindowsFolder;
+				return Create(ShellItemHelpers.CreateDescriptor(parent, itemIdReader)) as WindowsFolder;
 			},
 			cancellationToken);
 	}
@@ -213,7 +213,7 @@ internal sealed class WindowsStorableFactory
 				return new ShellFolderEnumerator(
 					scheduler,
 					enumerator,
-					identityProvider);
+					itemIdReader);
 			},
 			cancellationToken);
 	}

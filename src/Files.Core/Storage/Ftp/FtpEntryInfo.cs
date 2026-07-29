@@ -11,7 +11,7 @@ public enum FtpEntryKind
 }
 
 /// <summary>
-/// Contains provider-neutral metadata copied from an FTP listing.
+/// Contains source-neutral metadata copied from an FTP listing.
 /// </summary>
 public sealed record FtpEntryInfo
 {

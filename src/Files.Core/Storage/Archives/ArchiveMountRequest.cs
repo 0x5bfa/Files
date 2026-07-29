@@ -12,7 +12,7 @@ public sealed record ArchiveMountRequest
 		IStorableModel archiveModel,
 		ArchiveCredential? credential = null,
 		int credentialAttempt = 0,
-		IArchiveCredentialProvider? credentialProvider = null)
+		IArchiveCredentialResolver? credentialResolver = null)
 	{
 		ArgumentNullException.ThrowIfNull(source);
 		ArgumentNullException.ThrowIfNull(archiveModel);
@@ -22,7 +22,7 @@ public sealed record ArchiveMountRequest
 		ArchiveModel = archiveModel;
 		Credential = credential;
 		CredentialAttempt = credentialAttempt;
-		CredentialProvider = credentialProvider;
+		CredentialResolver = credentialResolver;
 	}
 
 	public IStorageSource Source { get; }
@@ -35,5 +35,5 @@ public sealed record ArchiveMountRequest
 
 	public int CredentialAttempt { get; }
 
-	public IArchiveCredentialProvider? CredentialProvider { get; }
+	public IArchiveCredentialResolver? CredentialResolver { get; }
 }

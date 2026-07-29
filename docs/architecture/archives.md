@@ -61,7 +61,7 @@ sequenceDiagram
         Selector->>SevenZip: TryMountAsync(backing stream, credential)
         alt Credential is missing or rejected
             SevenZip-->>Handler: CredentialRequired
-            Handler->>App: IArchiveCredentialProvider
+            Handler->>App: IArchiveCredentialResolver
             App-->>Handler: ArchiveCredential or cancel
             Handler->>Selector: Retry with credential
         else Credential is accepted
@@ -86,7 +86,7 @@ assumed to match.
 ## Files.App entry point
 
 Both a Shell archive folder and a normal file can expose
-`IArchiveSource`. Files.App must check this capability before treating an
+`IArchiveSource`. Files.App must check this item feature before treating an
 `IFolderModel` as an ordinary folder:
 
 ```csharp
@@ -144,11 +144,11 @@ twice.
 
 For Windows items, archive-extension detection uses the filesystem or Shell
 parsing name rather than the UI display name, so Explorer's “hide known file
-extensions” preference cannot change capability composition.
+extensions” preference cannot change item feature composition.
 
 Do not select by OS version. A Windows build, installed Shell extension,
 format, association, or policy can change whether the item is exposed as a
-folder. The actual storage shape and enumeration attempt are the capability
+folder. The actual storage shape and enumeration attempt are the item feature
 probe.
 
 ## SevenZip mount
@@ -201,14 +201,14 @@ deployment.
 
 ## Credentials
 
-Files.Core defines `IArchiveCredentialProvider`; Files.App supplies its
+Files.Core defines `IArchiveCredentialResolver`; Files.App supplies its
 implementation. Core never creates a dialog:
 
 ```csharp
-public sealed class ArchiveCredentialProvider
-	: IArchiveCredentialProvider
+public sealed class ArchiveCredentialResolver
+	: IArchiveCredentialResolver
 {
-	public async ValueTask<ArchiveCredential?> GetCredentialAsync(
+	public async ValueTask<ArchiveCredential?> ResolveAsync(
 		ArchiveCredentialChallenge challenge,
 		CancellationToken cancellationToken)
 	{
@@ -221,8 +221,8 @@ public sealed class ArchiveCredentialProvider
 ```
 
 Missing or rejected passwords produce a typed
-`ArchiveMountResult.CredentialRequired`. The handler asks the provider and
-retries before returning a context. Without a configured provider,
+`ArchiveMountResult.CredentialRequired`. The handler asks the resolver and
+retries before returning a context. Without a configured resolver,
 `ArchiveCredentialRequiredException` is surfaced. Credentials are not
 stored in `StorableReference`, `StorageAddress`, history, or view settings.
 `ArchiveCredential.ToString()` is intentionally redacted; application
@@ -230,9 +230,9 @@ telemetry must still avoid serializing its `Password` property.
 
 Some ZIP formats expose unencrypted directory metadata and validate the
 password only when an encrypted entry is extracted. The SevenZip mount
-retains the same credential-provider contract, serializes a new prompt,
+retains the same credential-resolver contract, serializes a new prompt,
 recreates its extractor over the seekable backing stream, clears partial
-output, and retries. Files.App's provider must therefore be safe to call from
+output, and retries. Files.App's resolver must therefore be safe to call from
 both location opening and later entry-stream opening.
 
 ## Ownership
@@ -272,7 +272,7 @@ Implemented:
 - read-only entry streams;
 - deterministic asynchronous cleanup.
 
-Separate archive operation providers are still required for compression,
+Separate archive operation handlers are still required for compression,
 extract-all, entry creation, entry deletion, rename, update, split volumes,
 and progress/collision policy. Those operations must reuse the same Core
 result and credential contracts without placing dialogs in Files.Core.

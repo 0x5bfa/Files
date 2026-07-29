@@ -3,8 +3,8 @@
 
 using System.Text;
 using Files.Core.Browsing;
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Previews;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Previews;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.Storage.Windows;
@@ -79,18 +79,18 @@ public sealed class WindowsShellPreviewTests
 	}
 
 	[TestMethod]
-	public async Task ShellProviderReturnsDescriptorOrBlockedResultWithoutActivation()
+	public async Task ShellLoaderReturnsDescriptorOrBlockedResultWithoutActivation()
 	{
 		var handlerClsid = Guid.NewGuid();
 		var resolver = new FakeHandlerResolver { HandlerClsid = handlerClsid };
 		var policy = new FakeShellPolicy();
-		var provider = new WindowsShellPreviewProvider(resolver, policy);
+		var loader = new WindowsShellPreviewLoader(resolver, policy);
 		var source = new TestStorageSource();
 		var file = new FakeWindowsFile("item", "document.pdf");
 		var context = CreateContext(source, file);
 
-		Assert.IsTrue(provider.CanProvide(context));
-		var result = await provider.GetPreviewAsync(new PreviewRequest(), context);
+		Assert.IsTrue(loader.CanLoad(context));
+		var result = await loader.GetPreviewAsync(new PreviewRequest(), context);
 
 		var descriptor = result as WindowsShellPreviewResult;
 		Assert.IsNotNull(descriptor);
@@ -100,21 +100,21 @@ public sealed class WindowsShellPreviewTests
 		Assert.AreEqual(1, resolver.ActivationCount);
 
 		policy.BlockReason = PreviewBlockReason.DisabledByPolicy;
-		var blocked = await provider.GetPreviewAsync(new PreviewRequest(), context);
+		var blocked = await loader.GetPreviewAsync(new PreviewRequest(), context);
 		Assert.IsInstanceOfType<BlockedPreviewResult>(blocked);
 		Assert.AreEqual(0, file.OpenCount);
 	}
 
 	[TestMethod]
-	public async Task ShellProviderReturnsNullWhenAssociationIsMissing()
+	public async Task ShellLoaderReturnsNullWhenAssociationIsMissing()
 	{
-		var provider = new WindowsShellPreviewProvider(
+		var loader = new WindowsShellPreviewLoader(
 			new FakeHandlerResolver(),
 			new FakeShellPolicy());
 		var source = new TestStorageSource();
 		var file = new FakeWindowsFile("item", "document.pdf");
 
-		var result = await provider.GetPreviewAsync(
+		var result = await loader.GetPreviewAsync(
 			new PreviewRequest(),
 			CreateContext(source, file));
 
@@ -149,8 +149,8 @@ public sealed class WindowsShellPreviewTests
 		var model = new StorableModel(
 			item,
 			requestedReference,
-			CapabilityPipeline.Empty.CreateSet(
-				new CapabilityContext(source, item, requestedReference)));
+			ItemFeatureRegistry.Empty.CreateFeatures(
+				new ItemContext(source, item, requestedReference)));
 
 		Assert.Throws<InvalidDataException>(() =>
 			new WindowsPreviewTarget(model, item));
@@ -256,22 +256,22 @@ public sealed class WindowsShellPreviewTests
 	{
 		var source = new TestStorageSource();
 		var handlerResolver = new FakeHandlerResolver { HandlerClsid = Guid.NewGuid() };
-		var streamProvider = new StreamPreviewProvider(
+		var streamLoader = new StreamPreviewLoader(
 			new ExtensionPreviewContentTypeResolver([
 				new KeyValuePair<string, string>(".txt", "text/plain"),
 			]),
 			new AllowPreviewPolicy());
-		var shellProvider = new WindowsShellPreviewProvider(
+		var shellLoader = new WindowsShellPreviewLoader(
 			handlerResolver,
 			new FakeShellPolicy());
-		var pipeline = new CapabilityPipelineBuilder()
-			.AddContributor<IPreviewSource>(
-				new PreviewProviderCapabilityContributor(streamProvider),
+		var featureRegistry = new ItemFeatureBuilder()
+			.Add<IPreviewSource>(
+				new PreviewSourceFactory(streamLoader),
 				priority: 200)
-			.AddContributor<IPreviewSource>(
-				new PreviewProviderCapabilityContributor(shellProvider),
+			.Add<IPreviewSource>(
+				new PreviewSourceFactory(shellLoader),
 				priority: 100)
-			.SetComposer<IPreviewSource>(new PreviewSourceComposer())
+			.SetCombiner<IPreviewSource>(new PreviewSourceCombiner())
 			.Build();
 
 		var textFile = new FakeWindowsFile("text", "readme.txt")
@@ -283,7 +283,7 @@ public sealed class WindowsShellPreviewTests
 		var textModel = new StorableModel(
 			textFile,
 			textReference,
-			pipeline.CreateSet(new CapabilityContext(source, textFile, textReference)));
+			featureRegistry.CreateFeatures(new ItemContext(source, textFile, textReference)));
 		await using var streamResult = await textModel
 			.Get<IPreviewSource>()!
 			.GetPreviewAsync(new PreviewRequest());
@@ -295,7 +295,7 @@ public sealed class WindowsShellPreviewTests
 		var shellModel = new StorableModel(
 			shellFile,
 			shellReference,
-			pipeline.CreateSet(new CapabilityContext(source, shellFile, shellReference)));
+			featureRegistry.CreateFeatures(new ItemContext(source, shellFile, shellReference)));
 		await using var shellResult = await shellModel
 			.Get<IPreviewSource>()!
 			.GetPreviewAsync(new PreviewRequest());
@@ -303,11 +303,11 @@ public sealed class WindowsShellPreviewTests
 		shellModel.Dispose();
 }
 
-	private static CapabilityContext CreateContext(
+	private static ItemContext CreateContext(
 		TestStorageSource source,
 		IStorable model)
 	{
-		return new CapabilityContext(
+		return new ItemContext(
 			source,
 			model,
 			new StorableReference(source.SourceId, model.Id));
@@ -327,8 +327,8 @@ public sealed class WindowsShellPreviewTests
 		var model = new StorableModel(
 			item,
 			reference,
-			CapabilityPipeline.Empty.CreateSet(
-				new CapabilityContext(source, item, reference)));
+			ItemFeatureRegistry.Empty.CreateFeatures(
+				new ItemContext(source, item, reference)));
 		return new WindowsPreviewTarget(model, item);
 	}
 
@@ -355,7 +355,7 @@ public sealed class WindowsShellPreviewTests
 		public int ActivationCount { get; private set; }
 
 		public ValueTask<Guid?> ResolveAsync(
-			CapabilityContext context,
+			ItemContext context,
 			CancellationToken cancellationToken = default)
 		{
 			ActivationCount++;
@@ -369,7 +369,7 @@ public sealed class WindowsShellPreviewTests
 		public PreviewBlockReason? BlockReason { get; set; }
 
 		public PreviewBlockReason? GetBlockReason(
-			CapabilityContext context,
+			ItemContext context,
 			Guid handlerClsid)
 			=> BlockReason;
 	}
@@ -378,7 +378,7 @@ public sealed class WindowsShellPreviewTests
 	{
 		public ValueTask<PreviewBlockReason?> GetBlockReasonAsync(
 			PreviewRequest request,
-			CapabilityContext context,
+			ItemContext context,
 			CancellationToken cancellationToken = default)
 			=> ValueTask.FromResult<PreviewBlockReason?>(null);
 	}

@@ -14,13 +14,13 @@ namespace Files.Core.Storage.Windows;
 /// </summary>
 public sealed class WindowsStorageSource : IStorageSource
 {
-	public const string DefaultProviderId = "windows-shell";
+	public const string DefaultSourceType = "windows-shell";
 	public const string FileAddressScheme = "file";
 	public const string ShellAddressScheme = "shell";
 
 	private readonly IReadOnlyList<Guid> rootFolderIds;
 	private readonly WindowsStorableFactory storableFactory;
-	private readonly WindowsShellChangeProvider changeProvider;
+	private readonly WindowsShellChangeWatcher changeWatcher;
 	private readonly bool ownsScheduler;
 	private readonly object disposalLock = new();
 	private Task? disposeTask;
@@ -34,30 +34,30 @@ public sealed class WindowsStorageSource : IStorageSource
 	{
 		ArgumentException.ThrowIfNullOrWhiteSpace(displayName);
 
-		SourceId = sourceId ?? new StorageSourceId(DefaultProviderId);
+		SourceId = sourceId ?? new StorageSourceId(DefaultSourceType);
 		DisplayName = displayName;
 		this.rootFolderIds = Array.AsReadOnly(
 			(rootFolderIds ?? [FOLDERID.FOLDERID_ComputerFolder]).ToArray());
 		Scheduler = scheduler ?? new WindowsShellScheduler();
 		ownsScheduler = scheduler is null;
 		storableFactory = new WindowsStorableFactory(Scheduler);
-		changeProvider = new WindowsShellChangeProvider(Scheduler);
+		changeWatcher = new WindowsShellChangeWatcher(Scheduler);
 	}
 
 	public StorageSourceId SourceId { get; }
 
-	public string ProviderId => DefaultProviderId;
+	public string SourceType => DefaultSourceType;
 
 	public string DisplayName { get; }
 
 	/// <summary>
-	/// Gets the shared scheduler used by Windows-backed capability contributors.
+	/// Gets the shared scheduler used by Windows-backed item feature factories.
 	/// </summary>
 	public IWindowsShellScheduler Scheduler { get; }
 
 	internal WindowsShellItemResolver ShellItemResolver => storableFactory.Resolver;
 
-	internal WindowsShellChangeProvider ChangeProvider => changeProvider;
+	internal WindowsShellChangeWatcher ChangeWatcher => changeWatcher;
 
 	internal Task<WindowsStorable?> TryCreateFromAbsolutePidlAsync(
 		ReadOnlyMemory<byte> absolutePidl,
@@ -182,7 +182,7 @@ public sealed class WindowsStorageSource : IStorageSource
 
 		try
 		{
-			await changeProvider.DisposeAsync().ConfigureAwait(false);
+			await changeWatcher.DisposeAsync().ConfigureAwait(false);
 		}
 		catch (Exception error)
 		{

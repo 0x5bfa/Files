@@ -3,7 +3,7 @@
 Files.Core is complete as the UI-independent foundation required to begin the
 new Files.App. “Complete” here means the architectural contracts plus the
 Windows and FTP vertical slices are usable end to end; it does not mean every
-future storage provider or Files feature is implemented.
+future storage source or Files feature is implemented.
 
 ## Ready for Files.App
 
@@ -14,10 +14,10 @@ future storage provider or Files feature is implemented.
 | Archives | Shell-first browsing, SevenZip fallback, encrypted credentials, read-only entry streams |
 | Items | Stable identity, immutable model replacement, selection |
 | Presentation | View settings, sorting, item changes, viewport prefetch |
-| Capabilities | Contributors, per-contract composers, decorators, ownership |
+| Item features | Factories, per-contract combiners, wrappers, ownership |
 | Thumbnails | Windows Shell PNG bytes, shared cache, invalidation |
-| Properties | Item-bound and batch-provider contracts, typed Windows values |
-| Folder changes | Shared `SHChangeNotifyRegister` provider and incremental updates |
+| Properties | Item-bound and batch-source contracts, typed Windows values |
+| Folder changes | Shared `SHChangeNotifyRegister` source and incremental updates |
 | Previews | Stream results and Windows Shell preview sessions |
 | Operations | Create, case-preserving rename, copy, move, Recycle Bin/permanent delete, collision policy |
 | FTP | FTP/FTPS resolution, streams, properties, same-source mutations, previews and archive reuse |
@@ -30,24 +30,24 @@ These do not block the new Files.App:
 
 - Search and tag have typed `BrowseLocation` values but require a chosen
   index/backend and corresponding location handler.
-- Cloud, MTP, SFTP, and other sources implement the same source, capability,
+- Cloud, MTP, SFTP, and other sources implement the same source, item feature,
   location, and operation contracts as later vertical slices.
 - FTP profiles are composed before `Build`. Runtime add/remove needs a mutable
   source registry with explicit ownership semantics.
 - Cross-source copies such as Windows-to-FTP need a generic stream-transfer
-  coordinator; the FTP provider deliberately owns only same-source requests.
+  coordinator; the FTP source deliberately owns only same-source requests.
 - Archive browsing and read streams are implemented. Compression,
   extract-all, entry mutations, split volumes, and archive operation
-  progress remain separate operation-provider work.
+  progress remain separate operation-source work.
 - Cold recovery of a moved Windows file from only an old same-volume address
   needs a file-ID index or `OpenFileById` strategy. Live operations already
   return an updated reference and watchers update open sessions.
 - Windows property extraction currently covers the typed values used by the
   first details view. Additional canonical properties can be added to
-  `WindowsPropertyProvider` without changing AppModels.
+  `WindowsPropertyReader` without changing AppModels.
 - Context menus, Shell verbs, drag/drop data packages, sharing, and
   application activation are Files.App/platform adapters, not item storage
-  capabilities. Their command, OLE, transfer, threading, and ownership design
+  item features. Their command, OLE, transfer, threading, and ownership design
   is specified in [Files.App command execution](commands.md) and
   [Clipboard, drag/drop, and Shell integration](platform-interactions.md).
 - Durable view settings, window-session serialization, telemetry, and policy

@@ -1,9 +1,9 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities.Previews;
-using Files.Core.Capabilities.Properties;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Previews;
+using Files.Core.ItemFeatures.Properties;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.ViewSettings;
 
 namespace Files.Core.Tests;
@@ -12,7 +12,7 @@ namespace Files.Core.Tests;
 public sealed class ContractValidationTests
 {
 	[TestMethod]
-	public void CapabilityRequestsRejectUnknownEnumsAndInvalidIds()
+	public void FeatureRequestsRejectUnknownEnumsAndInvalidIds()
 	{
 		Assert.Throws<ArgumentOutOfRangeException>(
 			() => new ThumbnailRequest(

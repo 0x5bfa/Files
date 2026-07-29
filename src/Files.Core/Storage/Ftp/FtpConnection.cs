@@ -11,7 +11,7 @@ namespace Files.Core.Storage.Ftp;
 internal sealed class FtpConnection : IAsyncDisposable
 {
 	private readonly FtpConnectionProfile profile;
-	private readonly IFtpCredentialProvider credentialProvider;
+	private readonly IFtpCredentialResolver credentialResolver;
 	private readonly IFtpSessionFactory sessionFactory;
 	private readonly SemaphoreSlim credentialLock = new(1, 1);
 	private FtpCredential? credential;
@@ -19,15 +19,15 @@ internal sealed class FtpConnection : IAsyncDisposable
 
 	public FtpConnection(
 		FtpConnectionProfile profile,
-		IFtpCredentialProvider credentialProvider,
+		IFtpCredentialResolver credentialResolver,
 		IFtpSessionFactory sessionFactory)
 	{
 		ArgumentNullException.ThrowIfNull(profile);
-		ArgumentNullException.ThrowIfNull(credentialProvider);
+		ArgumentNullException.ThrowIfNull(credentialResolver);
 		ArgumentNullException.ThrowIfNull(sessionFactory);
 
 		this.profile = profile;
-		this.credentialProvider = credentialProvider;
+		this.credentialResolver = credentialResolver;
 		this.sessionFactory = sessionFactory;
 	}
 
@@ -134,7 +134,7 @@ internal sealed class FtpConnection : IAsyncDisposable
 	private async ValueTask<IFtpSession> OpenSessionAsync(
 		CancellationToken cancellationToken)
 	{
-		var currentCredential = await GetCredentialAsync(
+		var currentCredential = await ResolveCredentialAsync(
 			isRetry: false,
 			rejectedCredential: null,
 			cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -149,7 +149,7 @@ internal sealed class FtpConnection : IAsyncDisposable
 		}
 		catch (FtpAuthenticationRequiredException)
 		{
-			var refreshedCredential = await GetCredentialAsync(
+			var refreshedCredential = await ResolveCredentialAsync(
 				isRetry: true,
 				rejectedCredential: currentCredential,
 				cancellationToken: cancellationToken).ConfigureAwait(false);
@@ -162,7 +162,7 @@ internal sealed class FtpConnection : IAsyncDisposable
 		}
 	}
 
-	private async ValueTask<FtpCredential> GetCredentialAsync(
+	private async ValueTask<FtpCredential> ResolveCredentialAsync(
 		bool isRetry,
 		FtpCredential? rejectedCredential,
 		CancellationToken cancellationToken)
@@ -186,8 +186,8 @@ internal sealed class FtpConnection : IAsyncDisposable
 				credential = null;
 			}
 
-			credential ??= await credentialProvider
-				.GetCredentialAsync(
+			credential ??= await credentialResolver
+				.ResolveAsync(
 					new FtpCredentialRequest(
 						profile,
 						isRetry),

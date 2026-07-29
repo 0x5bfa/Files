@@ -4,29 +4,29 @@
 namespace Files.Core.Storage;
 
 /// <summary>
-/// Routes requests to the first provider that supports them.
+/// Routes requests to the first handler that supports them.
 /// </summary>
 public sealed class StorageOperationService : IStorageOperationService
 {
-	private readonly IReadOnlyList<IStorageOperationProvider> providers;
+	private readonly IReadOnlyList<IStorageOperationHandler> handlers;
 
-	public StorageOperationService(IEnumerable<IStorageOperationProvider> providers)
+	public StorageOperationService(IEnumerable<IStorageOperationHandler> handlers)
 	{
-		ArgumentNullException.ThrowIfNull(providers);
+		ArgumentNullException.ThrowIfNull(handlers);
 
-		this.providers = providers.ToArray();
-		if (this.providers.Any(static provider => provider is null))
+		this.handlers = handlers.ToArray();
+		if (this.handlers.Any(static handler => handler is null))
 		{
 			throw new ArgumentException(
-				"The provider collection cannot contain null entries.",
-				nameof(providers));
+				"The handler collection cannot contain null entries.",
+				nameof(handlers));
 		}
 	}
 
 	public bool CanHandle(StorageOperationRequest request)
 	{
 		ArgumentNullException.ThrowIfNull(request);
-		return providers.Any(provider => provider.CanHandle(request));
+		return handlers.Any(handler => handler.CanHandle(request));
 	}
 
 	public async ValueTask<StorageOperationResult> ExecuteAsync(
@@ -37,10 +37,10 @@ public sealed class StorageOperationService : IStorageOperationService
 		ArgumentNullException.ThrowIfNull(request);
 		cancellationToken.ThrowIfCancellationRequested();
 
-		IStorageOperationProvider? provider = null;
+		IStorageOperationHandler? handler = null;
 		try
 		{
-			provider = providers.FirstOrDefault(
+			handler = handlers.FirstOrDefault(
 				candidate => candidate.CanHandle(request));
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -52,19 +52,19 @@ public sealed class StorageOperationService : IStorageOperationService
 			return Failed(exception);
 		}
 
-		if (provider is null)
+		if (handler is null)
 		{
 			return Failed(new NotSupportedException(
-				$"No storage operation provider can handle '{request.GetType().Name}'."));
+				$"No storage operation handler can handle '{request.GetType().Name}'."));
 		}
 
 		try
 		{
-			StorageOperationResult? result = await provider
+			StorageOperationResult? result = await handler
 				.ExecuteAsync(request, progress, cancellationToken)
 				.ConfigureAwait(false);
 			return result ?? Failed(new InvalidOperationException(
-				$"Storage operation provider '{provider.GetType().FullName}' returned null."));
+				$"Storage operation handler '{handler.GetType().FullName}' returned null."));
 		}
 		catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
 		{

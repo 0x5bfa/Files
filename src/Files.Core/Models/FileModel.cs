@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
+using Files.Core.ItemFeatures;
 using Files.Core.Storage;
 using OwlCore.Storage;
 
@@ -12,8 +12,8 @@ public sealed class FileModel : StorableModel, IFileModel
 	public FileModel(
 		IFile file,
 		StorableReference reference,
-		ICapabilitySet capabilities)
-		: base(file, reference, capabilities)
+		IItemFeatures features)
+		: base(file, reference, features)
 	{
 		File = file;
 	}

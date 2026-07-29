@@ -13,18 +13,18 @@ internal sealed class BrowseItemProjection
 
 	private readonly Dictionary<StorableKey, IStorableModel> modelsByKey = [];
 	private readonly List<IStorableModel> orderedItems = [];
-	private readonly Func<IStorableModel, string, object?>? propertyValueProvider;
+	private readonly Func<IStorableModel, string, object?>? propertyValueGetter;
 	private IReadOnlyList<IStorableModel> orderedItemsSnapshot =
 		Array.Empty<IStorableModel>();
 	private IComparer<IStorableModel> comparer;
 
 	public BrowseItemProjection(
 		BrowseViewSettings settings,
-		Func<IStorableModel, string, object?>? propertyValueProvider = null)
+		Func<IStorableModel, string, object?>? propertyValueGetter = null)
 	{
 		ArgumentNullException.ThrowIfNull(settings);
-		this.propertyValueProvider = propertyValueProvider;
-		comparer = CreateComparer(settings, propertyValueProvider);
+		this.propertyValueGetter = propertyValueGetter;
+		comparer = CreateComparer(settings, propertyValueGetter);
 	}
 
 	public IReadOnlyList<IStorableModel> Items =>
@@ -180,7 +180,7 @@ internal sealed class BrowseItemProjection
 		var previousKeys = orderedItems
 			.Select(static item => item.Reference.GetKey())
 			.ToArray();
-		comparer = CreateComparer(settings, propertyValueProvider);
+		comparer = CreateComparer(settings, propertyValueGetter);
 		orderedItems.Sort(comparer);
 		if (previousKeys.SequenceEqual(
 			orderedItems.Select(static item => item.Reference.GetKey())))
@@ -235,28 +235,28 @@ internal sealed class BrowseItemProjection
 
 	private static IComparer<IStorableModel> CreateComparer(
 		BrowseViewSettings settings,
-		Func<IStorableModel, string, object?>? propertyValueProvider)
+		Func<IStorableModel, string, object?>? propertyValueGetter)
 	{
 		return new BrowseItemComparer(
 			settings.SortPropertyId,
 			settings.SortDirection,
-			propertyValueProvider);
+			propertyValueGetter);
 	}
 
 	private sealed class BrowseItemComparer : IComparer<IStorableModel>
 	{
 		private readonly string? propertyId;
 		private readonly int direction;
-		private readonly Func<IStorableModel, string, object?>? propertyValueProvider;
+		private readonly Func<IStorableModel, string, object?>? propertyValueGetter;
 
 		public BrowseItemComparer(
 			string? propertyId,
 			ViewSortDirection sortDirection,
-			Func<IStorableModel, string, object?>? propertyValueProvider)
+			Func<IStorableModel, string, object?>? propertyValueGetter)
 		{
 			this.propertyId = propertyId;
 			direction = sortDirection is ViewSortDirection.Ascending ? 1 : -1;
-			this.propertyValueProvider = propertyValueProvider;
+			this.propertyValueGetter = propertyValueGetter;
 		}
 
 		public int Compare(IStorableModel? x, IStorableModel? y)
@@ -304,8 +304,8 @@ internal sealed class BrowseItemProjection
 			IStorableModel x,
 			IStorableModel y)
 		{
-			var xValue = propertyValueProvider?.Invoke(x, propertyId!);
-			var yValue = propertyValueProvider?.Invoke(y, propertyId!);
+			var xValue = propertyValueGetter?.Invoke(x, propertyId!);
+			var yValue = propertyValueGetter?.Invoke(y, propertyId!);
 			if (xValue is null || yValue is null)
 			{
 				if (xValue is null && yValue is null)

@@ -1,8 +1,8 @@
 # Storage operations
 
-Storage mutation is request-based and provider-routed. Files.App constructs a
+Storage mutation is request-based and handler-routed. Files.App constructs a
 UI-independent request from stable references; `StorageOperationService`
-selects the first provider that accepts it.
+selects the first handler that accepts it.
 
 ## Contracts
 
@@ -34,16 +34,16 @@ connectivity, collisions, or identity may change before execution.
 sequenceDiagram
     participant VM as Command adapter
     participant Service as Operation service
-    participant Provider as Storage provider
+    participant Handler as Storage operation handler
     participant Backend as Backend API
     participant Watcher as Folder watcher
 
     VM->>Service: ExecuteAsync(request)
-    Service->>Provider: CanHandle(request)
-    Service->>Provider: ExecuteAsync(request)
-    Provider->>Backend: perform mutation
-    Backend-->>Provider: completion
-    Provider-->>Service: result reference
+    Service->>Handler: CanHandle(request)
+    Service->>Handler: ExecuteAsync(request)
+    Handler->>Backend: perform mutation
+    Backend-->>Handler: completion
+    Handler-->>Service: result reference
     Service-->>VM: StorageOperationResult
     Watcher-->>VM: browse-session update
 ```
@@ -54,7 +54,7 @@ command can distinguish cancellation from a failed operation.
 
 ## Windows implementation
 
-`WindowsStorageOperationProvider` uses `IFileOperation` on the dedicated
+`WindowsStorageOperationHandler` uses `IFileOperation` on the dedicated
 operation STA. It supports:
 
 - filesystem create;
@@ -73,7 +73,7 @@ Windows path comparison deliberately has two meanings:
 - exact path spelling comparison is ordinal and case-sensitive.
 
 Consequently, renaming `report.txt` to `REPORT.TXT` is not treated as a no-op.
-When the case-insensitive destination already exists, the provider resolves it
+When the case-insensitive destination already exists, the handler resolves it
 and permits the rename only if its stable `ItemId` matches the source item.
 Copy and move derive their default name from `FileSystemPath`, not the Shell
 display name, because display names may hide a file extension.
@@ -117,7 +117,7 @@ An operation never mutates an existing `IStorableModel`. Folder notifications
 or refresh replace the old snapshot with a new model.
 
 - A same-volume rename normally retains `ItemId`.
-- A move may retain or change `ItemId`, depending on provider semantics.
+- A move may retain or change `ItemId`, depending on source semantics.
 - A copy always represents a new item.
 - `LastKnownAddress` is updated in the returned reference but is excluded
   from reference equality.
@@ -128,16 +128,16 @@ remains authoritative for the displayed item collection.
 
 ## Multi-item commands
 
-The provider contract intentionally operates on one request. Files.App may
+The handler contract intentionally operates on one request. Files.App may
 run a bounded sequence for multi-selection and aggregate progress, or a
-backend may add a specialized batch request/provider later. Keeping the
-single-item semantic stable avoids pretending that all providers support one
+backend may add a specialized batch handler later. Keeping the single-item
+semantic stable avoids pretending that all storage systems support one
 atomic bulk transaction.
 
 For a Files.App batch adapter:
 
 1. capture all selected `StorableReference` values;
-2. execute with bounded concurrency appropriate to the provider;
+2. execute with bounded concurrency appropriate to the source;
 3. stop scheduling new items when canceled;
 4. retain per-item failures rather than losing partial success;
 5. let folder notifications reconcile the visible session;

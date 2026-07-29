@@ -1,6 +1,6 @@
 # Browse view settings
 
-Details-view column widths, layout mode, sort selection, and item size describe how a browse location is presented. They are not properties or capabilities of one storage item.
+Details-view column widths, layout mode, sort selection, and item size describe how a browse location is presented. They are not properties or item features of one storage item.
 
 Files.Core therefore places them on `IBrowseSessionModel` and persists them
 through `IViewSettingsStore`.
@@ -72,7 +72,7 @@ When the active context exposes `IFolderChangeSource`, the session subscribes to
 
 The projection sorts `name` and `System.ItemNameDisplay` directly from `IStorableModel.Name`. Other property IDs use values already published into `BrowseItemPresentation`. Unavailable values remain at the end in either direction, with name and stable identity as deterministic tie-breakers.
 
-Selection is stored as stable `StorableKey` values rather than model references or addresses. Synchronous UI selection updates normalize against one `ItemsVersion`; if an item mutation races that normalization, the update retries against the new snapshot. Rename migrates selection only when the provider identity changes.
+Selection is stored as stable `StorableKey` values rather than model references or addresses. Synchronous UI selection updates normalize against one `ItemsVersion`; if an item mutation races that normalization, the update retries against the new snapshot. Rename migrates selection only when the source identity changes.
 
 Session events isolate each subscriber exception and continue to later subscribers, so a faulty observer cannot roll back an already committed model transition. Handlers should remain short and schedule asynchronous follow-up work instead of synchronously waiting on another session mutation.
 
@@ -84,14 +84,14 @@ Session events isolate each subscriber exception and continue to later subscribe
 flowchart TD
     Viewport["Viewport + settings"]
     Work["Capture generation + content version"]
-    Capability["Property and thumbnail sources"]
+    ItemFeature["Property and thumbnail sources"]
     Validate{"Snapshot still current?"}
     Presentation["BrowseItemPresentation"]
     Discard["Discard stale result"]
 
     Viewport --> Work
-    Work --> Capability
-    Capability --> Validate
+    Work --> ItemFeature
+    ItemFeature --> Validate
     Validate -->|Yes| Presentation
     Validate -->|No| Discard
 ```
@@ -101,15 +101,15 @@ The session uses two independent counters:
 - `Generation` changes when a browse context is replaced.
 - The internal content version changes whenever item model membership or a model snapshot changes within that context.
 
-The coordinator checks both before and after every awaited capability call. The session then checks both again and verifies that the exact model instance is still present before accepting the result. An incremental rename, update, delete, or create therefore cancels old work even though `Generation` is unchanged.
+The coordinator checks both before and after every awaited item feature call. The session then checks both again and verifies that the exact model instance is still present before accepting the result. An incremental rename, update, delete, or create therefore cancels old work even though `Generation` is unchanged.
 
-Accepted properties and copied thumbnail bytes are retained in `BrowseItemPresentation`. Consumers read them with `TryGetPresentation` and observe `ItemPresentationChanged`; property-based sorting re-evaluates as requested values arrive. This store is snapshot-scoped and is cleared or invalidated when models are replaced, so the prefetch result is useful even when no capability decorator provides a shared cache.
+Accepted properties and copied thumbnail bytes are retained in `BrowseItemPresentation`. Consumers read them with `TryGetPresentation` and observe `ItemPresentationChanged`; property-based sorting re-evaluates as requested values arrive. This store is snapshot-scoped and is cleared or invalidated when models are replaced, so the prefetch result is useful even when no item feature wrapper provides a shared cache.
 
 ## Why this is not `FolderModel.Get<IViewSettings>()`
 
 - Home, search, and tag pages have view settings but are not folders.
 - The same folder can be open in two panes with independent transient presentation state.
-- A storage provider should not know column pixel widths or the user's preferred layout.
-- Item capabilities disappear with an item model; saved view settings must survive model recreation.
+- A storage source should not know column pixel widths or the user's preferred layout.
+- Item features disappear with an item model; saved view settings must survive model recreation.
 
 The session owns current state and its UI-agnostic projection, the store owns persistence, and the ViewModel adapts versioned model changes and presentation values into WinUI collections and image objects.

@@ -11,7 +11,7 @@ namespace Files.Core.Tests;
 public sealed class WindowsFilesCoreBuilderTests
 {
 	[TestMethod]
-	public async Task DefaultWindowsSliceBuildsOperationsCapabilitiesAndPreviews()
+	public async Task DefaultWindowsSliceBuildsOperationsFeaturesAndPreviews()
 	{
 		var runtime = new FilesCoreBuilder()
 			.AddWindowsStorage()
@@ -25,8 +25,8 @@ public sealed class WindowsFilesCoreBuilderTests
 				@"C:\missing.txt"));
 
 		Assert.AreEqual(
-			WindowsStorageSource.DefaultProviderId,
-			source.ProviderId);
+			WindowsStorageSource.DefaultSourceType,
+			source.SourceType);
 		Assert.IsNotNull(runtime.WindowsShellPreviewSessions);
 		Assert.IsTrue(
 			runtime.StorageOperations.CanHandle(

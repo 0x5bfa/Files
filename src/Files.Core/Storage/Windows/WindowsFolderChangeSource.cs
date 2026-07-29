@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Diagnostics;
-using Files.Core.Capabilities.Changes;
+using Files.Core.ItemFeatures.Changes;
 using Files.Core.Storage;
 using Windows.Win32.UI.Shell;
 
@@ -15,7 +15,7 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 	private readonly CancellationTokenSource lifetime = new();
 	private readonly SemaphoreSlim lifecycleGate = new(1, 1);
 	private readonly object disposeSync = new();
-	private WindowsShellChangeProvider.WindowsShellChangeSubscription? subscription;
+	private WindowsShellChangeWatcher.WindowsShellChangeSubscription? subscription;
 	private Task? pumpTask;
 	private Task? disposeTask;
 	private int isStarted;
@@ -58,7 +58,7 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 				CancellationTokenSource.CreateLinkedTokenSource(
 					cancellationToken,
 					lifetime.Token);
-			var newSubscription = await source.ChangeProvider
+			var newSubscription = await source.ChangeWatcher
 				.SubscribeAsync(
 					folderLocator,
 					recursive: false,
@@ -118,7 +118,7 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 	}
 
 	private async Task PumpAsync(
-		WindowsShellChangeProvider.WindowsShellChangeSubscription changeSubscription,
+		WindowsShellChangeWatcher.WindowsShellChangeSubscription changeSubscription,
 		CancellationToken cancellationToken)
 	{
 		try
@@ -272,7 +272,7 @@ internal sealed class WindowsFolderChangeSource : IFolderChangeSource
 
 	private async Task DisposeAsyncCore()
 	{
-		WindowsShellChangeProvider.WindowsShellChangeSubscription? currentSubscription;
+		WindowsShellChangeWatcher.WindowsShellChangeSubscription? currentSubscription;
 		Task? currentPump;
 		var errors = new List<Exception>();
 

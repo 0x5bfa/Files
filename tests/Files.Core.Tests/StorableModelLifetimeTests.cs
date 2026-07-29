@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
+using Files.Core.ItemFeatures;
 using Files.Core.Browsing;
 using Files.Core.Models;
 
@@ -11,23 +11,23 @@ namespace Files.Core.Tests;
 public sealed class StorableModelLifetimeTests
 {
 	[TestMethod]
-	public async Task ModelAwaitsCapabilitiesBeforeAsyncCoreModel()
+	public async Task ModelAwaitsFeaturesBeforeAsyncCoreModel()
 	{
 		var order = new List<string>();
-		var pipeline = new CapabilityPipelineBuilder()
-			.AddContributor<AsyncOrderCapability>(
-				new DelegateCapabilityContributor<AsyncOrderCapability>(
-					_ => new AsyncOrderCapability(order)))
+		var featureRegistry = new ItemFeatureBuilder()
+			.Add<AsyncOrderFeature>(
+				new DelegateItemFeatureFactory<AsyncOrderFeature>(
+					_ => new AsyncOrderFeature(order)))
 			.Build();
-		var factory = new StorableModelFactory(pipeline);
+		var factory = new StorableModelFactory(featureRegistry);
 		var coreModel = new AsyncOrderStorable("item", "Item", order);
 		var model = factory.Create(new TestStorageSource(), coreModel);
 
-		Assert.IsNotNull(model.Get<AsyncOrderCapability>());
+		Assert.IsNotNull(model.Get<AsyncOrderFeature>());
 		await model.DisposeAsync();
 
 		CollectionAssert.AreEqual(
-			new[] { "capability", "core" },
+			new[] { "feature", "core" },
 			order);
 	}
 
@@ -84,11 +84,11 @@ public sealed class StorableModelLifetimeTests
 		Assert.IsTrue(coreModel.IsDisposed);
 	}
 
-	private sealed class AsyncOrderCapability : IAsyncDisposable
+	private sealed class AsyncOrderFeature : IAsyncDisposable
 	{
 		private readonly IList<string> order;
 
-		public AsyncOrderCapability(IList<string> order)
+		public AsyncOrderFeature(IList<string> order)
 		{
 			this.order = order;
 		}
@@ -96,7 +96,7 @@ public sealed class StorableModelLifetimeTests
 		public async ValueTask DisposeAsync()
 		{
 			await Task.Yield();
-			order.Add("capability");
+			order.Add("feature");
 		}
 	}
 

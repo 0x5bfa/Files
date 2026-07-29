@@ -1,9 +1,9 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Properties;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Properties;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.Models;
 using Files.Core.ViewSettings;
 

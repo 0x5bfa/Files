@@ -15,10 +15,10 @@ internal static unsafe class ShellItemHelpers
 {
 	public static WindowsStorableDescriptor CreateDescriptor(
 		IShellItem shellItem,
-		IWindowsItemIdentityProvider identityProvider)
+		IWindowsItemIdReader itemIdReader)
 	{
 		ArgumentNullException.ThrowIfNull(shellItem);
-		ArgumentNullException.ThrowIfNull(identityProvider);
+		ArgumentNullException.ThrowIfNull(itemIdReader);
 
 		var result = shellItem.GetAttributes(
 			SFGAO_FLAGS.SFGAO_FOLDER
@@ -36,7 +36,7 @@ internal static unsafe class ShellItemHelpers
 		var fileSystemPath = (attributes & SFGAO_FLAGS.SFGAO_FILESYSTEM) != 0
 			? TryGetDisplayName(shellItem, SIGDN.SIGDN_FILESYSPATH)
 			: null;
-		var itemId = identityProvider.GetItemId(
+		var itemId = itemIdReader.GetItemId(
 			shellItem,
 			parsingName,
 			fileSystemPath);

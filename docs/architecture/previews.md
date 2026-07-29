@@ -1,6 +1,6 @@
-# Preview pipeline
+# Preview loading
 
-Previews are UI-independent capabilities. `BrowsePreviewModel` selects the
+Previews are UI-independent item features. `BrowsePreviewModel` selects the
 current item, while an `IPreviewSource` turns that item into a disposable
 `PreviewResult`. WinUI image, media, and document renderers consume the result
 outside `Files.Core`.
@@ -13,50 +13,50 @@ session.
 ```mermaid
 flowchart TD
     Browse["BrowsePreviewModel"]
-    Pipeline["Preview capability pipeline"]
+    Registry["ItemFeatureRegistry"]
     Result["WindowsShellPreviewResult"]
     Factory["Shell session factory"]
     Session["Preview session on dedicated STA"]
     Host["Future WinUI host adapter"]
     Handler["Windows IPreviewHandler"]
 
-    Browse --> Pipeline
-    Pipeline --> Result
+    Browse --> Registry
+    Registry --> Result
     Host --> Factory
     Result --> Factory
     Factory --> Session
     Session --> Handler
 ```
 
-## Provider and item-bound source
+## Shared loader and item-bound source
 
-Providers contain reusable backend logic. A
-`PreviewProviderCapabilityContributor` binds a provider to one
-`CapabilityContext`, producing the item-bound `IPreviewSource` exposed by the
+Loaders contain reusable backend logic. A
+`PreviewSourceFactory` binds a loader to one
+`ItemContext`, producing the item-bound `IPreviewSource` exposed by the
 model.
 
 ```mermaid
 flowchart LR
     Browse["BrowsePreviewModel"] --> Model["StorableModel"]
-    Model --> Source["IPreviewSource"]
-    Source --> Provider["StreamPreviewProvider"]
-    Model -. capability context .-> Contributor["PreviewProviderCapabilityContributor"]
-    Contributor -. binds .-> Source
-    Provider --> File["IFile.OpenStreamAsync"]
+    Model --> ItemSource["IPreviewSource"]
+    ItemSource --> Loader["StreamPreviewLoader"]
+    Model -. item feature context .-> Factory["PreviewSourceFactory"]
+    Factory -. binds .-> ItemSource
+    Loader --> File["IFile.OpenStreamAsync"]
     File --> Result["StreamPreviewResult"]
     Result --> Renderer["UI renderer outside Files.Core"]
 ```
 
-`StreamPreviewProvider` currently supports `IFile` core models whose name has
+`StreamPreviewLoader` currently supports `IFile` core models whose name has
 an explicitly registered extension. `ExtensionPreviewContentTypeResolver`
 owns that mapping and is case-insensitive. There is no implicit
 `application/octet-stream` fallback: an unknown extension is unavailable, so
-another provider may try.
+another loader may try.
 
 ## Composition and blocking
 
-`PreviewSourceComposer` orders candidates by descending priority and asks each
-source until one returns a non-null result. `null` means “this provider does
+`PreviewSourceCombiner` orders options by descending priority and asks each
+source until one returns a non-null result. `null` means “this source does
 not handle the item”; a `BlockedPreviewResult` is a deliberate terminal
 answer and prevents lower-priority fallback.
 
@@ -69,10 +69,10 @@ Files.App should inject its hydration and trust policy.
 
 ## Stream ownership and size limits
 
-After `IFile.OpenStreamAsync` succeeds, `StreamPreviewProvider` owns the
+After `IFile.OpenStreamAsync` succeeds, `StreamPreviewLoader` owns the
 stream until it returns a result. On success, ownership transfers to
 `StreamPreviewResult`; its `DisposeAsync` is idempotent. On cancellation,
-opening/read failure, or an over-limit result, the provider disposes the
+opening/read failure, or an over-limit result, the loader disposes the
 opened stream.
 
 With no `MaximumBytes`, the original stream is returned without buffering. If
@@ -87,23 +87,23 @@ and reports the actual length.
 `BrowsePreviewModel` owns the current result and cancels an older request when
 selection, item identity, or browse generation changes. A result completed by
 an obsolete request is disposed rather than published. This keeps the
-capability contract independent from WinUI thread affinity and leaves image
+item feature contract independent from WinUI thread affinity and leaves image
 creation, such as `BitmapImage.SetSourceAsync`, to the UI layer.
 
 ```mermaid
 sequenceDiagram
     participant Browse as BrowsePreviewModel
-    participant Source as IPreviewSource
-    participant Provider as StreamPreviewProvider
+    participant ItemSource as IPreviewSource
+    participant Loader as StreamPreviewLoader
     participant File as IFile
     participant UI as UI renderer
 
-    Browse->>Source: GetPreviewAsync(request, cancellationToken)
-    Source->>Provider: bound context
-    Provider->>Provider: resolve type and access policy
-    Provider->>File: OpenStreamAsync(Read)
-    File-->>Provider: owned stream
-    Provider-->>Browse: StreamPreviewResult
+    Browse->>ItemSource: GetPreviewAsync(request, cancellationToken)
+    ItemSource->>Loader: bound context
+    Loader->>Loader: resolve type and access policy
+    Loader->>File: OpenStreamAsync(Read)
+    File-->>Loader: owned stream
+    Loader-->>Browse: StreamPreviewResult
     Browse-->>UI: current result
     UI->>Browse: dispose obsolete/current result
 ```
@@ -127,7 +127,7 @@ Shell association API (`AssocQueryStringW`) using the preview-handler Shell
 extension category. It normalizes extensions, performs the required-size
 query before allocating the native result buffer, and caches both successful
 and missing associations. A malformed CLSID is treated as unavailable. The
-provider therefore performs no COM activation, file open, or HWND work.
+loader therefore performs no COM activation, file open, or HWND work.
 
 The session factory uses a dedicated `WindowsShellScheduler` instance. Every
 activation, handler method call, `IShellItem`/stream creation, and COM release
@@ -162,8 +162,8 @@ Both cleanup steps are attempted and multiple failures are aggregated.
 Activation failure similarly cleans the controller on the preview STA and
 awaits target-model disposal before returning the original error.
 
-`AddWindowsStorage` gives `StreamPreviewProvider` priority 200 and
-`WindowsShellPreviewProvider` priority 100. Known stream formats are therefore
+`AddWindowsStorage` gives `StreamPreviewLoader` priority 200 and
+`WindowsShellPreviewLoader` priority 100. Known stream formats are therefore
 preferred; a blocked result stops fallback, while a `null` stream result
-allows the Shell descriptor provider to run. The remaining implementation is
+allows the Shell descriptor source to run. The remaining implementation is
 the Files.App renderer/host described in [New Files.App architecture](files-app.md).

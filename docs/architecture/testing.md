@@ -7,13 +7,13 @@ model graph through public contracts.
 
 `tests/Files.Core.Tests` covers:
 
-- lazy capability resolution, composition, ownership, and async disposal;
+- lazy item feature resolution, composition, ownership, and async disposal;
 - thumbnail cache invalidation races and LRU behavior;
 - stream preview ownership, blocking, cancellation, and size limits;
 - browse navigation, replacement, incremental folder changes, selection,
   projection, preview, and viewport prefetch;
 - application/window/tab/pane ownership and navigation history;
-- awaited item/capability/CoreModel disposal and aggregated cleanup failures;
+- awaited item/item feature/CoreModel disposal and aggregated cleanup failures;
 - unbuilt-builder cleanup, ownership transfer, construction failure, and
   runtime disposal;
 - operation routing, enum validation, and result/progress invariants;
@@ -53,7 +53,7 @@ Archive scenario tests should keep small committed fixtures for
 unencrypted/encrypted ZIP and 7z, a header-encrypted 7z, synthesized folders,
 case-distinct names, malformed traversal entries, and a non-seekable backing
 stream. Run each supported fixture through Windows 10 and the current
-Windows 11 image because Shell eligibility is deliberately capability-based,
+Windows 11 image because Shell eligibility is deliberately item feature-based,
 not OS-version-based. Never place fixture passwords in production telemetry
 or error messages.
 
@@ -69,7 +69,7 @@ variables that can be printed.
 
 `tests/Files.Core.Benchmarks` measures deterministic architecture overhead:
 
-- cold and cached capability resolution across contributor counts;
+- cold and cached item feature resolution across factory counts;
 - thumbnail cache hit, miss, insertion, and eviction.
 
 Run:
@@ -86,7 +86,7 @@ dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj `
 	-c Release -- --smoke
 ```
 
-Do not mix Shell, disk, network, or provider latency into these
+Do not mix Shell, disk, network, or source latency into these
 microbenchmarks. Measure those as scenario tests with machine details,
 warm/cold cache state, item count, and installed Shell extensions recorded.
 

@@ -2,13 +2,13 @@
 
 Windows Shell COM work is isolated behind `IWindowsShellScheduler`. The scheduler is a Files-specific service that can be injected, shared, and replaced in tests.
 
-Its low-level STA mechanism follows the useful part of the ReFiles experiment—OLE initialization plus a Win32 message pump—but it does not adopt ReFiles' provider, capability, or root-model architecture. Files keeps its own CoreModel and capability pipeline.
+Its low-level STA mechanism follows the useful part of the ReFiles experiment—OLE initialization plus a Win32 message pump—but it does not adopt ReFiles' source, item feature, or root-model architecture. Files keeps its own CoreModel and item feature flow.
 
 ## Lanes
 
 ```mermaid
 flowchart TB
-    App["AppModels and capability implementations"]
+    App["AppModels and item feature implementations"]
     Scheduler["IWindowsShellScheduler"]
     Ordered["Ordered STA\n1 worker"]
     Concurrent["Concurrent STA pool\n2 to 4 workers by default"]
@@ -62,7 +62,7 @@ Each worker:
 4. pumps messages before continuing queued work;
 5. pairs successful initialization with `OleUninitialize`.
 
-This matters because Shell extensions and providers can depend on message dispatch and COM reentrancy even when Files has no visible window on that worker.
+This matters because Shell extensions and sources can depend on message dispatch and COM reentrancy even when Files has no visible window on that worker.
 
 ## Rules at the boundary
 

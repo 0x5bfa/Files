@@ -2,8 +2,8 @@
 // Licensed under the MIT License.
 
 using Files.Core.Browsing;
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Archives;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Archives;
 using Files.Core.Storage.Archives;
 using Files.Core.Storage.Archives.SevenZip;
 
@@ -11,12 +11,12 @@ namespace Files.Core.Composition;
 
 public static class ArchiveFilesCoreBuilderExtensions
 {
-	private const string ArchiveBrowsingFeature =
+	private const string ArchiveBrowsingModule =
 		"Files.Core.Archives.Browsing";
 
 	public static FilesCoreBuilder AddArchiveBrowsing(
 		this FilesCoreBuilder builder,
-		IArchiveCredentialProvider? credentialProvider = null)
+		IArchiveCredentialResolver? credentialResolver = null)
 	{
 		ArgumentNullException.ThrowIfNull(builder);
 
@@ -27,19 +27,19 @@ public static class ArchiveFilesCoreBuilderExtensions
 				sevenZipBackend,
 			],
 			sevenZipBackend,
-			credentialProvider);
+			credentialResolver);
 	}
 
 	public static FilesCoreBuilder AddArchiveBrowsing(
 		this FilesCoreBuilder builder,
 		IEnumerable<IArchiveBackend> backends,
 		IArchiveProbe? probe = null,
-		IArchiveCredentialProvider? credentialProvider = null)
+		IArchiveCredentialResolver? credentialResolver = null)
 	{
 		ArgumentNullException.ThrowIfNull(builder);
 		ArgumentNullException.ThrowIfNull(backends);
 
-		if (!builder.TryRegisterFeature(ArchiveBrowsingFeature))
+		if (!builder.TryAddModule(ArchiveBrowsingModule))
 		{
 			return builder;
 		}
@@ -47,18 +47,18 @@ public static class ArchiveFilesCoreBuilderExtensions
 		var selector = new ArchiveBackendSelector(
 			backends,
 			probe);
-		builder.Capabilities
-			.SetComposer<IArchiveSource>(
-				new PriorityCapabilityComposer<IArchiveSource>())
-			.AddContributor<IArchiveSource>(
-				new ArchiveSourceCapabilityContributor(),
+		builder.ItemFeatures
+			.SetCombiner<IArchiveSource>(
+				new PriorityItemFeatureCombiner<IArchiveSource>())
+			.Add<IArchiveSource>(
+				new ArchiveSourceFactory(),
 				priority: 100,
 				origin: "Archive browsing");
 		builder.AddBrowseLocationHandler(
 			dataRoot => new ArchiveBrowseLocationHandler(
 				dataRoot,
 				selector,
-				credentialProvider));
+				credentialResolver));
 		return builder;
 	}
 }

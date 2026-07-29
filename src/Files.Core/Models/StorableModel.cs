@@ -1,7 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
+using Files.Core.ItemFeatures;
 using Files.Core.Storage;
 using OwlCore.Storage;
 
@@ -16,16 +16,16 @@ public class StorableModel : IStorableModel
 	public StorableModel(
 		IStorable coreModel,
 		StorableReference reference,
-		ICapabilitySet capabilities)
+		IItemFeatures features)
 	{
 		ArgumentNullException.ThrowIfNull(coreModel);
 		ArgumentNullException.ThrowIfNull(reference);
-		ArgumentNullException.ThrowIfNull(capabilities);
+		ArgumentNullException.ThrowIfNull(features);
 
 		CoreModel = coreModel;
 		Reference = reference;
 		Name = coreModel.Name;
-		Capabilities = capabilities;
+		Features = features;
 	}
 
 	public IStorable CoreModel { get; }
@@ -34,7 +34,7 @@ public class StorableModel : IStorableModel
 
 	public string Name { get; }
 
-	public ICapabilitySet Capabilities { get; }
+	public IItemFeatures Features { get; }
 
 	public void Dispose()
 	{
@@ -66,7 +66,7 @@ public class StorableModel : IStorableModel
 
 		try
 		{
-			await Capabilities.DisposeAsync().ConfigureAwait(false);
+			await Features.DisposeAsync().ConfigureAwait(false);
 		}
 		catch (Exception error)
 		{

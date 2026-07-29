@@ -2,7 +2,7 @@
 // Licensed under the MIT License.
 
 using System.Runtime.CompilerServices;
-using Files.Core.Capabilities;
+using Files.Core.ItemFeatures;
 using Files.Core.Storage;
 using OwlCore.Storage;
 
@@ -18,8 +18,8 @@ public sealed class FolderModel : StorableModel, IFolderModel
 		IFolder folder,
 		IStorableModelFactory modelFactory,
 		StorableReference reference,
-		ICapabilitySet capabilities)
-		: base(folder, reference, capabilities)
+		IItemFeatures features)
+		: base(folder, reference, features)
 	{
 		ArgumentNullException.ThrowIfNull(source);
 		ArgumentNullException.ThrowIfNull(modelFactory);

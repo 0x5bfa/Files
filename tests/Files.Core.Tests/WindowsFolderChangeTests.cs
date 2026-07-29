@@ -1,8 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Changes;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Changes;
 using Files.Core.Storage;
 using Files.Core.Storage.Windows;
 
@@ -32,8 +32,8 @@ public sealed class WindowsFolderChangeTests
 				source.SourceId,
 				folder.Id,
 				folder.Address);
-			await using var changeSource = new FolderChangeCapabilityContributor().Create(
-				new CapabilityContext(source, folder, reference));
+			await using var changeSource = new FolderChangeSourceFactory().Create(
+				new ItemContext(source, folder, reference));
 
 			Assert.IsNotNull(changeSource);
 			var createdTask = WaitForChangeAsync(
@@ -73,7 +73,7 @@ public sealed class WindowsFolderChangeTests
 	}
 
 	[TestMethod]
-	public async Task SharedProviderDoesNotDeliverChangesToAnotherFolder()
+	public async Task SharedWatcherDoesNotDeliverChangesToAnotherFolder()
 	{
 		var rootPath = Path.Combine(
 			Path.GetTempPath(),
@@ -189,8 +189,8 @@ public sealed class WindowsFolderChangeTests
 			source.SourceId,
 			folder.Id,
 			folder.Address);
-		var changeSource = new FolderChangeCapabilityContributor().Create(
-			new CapabilityContext(source, folder, reference));
+		var changeSource = new FolderChangeSourceFactory().Create(
+			new ItemContext(source, folder, reference));
 
 		Assert.IsNotNull(changeSource);
 		return changeSource!;

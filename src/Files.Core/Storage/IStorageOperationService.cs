@@ -4,7 +4,7 @@
 namespace Files.Core.Storage;
 
 /// <summary>
-/// Selects a storage operation provider and executes a request.
+/// Selects a storage operation handler and executes a request.
 /// </summary>
 public interface IStorageOperationService
 {

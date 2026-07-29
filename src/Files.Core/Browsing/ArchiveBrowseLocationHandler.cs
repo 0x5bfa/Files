@@ -17,19 +17,19 @@ public sealed class ArchiveBrowseLocationHandler
 	private const int MaximumCredentialAttempts = 5;
 	private readonly IFilesDataRoot dataRoot;
 	private readonly ArchiveBackendSelector backendSelector;
-	private readonly IArchiveCredentialProvider? credentialProvider;
+	private readonly IArchiveCredentialResolver? credentialResolver;
 
 	public ArchiveBrowseLocationHandler(
 		IFilesDataRoot dataRoot,
 		ArchiveBackendSelector backendSelector,
-		IArchiveCredentialProvider? credentialProvider = null)
+		IArchiveCredentialResolver? credentialResolver = null)
 	{
 		ArgumentNullException.ThrowIfNull(dataRoot);
 		ArgumentNullException.ThrowIfNull(backendSelector);
 
 		this.dataRoot = dataRoot;
 		this.backendSelector = backendSelector;
-		this.credentialProvider = credentialProvider;
+		this.credentialResolver = credentialResolver;
 	}
 
 	public bool CanHandle(BrowseLocation location)
@@ -69,7 +69,7 @@ public sealed class ArchiveBrowseLocationHandler
 					archiveModel,
 					credential,
 					credentialAttempt,
-					credentialProvider);
+					credentialResolver);
 				var result = await backendSelector
 					.TryMountAsync(request, cancellationToken)
 					.ConfigureAwait(false);
@@ -80,7 +80,7 @@ public sealed class ArchiveBrowseLocationHandler
 						mount = success.Mount;
 						break;
 					case ArchiveMountResult.CredentialRequired required:
-						if (credentialProvider is null)
+						if (credentialResolver is null)
 						{
 							throw new ArchiveCredentialRequiredException(
 								required.Challenge);
@@ -96,8 +96,8 @@ public sealed class ArchiveBrowseLocationHandler
 								$"Archive credential attempts exceeded {MaximumCredentialAttempts}.");
 						}
 
-						credential = await credentialProvider
-							.GetCredentialAsync(
+						credential = await credentialResolver
+							.ResolveAsync(
 								required.Challenge,
 								cancellationToken)
 							.ConfigureAwait(false);

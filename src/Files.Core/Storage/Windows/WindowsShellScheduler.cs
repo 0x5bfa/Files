@@ -12,7 +12,7 @@ using Windows.Win32.UI.WindowsAndMessaging;
 namespace Files.Core.Storage.Windows;
 
 /// <summary>
-/// Owns the message-pumped STA lanes used by the Windows storage provider.
+/// Owns the message-pumped STA lanes used by the Windows storage source.
 /// </summary>
 /// <remarks>
 /// Delegates must be synchronous. Cancellation applies while work is waiting to

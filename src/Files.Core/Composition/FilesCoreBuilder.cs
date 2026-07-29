@@ -3,10 +3,10 @@
 
 using Files.Core.AppModels;
 using Files.Core.Browsing;
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Previews;
-using Files.Core.Capabilities.Properties;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Previews;
+using Files.Core.ItemFeatures.Properties;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Core.Data;
 using Files.Core.Models;
 using Files.Core.Storage;
@@ -15,15 +15,15 @@ using Files.Core.ViewSettings;
 namespace Files.Core.Composition;
 
 /// <summary>
-/// Configures storage sources, capabilities, and AppModel factories.
+/// Configures storage sources, item features, and AppModel factories.
 /// </summary>
 public sealed class FilesCoreBuilder : IAsyncDisposable
 {
 	private readonly List<IStorageSource> sources = [];
-	private readonly List<IStorageOperationProvider> operationProviders = [];
+	private readonly List<IStorageOperationHandler> operationHandlers = [];
 	private readonly List<Func<IFilesDataRoot, IBrowseLocationHandler>> locationHandlerFactories = [];
 	private readonly List<IAsyncDisposable> ownedServices = [];
-	private readonly HashSet<string> registeredFeatures =
+	private readonly HashSet<string> configuredModules =
 		new(StringComparer.Ordinal);
 	private readonly IViewSettingsStore viewSettingsStore;
 	private readonly IThumbnailCache thumbnailCache;
@@ -43,15 +43,15 @@ public sealed class FilesCoreBuilder : IAsyncDisposable
 		this.thumbnailCache =
 			thumbnailCache ?? new MemoryThumbnailCache();
 
-		Capabilities = new CapabilityPipelineBuilder()
-			.SetComposer<IThumbnailSource>(new ThumbnailSourceComposer())
-			.SetComposer<IPropertySource>(new PropertySourceComposer())
-			.SetComposer<IPreviewSource>(new PreviewSourceComposer())
-			.AddDecorator<IThumbnailSource>(
-				new ThumbnailCacheDecorator(this.thumbnailCache));
+		ItemFeatures = new ItemFeatureBuilder()
+			.SetCombiner<IThumbnailSource>(new ThumbnailSourceCombiner())
+			.SetCombiner<IPropertySource>(new PropertySourceCombiner())
+			.SetCombiner<IPreviewSource>(new PreviewSourceCombiner())
+			.AddWrapper<IThumbnailSource>(
+				new ThumbnailCacheWrapper(this.thumbnailCache));
 	}
 
-	public CapabilityPipelineBuilder Capabilities { get; }
+	public ItemFeatureBuilder ItemFeatures { get; }
 
 	public FilesCoreBuilder AddStorageSource(IStorageSource source)
 	{
@@ -68,12 +68,12 @@ public sealed class FilesCoreBuilder : IAsyncDisposable
 		return this;
 	}
 
-	public FilesCoreBuilder AddStorageOperationProvider(
-		IStorageOperationProvider provider)
+	public FilesCoreBuilder AddStorageOperationHandler(
+		IStorageOperationHandler handler)
 	{
 		EnsureMutable();
-		ArgumentNullException.ThrowIfNull(provider);
-		operationProviders.Add(provider);
+		ArgumentNullException.ThrowIfNull(handler);
+		operationHandlers.Add(handler);
 		return this;
 	}
 
@@ -95,8 +95,8 @@ public sealed class FilesCoreBuilder : IAsyncDisposable
 		FilesApplicationModel? application = null;
 		try
 		{
-			var capabilityPipeline = Capabilities.Build();
-			var modelFactory = new StorableModelFactory(capabilityPipeline);
+			var itemFeatureRegistry = ItemFeatures.Build();
+			var modelFactory = new StorableModelFactory(itemFeatureRegistry);
 			dataRoot = new FilesDataRoot(sources, modelFactory);
 
 			var handlers = new List<IBrowseLocationHandler>
@@ -119,7 +119,7 @@ public sealed class FilesCoreBuilder : IAsyncDisposable
 				thumbnailCache);
 			application = new FilesApplicationModel(paneFactory);
 			var storageOperations =
-				new StorageOperationService(operationProviders);
+				new StorageOperationService(operationHandlers);
 			IWindowsShellPreviewSessionFactory? previewSessions = null;
 			if (windowsShellPreviewSessionFactory is not null)
 			{
@@ -190,11 +190,11 @@ public sealed class FilesCoreBuilder : IAsyncDisposable
 		}
 	}
 
-	internal bool TryRegisterFeature(string featureId)
+	internal bool TryAddModule(string moduleId)
 	{
 		EnsureMutable();
-		ArgumentException.ThrowIfNullOrWhiteSpace(featureId);
-		return registeredFeatures.Add(featureId);
+		ArgumentException.ThrowIfNullOrWhiteSpace(moduleId);
+		return configuredModules.Add(moduleId);
 	}
 
 	internal void SetWindowsShellPreviewSessionFactory(

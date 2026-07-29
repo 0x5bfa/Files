@@ -1,8 +1,8 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.Capabilities;
-using Files.Core.Capabilities.Properties;
+using Files.Core.ItemFeatures;
+using Files.Core.ItemFeatures.Properties;
 using Files.Core.Models;
 using Files.Core.Storage;
 using Files.Core.Storage.Windows;
@@ -15,7 +15,7 @@ namespace Files.Core.Tests;
 public sealed class WindowsPropertyTests
 {
 	[TestMethod]
-	public async Task WindowsPropertyProviderReadsOnlyRequestedProperties()
+	public async Task WindowsPropertyReaderReadsOnlyRequestedProperties()
 	{
 		var directoryPath = Path.Combine(Path.GetTempPath(), $"Files.Core.PropertyTests-{Guid.NewGuid():N}");
 		Directory.CreateDirectory(directoryPath);
@@ -30,14 +30,14 @@ public sealed class WindowsPropertyTests
 			var coreModel = await source.ResolveAsync(
 				new StorageAddress(WindowsStorageSource.FileAddressScheme, filePath));
 
-			var pipeline = new CapabilityPipelineBuilder()
-				.AddContributor<IPropertySource>(
-					new PropertyProviderCapabilityContributor(new WindowsPropertyProvider()),
+			var featureRegistry = new ItemFeatureBuilder()
+				.Add<IPropertySource>(
+					new PropertySourceFactory(new WindowsPropertyReader()),
 					origin: "Windows Property System")
-				.SetComposer<IPropertySource>(new PropertySourceComposer())
+				.SetCombiner<IPropertySource>(new PropertySourceCombiner())
 				.Build();
 
-			using var model = new StorableModelFactory(pipeline).Create(source, coreModel);
+			using var model = new StorableModelFactory(featureRegistry).Create(source, coreModel);
 			var propertySource = model.Get<IPropertySource>();
 			Assert.IsNotNull(propertySource);
 

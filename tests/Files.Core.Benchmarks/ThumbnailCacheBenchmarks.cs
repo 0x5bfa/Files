@@ -3,7 +3,7 @@
 
 using BenchmarkDotNet.Attributes;
 using Files.Core.Storage;
-using Files.Core.Capabilities.Thumbnails;
+using Files.Core.ItemFeatures.Thumbnails;
 
 namespace Files.Core.Benchmarks;
 

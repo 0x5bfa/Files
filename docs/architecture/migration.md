@@ -18,7 +18,7 @@ flowchart TB
     CsWin32 --> Core
 ```
 
-One assembly does not mean one layer. `Files.Core` should retain namespaces and folders for storage contracts, providers, AppModels, browsing, operations, and interop.
+One assembly does not mean one layer. `Files.Core` should retain namespaces and folders for storage contracts, sources, AppModels, browsing, operations, and interop.
 
 ## Safe migration order
 
@@ -36,9 +36,9 @@ flowchart TD
     Move --> Delete
 ```
 
-1. Stabilize `IStorageSource`, CoreModel capabilities, AppModels, and
+1. Stabilize `IStorageSource`, CoreModel item features, AppModels, and
    browse-session ownership in the new project. **Complete.**
-2. Implement one provider and one browser path end to end. Windows storage,
+2. Implement one source and one browser path end to end. Windows storage,
    browsing, presentation, preview, and operations are the first slice.
    **Complete.**
 3. Introduce `FilesCoreRuntime` in `Files.App` behind a feature boundary. Do
@@ -55,7 +55,7 @@ flowchart LR
     Core["Files.Core"] --> CsWin32["Files.App.CsWin32"]
 ```
 
-It allows the Windows provider to use existing source-generated interop
+It allows the Windows source to use existing source-generated interop
 without copying generated code. When CsWin32 moves into `Files.Core`, this
 project reference disappears while namespaces and higher-level contracts
 remain stable.
@@ -69,5 +69,5 @@ See [New Files.App architecture](files-app.md) for the exact adoption slice.
 - Prefer a vertical feature boundary over a repository-wide type replacement.
 - Keep WinUI out of `Files.Core`, even though `Files.Core` targets Windows.
 - Keep existing and new implementations side by side until a consumer is migrated and verified.
-- Keep capability contracts and Windows threading boundaries stable while files are still moving between assemblies.
+- Keep item feature contracts and Windows threading boundaries stable while files are still moving between assemblies.
 - Treat a later project merge as a mechanical dependency change, not as permission to collapse the logical layers.

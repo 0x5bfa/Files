@@ -2,7 +2,7 @@
 
 ## CoreModels and AppModels
 
-CoreModels standardize one provider. For storage, the smallest CoreModels are the OwlCore.Storage interfaces such as `IStorable`, `IFile`, and `IFolder`.
+CoreModels standardize storage items across sources. For storage, the smallest CoreModels are the OwlCore.Storage interfaces such as `IStorable`, `IFile`, and `IFolder`.
 
 Item AppModels wrap CoreModels and add Files-specific composition. They are
 implemented by `Files.Core.Models.IStorableModel` and do not expose WinUI
@@ -18,6 +18,7 @@ boundaries in this document.
 classDiagram
     class IStorageSource {
         +SourceId
+        +SourceType
         +GetRootsAsync()
         +ResolveAsync()
     }
@@ -30,9 +31,9 @@ classDiagram
     class IStorableModel {
         +CoreModel
         +Reference
-        +Capabilities
+        +Features
     }
-    class ICapabilitySet {
+    class IItemFeatures {
         +Get~T~()
         +TryGet~T~()
     }
@@ -41,7 +42,7 @@ classDiagram
     IStorable <|-- IFolder
     IStorageSource --> IStorable : resolves
     IStorableModel --> IStorable : wraps
-    IStorableModel --> ICapabilitySet : owns
+    IStorableModel --> IItemFeatures : owns
 ```
 
 `IStorageSource` is not an `IStorable`. It represents a configured connection or namespace capable of producing storage items. A Windows Shell namespace, an FTP account, and an opened archive are storage sources. Their child files and folders are storables.
@@ -53,7 +54,8 @@ Three values have different jobs:
 | Type | Meaning |
 | --- | --- |
 | `StorageSourceId` | Stable identity of a configured source |
-| `IStorable.Id` | Provider-defined identity within that source |
+| `IStorageSource.SourceType` | Short implementation category such as `windows-shell` or `ftp`; not item identity |
+| `IStorable.Id` | Source-defined identity within that source |
 | `StorageAddress` | An address that a source may resolve |
 
 `StorableReference` combines the source ID and item ID. Its equality and hash
@@ -87,9 +89,9 @@ flowchart LR
     Address -. fallback .-> Reference
 ```
 
-## Optional capabilities
+## Optional item features
 
-Capabilities remain independent interfaces. A concrete CoreModel may directly implement both `IStorable` and a capability, but the capability does not inherit from `IStorable`.
+Item features remain independent interfaces. A concrete CoreModel may directly implement both `IStorable` and an item feature, but the item feature does not inherit from `IStorable`.
 
 ```csharp
 public interface IThumbnailSource
@@ -107,31 +109,31 @@ public interface IPropertySource
 }
 ```
 
-An implementation may instead come from a source adapter, a cache decorator, or a plugin. The `CapabilityPipeline` composes those candidates once and stores the result in the AppModel's `ICapabilitySet`.
+An implementation may instead come from a source adapter, a cache wrapper, or an extension. The `ItemFeatureRegistry` combines those options once and stores the result in the AppModel's `IItemFeatures`.
 
 ```mermaid
 flowchart LR
     Source["IStorageSource"]
     Core["IStorable CoreModel"]
     Factory["StorableModelFactory"]
-    Pipeline["CapabilityPipeline"]
+    Registry["ItemFeatureRegistry"]
     Model["IStorableModel"]
 
     Source --> Core
     Source --> Factory
     Core --> Factory
-    Factory --> Pipeline
-    Pipeline --> Model
+    Factory --> Registry
+    Registry --> Model
     Factory --> Model
 ```
 
-See [Capability composition](capabilities.md) for resolution, multiple providers, decorators, and ownership.
+See [Item feature composition](item-features.md) for resolution, multiple sources, wrappers, and ownership.
 
 ## Ownership
 
 `IStorableModelFactory` transfers ownership of a newly supplied CoreModel to
-the returned AppModel. The AppModel asynchronously disposes its capability set
-before disposing the CoreModel. If a capability or CoreModel supports only
+the returned AppModel. The AppModel asynchronously disposes its item feature set
+before disposing the CoreModel. If an item feature or CoreModel supports only
 `IDisposable`, that synchronous cleanup runs inside the same ordered
 disposal.
 

@@ -19,7 +19,7 @@ internal sealed class SevenZipArchiveMount
 	private readonly SevenZipArchiveIndex index;
 	private readonly SemaphoreSlim extractorLock = new(1, 1);
 	private readonly object disposalLock = new();
-	private readonly IArchiveCredentialProvider? credentialProvider;
+	private readonly IArchiveCredentialResolver? credentialResolver;
 	private SevenZipExtractor extractor;
 	private int credentialAttempt;
 	private Task? disposeTask;
@@ -42,7 +42,7 @@ internal sealed class SevenZipArchiveMount
 		this.extractor = extractor;
 		this.index = index;
 		credentialAttempt = request.CredentialAttempt;
-		credentialProvider = request.CredentialProvider;
+		credentialResolver = request.CredentialResolver;
 		SourceId = CreateSourceId(request.Archive);
 		Root = CreateFolder(string.Empty);
 	}
@@ -58,7 +58,7 @@ internal sealed class SevenZipArchiveMount
 
 	public StorageSourceId SourceId { get; }
 
-	public string ProviderId =>
+	public string SourceType =>
 		SevenZipArchiveBackend.DefaultBackendId;
 
 	public string DisplayName { get; }
@@ -221,7 +221,7 @@ internal sealed class SevenZipArchiveMount
 				DisplayName,
 				credentialAttempt + 1,
 				previousCredentialRejected: true);
-			if (credentialProvider is null
+			if (credentialResolver is null
 				|| challenge.Attempt
 					> MaximumCredentialAttempts)
 			{
@@ -229,8 +229,8 @@ internal sealed class SevenZipArchiveMount
 					challenge);
 			}
 
-			var credential = await credentialProvider
-				.GetCredentialAsync(
+			var credential = await credentialResolver
+				.ResolveAsync(
 					challenge,
 					cancellationToken)
 				.ConfigureAwait(false);
