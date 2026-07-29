@@ -52,9 +52,10 @@ These do not block the new Files.App:
   [Clipboard, drag/drop, and Shell integration](platform-interactions.md).
 - Durable view settings, window-session serialization, telemetry, and policy
   implementations belong to the application composition root.
-- The physical merge of `Files.Shared`, `Files.Core.Storage`,
-  `Files.App.Storage`, and `Files.App.CsWin32` remains a mechanical migration
-  after consumers move to the new contracts.
+- `Files.Core.Storage` and `Files.App.Storage` have been retired, and CsWin32
+  generation now lives directly in `Files.Core`. Moving the remaining
+  Files.App consumers and deciding the future of `Files.Shared` are separate
+  migrations.
 
 ## Definition of done for the next session
 

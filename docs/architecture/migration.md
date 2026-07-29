@@ -6,16 +6,8 @@ The final physical layout and the logical architecture are separate decisions. M
 
 ```mermaid
 flowchart TB
-    Shared["Files.Shared"]
-    CoreStorage["Files.Core.Storage"]
-    AppStorage["Files.App.Storage"]
-    CsWin32["Files.App.CsWin32"]
-    Core["Files.Core"]
-
-    Shared --> Core
-    CoreStorage --> Core
-    AppStorage --> Core
-    CsWin32 --> Core
+    Core["Files.Core<br/>models, storage, and interop"]
+    Shared["Files.Shared<br/>remaining legacy shared code"]
 ```
 
 One assembly does not mean one layer. `Files.Core` should retain namespaces and folders for storage contracts, sources, AppModels, browsing, operations, and interop.
@@ -43,31 +35,31 @@ flowchart TD
    **Complete.**
 3. Introduce `FilesCoreRuntime` in `Files.App` behind a feature boundary. Do
    not move unrelated source files during adoption. **Next step.**
-4. Move WinUI-agnostic logic from the four existing projects after consumers use the new contracts.
-5. Remove old projects and temporary references only after their dependency edges reach zero.
+4. CsWin32 input and wrappers now live in `Files.Core`; the obsolete
+   `Files.Core.Storage` and `Files.App.Storage` projects have been removed.
+   **Complete.**
+5. Move remaining Files.App consumers to the new contracts and decide whether
+   any `Files.Shared` code belongs in Core.
 
-## Transitional dependency
+## Interop ownership
 
-Files.Core currently has this temporary edge:
+Files.Core now owns CsWin32 generation:
 
 ```mermaid
 flowchart LR
-    Core["Files.Core"] --> CsWin32["Files.App.CsWin32"]
+    Input["NativeMethods.txt"] --> Core["Files.Core"]
+    Wrappers["Interop/Windows wrappers"] --> Core
 ```
 
-It allows the Windows source to use existing source-generated interop
-without copying generated code. When CsWin32 moves into `Files.Core`, this
-project reference disappears while namespaces and higher-level contracts
-remain stable.
+Generated output remains untracked and must not be edited directly. Existing
+`Windows.Win32` namespaces remain stable despite the assembly move.
 
 See [New Files.App architecture](files-app.md) for the exact adoption slice.
 
 ## Conflict controls
 
-- Do not rename or move the existing four projects while the architecture contracts are still changing.
 - Do not make existing storage services implement new contracts through large compatibility classes.
 - Prefer a vertical feature boundary over a repository-wide type replacement.
 - Keep WinUI out of `Files.Core`, even though `Files.Core` targets Windows.
-- Keep existing and new implementations side by side until a consumer is migrated and verified.
 - Keep item feature contracts and Windows threading boundaries stable while files are still moving between assemblies.
-- Treat a later project merge as a mechanical dependency change, not as permission to collapse the logical layers.
+- Treat project merges as mechanical dependency changes, not as permission to collapse the logical layers.

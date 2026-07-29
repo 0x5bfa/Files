@@ -286,7 +286,7 @@ effect would encourage an unsafe retry.
 - A source given an `IWindowsShellScheduler` borrows it; the composition root owns that shared scheduler.
 - `WindowsStorable` contains only a managed snapshot and is not disposable.
 - The affine enumerator and stream wrappers must finish before their source or shared scheduler is disposed.
-- Source-generated COM projections are used through `Files.App.CsWin32`; incompatible `Marshal.ReleaseComObject` APIs are not used.
+- Source-generated COM projections are generated directly in `Files.Core`; incompatible `Marshal.ReleaseComObject` APIs are not used.
 
 See [Windows Shell threading](threading.md) for lane selection, cancellation, reentrancy, and shutdown.
 

@@ -64,9 +64,9 @@ src/Files.App/
     StgMediumLease.cs
 ```
 
-Native declarations and generated interfaces remain in
-`Files.App.CsWin32`. Add missing APIs to `NativeMethods.txt` or an existing
-wrapper; do not add duplicate ad hoc P/Invokes or edit generated output.
+Native declarations, generated interfaces, and `NativeMethods.txt` live in
+`Files.Core`. Add missing APIs to the generator input or an existing wrapper;
+do not add duplicate ad hoc P/Invokes or edit generated output.
 
 ## Shared transfer intent
 

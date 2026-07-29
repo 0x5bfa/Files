@@ -80,8 +80,8 @@ Implemented areas:
 - Windows Shell archive folders with SevenZipSharp fallback on Windows 10,
   encrypted archives, unsupported Shell formats, and remote streams.
 
-Files.Core targets Windows and temporarily references `Files.App.CsWin32` for
-source-generated interop. It does not reference WinUI.
+Files.Core targets Windows and owns its source-generated CsWin32 interop. It
+does not reference WinUI.
 
 ## FTP vertical slice
 
@@ -107,9 +107,9 @@ and cross-source transfer coordination remain separate extension boundaries.
 - Additional storage sources plug into the same storage, item feature,
   location, and operation contracts.
 - Durable settings and window-session serialization are application policy.
-- The eventual merge of `Files.Shared`, `Files.Core.Storage`,
-  `Files.App.Storage`, and `Files.App.CsWin32` is a separate mechanical
-  migration and must preserve these logical namespaces.
+- Retired storage projects no longer define competing contracts. The future of
+  `Files.Shared` and migration of remaining Files.App consumers are separate
+  concerns.
 
 The complete design and Files.App implementation blueprint are in
 [`docs/architecture`](../../docs/architecture/README.md).
