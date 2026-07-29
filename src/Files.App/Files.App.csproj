@@ -26,6 +26,7 @@
         <RuntimeIdentifiers>win-x86;win-x64;win-arm64</RuntimeIdentifiers>
         <UseWinUI>true</UseWinUI>
         <BuiltInComInteropSupport>true</BuiltInComInteropSupport>
+        <WindowsAppSDKBackgroundTask>true</WindowsAppSDKBackgroundTask>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
         <CETCompat>false</CETCompat>
         <Configurations>Debug;Release</Configurations>
@@ -154,7 +155,6 @@
 
     <ItemGroup>
         <ProjectReference Include="..\Files.App.CsWin32\Files.App.CsWin32.csproj" />
-        <ProjectReference Include="..\Files.App.BackgroundTasks\Files.App.BackgroundTasks.csproj" />
         <ProjectReference Include="..\Files.App.Controls\Files.App.Controls.csproj" />
         <ProjectReference Include="..\Files.App.Storage\Files.App.Storage.csproj" />
         <ProjectReference Include="..\Files.Core.Storage\Files.Core.Storage.csproj" />
