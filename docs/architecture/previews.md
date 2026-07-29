@@ -1,23 +1,21 @@
-# Preview loading
+# プレビューの読み込み
 
-Previews are UI-independent item features. `BrowsePreviewModel` selects the
-current item, while an `IPreviewSource` turns that item into a disposable
-`PreviewResult`. WinUI image, media, and document renderers consume the result
-outside `Files.Core`.
+プレビューは UI に依存しない項目機能です。`BrowsePreviewModel` が現在の項目を選択し、
+`IPreviewSource` がその項目を破棄可能な `PreviewResult` に変換します。WinUI の画像、メディア、
+ドキュメントレンダラーは、`Files.Core` の外側でその結果を消費します。
 
-The Core preview architecture has two independent result paths. Stream
-previews return data owned by `StreamPreviewResult`; Windows Shell previews
-return a descriptor and create the COM handler only when a UI host opens a
-session.
+Core のプレビューアーキテクチャには、独立した 2 つの結果経路があります。ストリームプレビューは
+`StreamPreviewResult` が所有するデータを返します。Windows Shell プレビューは記述子を返し、
+UI ホストがセッションを開いたときにだけ COM ハンドラーを作成します。
 
 ```mermaid
 flowchart TD
     Browse["BrowsePreviewModel"]
     Registry["ItemFeatureRegistry"]
     Result["WindowsShellPreviewResult"]
-    Factory["Shell session factory"]
-    Session["Preview session on dedicated STA"]
-    Host["Future WinUI host adapter"]
+    Factory["Shell セッションファクトリ"]
+    Session["専用 STA 上のプレビューセッション"]
+    Host["将来の WinUI ホストアダプター"]
     Handler["Windows IPreviewHandler"]
 
     Browse --> Registry
@@ -28,12 +26,10 @@ flowchart TD
     Session --> Handler
 ```
 
-## Shared loader and item-bound source
+## 共有ローダーと項目に束縛されたソース
 
-Loaders contain reusable backend logic. A
-`PreviewSourceFactory` binds a loader to one
-`ItemContext`, producing the item-bound `IPreviewSource` exposed by the
-model.
+ローダーには再利用可能なバックエンド処理を含めます。`PreviewSourceFactory` がローダーを
+1 つの `ItemContext` に束縛し、モデルが公開する項目束縛済みの `IPreviewSource` を生成します。
 
 ```mermaid
 flowchart LR
@@ -44,51 +40,42 @@ flowchart LR
     Factory -. binds .-> ItemSource
     Loader --> File["IFile.OpenStreamAsync"]
     File --> Result["StreamPreviewResult"]
-    Result --> Renderer["UI renderer outside Files.Core"]
+    Result --> Renderer["Files.Core 外部の UI レンダラー"]
 ```
 
-`StreamPreviewLoader` currently supports `IFile` core models whose name has
-an explicitly registered extension. `ExtensionPreviewContentTypeResolver`
-owns that mapping and is case-insensitive. There is no implicit
-`application/octet-stream` fallback: an unknown extension is unavailable, so
-another loader may try.
+現在 `StreamPreviewLoader` は、明示的に登録された拡張子を名前に持つ `IFile` CoreModel をサポートします。
+その対応付けは `ExtensionPreviewContentTypeResolver` が所有し、大文字小文字を区別しません。
+暗黙的な `application/octet-stream` フォールバックはありません。未知の拡張子は利用不可となり、
+別のローダーが試行できるようにします。
 
-## Composition and blocking
+## 合成とブロック
 
-`PreviewSourceCombiner` orders options by descending priority and asks each
-source until one returns a non-null result. `null` means “this source does
-not handle the item”; a `BlockedPreviewResult` is a deliberate terminal
-answer and prevents lower-priority fallback.
+`PreviewSourceCombiner` は優先度の降順に選択肢を並べ、null でない結果を返すまで各ソースに問い合わせます。
+`null` は「このソースは項目を処理しない」という意味です。一方 `BlockedPreviewResult` は意図的な終端応答であり、
+優先度の低いフォールバックを防ぎます。
 
-Access decisions are kept separate from stream opening through
-`IPreviewStreamAccessPolicy`. A policy can return `RequiresHydration`,
-`AccessDenied`, `DisabledByPolicy`, or another `PreviewBlockReason` before any
-stream is opened. The request's `PreviewHydrationPolicy` is passed through to
-the policy. `FilesCoreBuilder` supplies a permissive fallback; production
-Files.App should inject its hydration and trust policy.
+アクセスの判定は `IPreviewStreamAccessPolicy` によってストリームのオープンから分離します。
+ポリシーはストリームを開く前に、`RequiresHydration`、`AccessDenied`、`DisabledByPolicy`、その他の
+`PreviewBlockReason` を返せます。要求の `PreviewHydrationPolicy` はポリシーへそのまま渡されます。
+`FilesCoreBuilder` は寛容なフォールバックを提供します。本番の Files.App は hydration と信頼のポリシーを
+注入してください。
 
-## Stream ownership and size limits
+## ストリームの所有権とサイズ制限
 
-After `IFile.OpenStreamAsync` succeeds, `StreamPreviewLoader` owns the
-stream until it returns a result. On success, ownership transfers to
-`StreamPreviewResult`; its `DisposeAsync` is idempotent. On cancellation,
-opening/read failure, or an over-limit result, the loader disposes the
-opened stream.
+`IFile.OpenStreamAsync` が成功した後、結果を返すまで `StreamPreviewLoader` がストリームを所有します。
+成功時には所有権が `StreamPreviewResult` へ移り、その `DisposeAsync` は冪等です。キャンセル、オープンまたは
+読み取りの失敗、サイズ超過の結果では、ローダーが開いたストリームを破棄します。
 
-With no `MaximumBytes`, the original stream is returned without buffering. If
-the stream is seekable, its length is checked before returning it. A
-non-seekable stream is copied only when a limit is required, reading at most
-`MaximumBytes + 1` bytes. An over-limit copy is discarded as
-`PreviewBlockReason.TooLarge`; an allowed copy is returned from position zero
-and reports the actual length.
+`MaximumBytes` がない場合、元のストリームをバッファーせずに返します。シーク可能なストリームなら、返す前に
+長さを確認します。シークできないストリームは制限が必要な場合だけコピーし、最大でも `MaximumBytes + 1` バイトを
+読み取ります。制限超過のコピーは `PreviewBlockReason.TooLarge` として破棄し、許可されたコピーは位置 0 から返して
+実際の長さを報告します。
 
-## Browse selection and races
+## 参照選択と競合
 
-`BrowsePreviewModel` owns the current result and cancels an older request when
-selection, item identity, or browse generation changes. A result completed by
-an obsolete request is disposed rather than published. This keeps the
-item feature contract independent from WinUI thread affinity and leaves image
-creation, such as `BitmapImage.SetSourceAsync`, to the UI layer.
+`BrowsePreviewModel` は現在の結果を所有し、選択、項目 ID、参照世代が変わると古い要求をキャンセルします。
+古い要求が完了しても、その結果は公開せず破棄します。これにより項目機能の契約を WinUI のスレッド親和性から
+独立させ、`BitmapImage.SetSourceAsync` のような画像生成を UI レイヤーに残します。
 
 ```mermaid
 sequenceDiagram
@@ -96,74 +83,57 @@ sequenceDiagram
     participant ItemSource as IPreviewSource
     participant Loader as StreamPreviewLoader
     participant File as IFile
-    participant UI as UI renderer
+    participant UI as UI レンダラー
 
     Browse->>ItemSource: GetPreviewAsync(request, cancellationToken)
-    ItemSource->>Loader: bound context
-    Loader->>Loader: resolve type and access policy
+    ItemSource->>Loader: 束縛済みコンテキスト
+    Loader->>Loader: 型とアクセス・ポリシーを解決
     Loader->>File: OpenStreamAsync(Read)
-    File-->>Loader: owned stream
+    File-->>Loader: 所有済みストリーム
     Loader-->>Browse: StreamPreviewResult
-    Browse-->>UI: current result
-    UI->>Browse: dispose obsolete/current result
+    Browse-->>UI: 現在の結果
+    UI->>Browse: 古い/現在の結果を破棄
 ```
 
-WinUI renderers, dispatcher-affine image/media objects, and the child-HWND
-host are outside Files.Core. Stream ownership, Shell association, handler
-activation, STA scheduling, session control, and deterministic COM cleanup
-are implemented in Core.
+WinUI レンダラー、dispatcher に依存する画像・メディアオブジェクト、子 HWND ホストは Files.Core の外側です。
+ストリーム所有権、Shell との関連付け、ハンドラーのアクティブ化、STA スケジュール、セッション制御、決定論的な
+COM クリーンアップは Core で実装します。
 
-## Windows Shell preview backend
+## Windows Shell プレビューバックエンド
 
-`WindowsShellPreviewResult` is a UI-independent descriptor. It stores the
-stable `StorableReference` and the associated handler CLSID, but does not own a
-COM object, `IShellItem`, PIDL, HWND, WinUI object, or a path used as identity.
-`WindowsShellPreviewSessionFactory` resolves the reference again when a
-session starts and verifies the returned source and item identity before using
-the item.
+`WindowsShellPreviewResult` は UI に依存しない記述子です。安定した `StorableReference` と関連するハンドラー CLSID
+を保持しますが、COM オブジェクト、`IShellItem`、PIDL、HWND、WinUI オブジェクト、識別に使うパスを所有しません。
+`WindowsShellPreviewSessionFactory` はセッション開始時に参照を再解決し、項目を使用する前に返されたソースと項目の
+識別情報を検証します。
 
-`WindowsPreviewHandlerResolver` discovers the preview handler through the
-Shell association API (`AssocQueryStringW`) using the preview-handler Shell
-extension category. It normalizes extensions, performs the required-size
-query before allocating the native result buffer, and caches both successful
-and missing associations. A malformed CLSID is treated as unavailable. The
-loader therefore performs no COM activation, file open, or HWND work.
+`WindowsPreviewHandlerResolver` は Shell 関連付け API（`AssocQueryStringW`）を使い、プレビュー・ハンドラー Shell 拡張
+カテゴリからプレビュー・ハンドラーを検出します。拡張子を正規化し、ネイティブ結果バッファーを確保する前に必要サイズを
+問い合わせ、成功した関連付けと見つからなかった関連付けの両方をキャッシュします。不正な CLSID は利用不可として扱います。
+そのためローダーは COM のアクティブ化、ファイルのオープン、HWND の処理を行いません。
 
-The session factory uses a dedicated `WindowsShellScheduler` instance. Every
-activation, handler method call, `IShellItem`/stream creation, and COM release
-is queued to that preview STA. The handler is activated with
-`CLSCTX_LOCAL_SERVER` by the default activation policy. An alternative context
-such as in-process activation must be explicitly supplied by an injected
-activation policy; there is no implicit in-process fallback. Initialization is
-attempted in this order:
+セッションファクトリは専用の `WindowsShellScheduler` インスタンスを使用します。アクティブ化、ハンドラーの各メソッド呼び出し、
+`IShellItem`/ストリームの作成、COM 解放はすべて、そのプレビュー STA にキューイングされます。既定のアクティブ化ポリシーでは
+`CLSCTX_LOCAL_SERVER` でハンドラーをアクティブ化します。インプロセス・アクティブ化など別のコンテキストを使う場合は、
+注入したアクティブ化ポリシーで明示的に指定する必要があります。暗黙的なインプロセス・フォールバックはありません。
+初期化は次の順序で試行します。
 
 1. `IInitializeWithStream`
 2. `IInitializeWithItem`
 3. `IInitializeWithFile`
 
-The first successful contract wins. Streams and Shell items are retained until
-`Unload()` and deterministic disposal. The controller also supplies a minimal
-`IPreviewHandlerFrame` site, applies optional `IPreviewHandlerVisuals`, and
-exposes bounds, focus, and accelerator operations without taking a WinUI
-dependency. Cleanup attempts `Unload()`, `SetSite(null)`, and every COM release
-even when one cleanup operation fails. Disposal is idempotent.
+最初に成功した契約が採用されます。ストリームと Shell 項目は `Unload()` と決定論的な破棄まで保持します。
+コントローラーは最小限の `IPreviewHandlerFrame` サイトも提供し、任意の `IPreviewHandlerVisuals` を適用します。
+さらに WinUI 依存なしで境界、フォーカス、アクセラレーター操作を公開します。クリーンアップでは、いずれかの操作が失敗しても
+`Unload()`、`SetSite(null)`、すべての COM 解放を試行します。破棄は冪等です。
 
-Cancellation prevents queued operations from starting, but cannot interrupt a
-synchronous third-party COM method that is already executing. The Files.App
-adapter creates the dedicated host HWND, converts its arranged size to
-physical-pixel bounds, forwards theme/focus/keyboard events, and disposes the
-session on unload. XAML controls and host-window creation are deliberately not
-part of Core.
+キャンセルはキューに入った操作の開始を防ぎますが、実行中の同期的なサードパーティー COM メソッドを中断することはできません。
+Files.App アダプターは専用ホスト HWND を作成し、配置サイズを物理ピクセル境界へ変換し、テーマ・フォーカス・キーボードイベントを
+転送し、アンロード時にセッションを破棄します。XAML コントロールとホストウィンドウの作成は意図的に Core に含めません。
 
-Session teardown is ordered across the thread boundary. The preview controller
-and its COM state are disposed on the dedicated preview STA first; the resolved
-target `IStorableModel` is then asynchronously disposed outside that callback.
-Both cleanup steps are attempted and multiple failures are aggregated.
-Activation failure similarly cleans the controller on the preview STA and
-awaits target-model disposal before returning the original error.
+セッションの終了はスレッド境界をまたいで順序付けます。まずプレビューコントローラーと COM 状態を専用プレビュー STA で破棄し、
+そのコールバックの外側で解決済みの `IStorableModel` を非同期に破棄します。両方のクリーンアップを試行し、複数の失敗は集約します。
+アクティブ化に失敗した場合も、プレビュー STA 上でコントローラーをクリーンアップし、元のエラーを返す前に対象モデルの破棄を待機します。
 
-`AddWindowsStorage` gives `StreamPreviewLoader` priority 200 and
-`WindowsShellPreviewLoader` priority 100. Known stream formats are therefore
-preferred; a blocked result stops fallback, while a `null` stream result
-allows the Shell descriptor source to run. The remaining implementation is
-the Files.App renderer/host described in [New Files.App architecture](files-app.md).
+`AddWindowsStorage` は `StreamPreviewLoader` に優先度 200、`WindowsShellPreviewLoader` に優先度 100 を与えます。そのため既知の
+ストリーム形式が優先されます。ブロックされた結果はフォールバックを停止し、`null` のストリーム結果なら Shell 記述子ソースを実行できます。
+残る実装は、[新 Files.App アーキテクチャ](files-app.md) に記載する Files.App のレンダラーとホストです。

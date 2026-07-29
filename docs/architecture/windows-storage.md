@@ -1,8 +1,8 @@
-# Windows storage source
+# Windows ストレージソース
 
-The Windows source maps the Windows Shell namespace to OwlCore.Storage without introducing WinUI dependencies or leaking apartment-affine COM interfaces into ordinary models.
+Windows ソースは、WinUI 依存関係を導入したり、アパートメントに依存する COM インターフェースを通常のモデルへ漏らしたりせずに、Windows Shell 名前空間を OwlCore.Storage に対応付けます。
 
-## Object model
+## オブジェクトモデル
 
 ```mermaid
 classDiagram
@@ -41,7 +41,7 @@ classDiagram
     WindowsStorageSource --> WindowsStorable : creates
 ```
 
-`WindowsStorageSource` resolves both `shell` and `file` addresses. Its default root is the Shell `ComputerFolder` known folder.
+`WindowsStorageSource` は `shell` と `file` の両方のアドレスを解決します。既定のルートは、Shell の既知のフォルダーである `ComputerFolder` です。
 
 ```csharp
 await using var dataRoot = new FilesDataRoot(
@@ -59,40 +59,39 @@ await foreach (var root in dataRoot.GetRootsAsync(windows.SourceId))
 }
 ```
 
-`WindowsStorableDescriptor` copies these values while still on the ordered Shell STA:
+`WindowsStorableDescriptor` は、順序付けられた Shell STA 上にいる間に次の値をコピーします。
 
-- `ItemId` is created by one `IWindowsItemIdReader`. File-system items use the versioned `winfs:v1:<volume>:<file-index>` identity; virtual or inaccessible items use the versioned, encoded `winshell-address:v1:<address>` fallback.
-- `WindowsItemLocator` contains a managed copy of the absolute PIDL and the `SIGDN_DESKTOPABSOLUTEPARSING` fallback locator. The PIDL is copied before the Shell STA operation returns.
-- `Name` uses a UI-friendly Shell display name with a normal-display fallback.
-- `FileSystemPath` uses `SIGDN_FILESYSPATH` only when `SFGAO_FILESYSTEM` is present. It is nullable by design.
-- `IsFolder` selects `WindowsFolder` or `WindowsFile` without retaining `IShellItem`.
-- `IsStream` snapshots `SFGAO_STREAM`. Together with `IsFolder`, it
-  distinguishes a file-like Shell container such as an archive from a normal
-  filesystem directory without synchronous filesystem probing.
+- `ItemId` は 1 つの `IWindowsItemIdReader` が作成します。ファイルシステム項目にはバージョン付きの `winfs:v1:<volume>:<file-index>` 識別情報を使い、
+  仮想またはアクセス不能な項目にはバージョン付きでエンコードされた `winshell-address:v1:<address>` フォールバックを使います。
+- `WindowsItemLocator` は絶対 PIDL の管理対象コピーと、`SIGDN_DESKTOPABSOLUTEPARSING` のフォールバックロケーターを含みます。STA の操作が戻る前に PIDL をコピーします。
+- `Name` は UI 向けの Shell 表示名を使い、通常表示名へフォールバックします。
+- `FileSystemPath` は `SFGAO_FILESYSTEM` が存在する場合だけ `SIGDN_FILESYSPATH` を使います。設計上 null 許容です。
+- `IsFolder` は `IShellItem` を保持せずに `WindowsFolder` または `WindowsFile` を選択します。
+- `IsStream` は `SFGAO_STREAM` をスナップショットします。`IsFolder` と組み合わせることで、アーカイブのようなファイル形状の Shell コンテナーと通常のファイルシステムディレクトリを、同期的なファイルシステム探索なしで区別できます。
 
-Addresses and identities are intentionally independent. A filesystem model exposes a `file:` address containing its current filesystem path. An item without a filesystem path exposes a `shell:` address containing its desktop-absolute parsing name. Either kind may still use a source-defined identity.
+アドレスと識別情報は意図的に独立しています。ファイルシステムモデルは現在のファイルシステムパスを含む `file:` アドレスを公開します。
+ファイルシステムパスを持たない項目はデスクトップ絶対解析名を含む `shell:` アドレスを公開します。どちらもソース定義の識別情報を使えます。
 
-Windows file IDs are stable across rename. A persisted filesystem reference keeps its previous `file:` address as a recovery hint. Resolution tries that path and, when the path is missing or now identifies a different item, scans the previous parent directory for the requested file ID. A reference is accepted only when the resolved candidate has exactly the requested `ItemId`; a recreated file at a stale address is rejected.
+Windows のファイル ID は名前変更をまたいで安定します。永続化されたファイルシステム参照は、以前の `file:` アドレスを復旧ヒントとして保持します。
+解決ではそのパスを試し、パスがなくなった、または別の項目を指すようになった場合は、以前の親ディレクトリを走査して要求されたファイル ID を探します。
+解決された候補が要求された `ItemId` と完全に一致する場合だけ参照を受け入れ、古いアドレスに再作成されたファイルは拒否します。
 
-This scan is a bounded fallback for a rename within the same directory. A
-cold reference cannot recover a move to a different directory from the stale
-address alone. That requires a volume-relative reverse lookup such as
-`OpenFileById`, or an external watcher/index that persists the item's new
-address. Live operations return the updated reference.
+この走査は同じディレクトリ内の名前変更を対象にした、範囲を限定したフォールバックです。冷たい参照は、古いアドレスだけでは別のディレクトリへの移動を復旧できません。
+その場合は `OpenFileById` のようなボリューム相対逆引きや、新しいアドレスを永続化する外部ウォッチャー/インデックスが必要です。ライブ操作では更新された参照を返します。
 
-Using a filesystem path or parsing name as the identity would make virtual items such as This PC, libraries, Recycle Bin, and portable devices unidentifiable.
+ファイルシステムパスや解析名を識別情報にすると、This PC、ライブラリ、ごみ箱、ポータブルデバイスのような仮想項目を識別できなくなります。
 
-## Persisted reference recovery
+## 永続化参照の復旧
 
 ```mermaid
 flowchart TD
     Reference["StorableReference"]
-    Kind{"ItemId kind"}
-    Shell["Decode Shell fallback"]
-    Address["Try LastKnownAddress"]
-    Scan["Scan previous parent"]
-    Match{"ItemId matches?"}
-    Model["Return new model"]
+    Kind{"ItemId の種類"}
+    Shell["Shell フォールバックをデコード"]
+    Address["LastKnownAddress を試す"]
+    Scan["以前の親を走査"]
+    Match{"ItemId が一致?"}
+    Model["新しいモデルを返す"]
     Missing["FileNotFoundException"]
 
     Reference --> Kind
@@ -106,16 +105,16 @@ flowchart TD
     Match -->|No| Missing
 ```
 
-The identity source is stateless. Recovery works after the original `WindowsStorageSource` has been disposed and recreated; it does not rely on a process-local item-ID-to-path dictionary.
+識別情報のソースはステートレスです。復旧は元の `WindowsStorageSource` を破棄して再作成した後でも機能し、プロセス内の item-ID からパスへの辞書に依存しません。
 
-## Snapshot boundary
+## スナップショット境界
 
 ```mermaid
 flowchart LR
-    Request["Resolve address"]
-    STA["Ordered Shell STA"]
+    Request["アドレスを解決"]
+    STA["順序付き Shell STA"]
     Item["IShellItem"]
-    Copy["Copy identity, PIDL, and display data"]
+    Copy["識別情報、PIDL、表示データをコピー"]
     Descriptor["WindowsStorableDescriptor"]
     Model["WindowsFile / WindowsFolder"]
 
@@ -127,102 +126,109 @@ flowchart LR
     Item -. never exposed .-> STA
 ```
 
-Most CoreModels are therefore apartment-neutral and do not need disposal. The two exceptions are private wrappers around resources that must remain live:
+そのため、ほとんどの CoreModel はアパートメントに依存せず、破棄も不要です。存続させる必要があるリソースの内部ラッパーだけが例外です。
 
-- `ShellFolderEnumerator` owns `IEnumShellItems` and routes each bounded batch to the same ordered STA.
-- `ShellReadStream` owns a virtual `IStream` and routes `Read`, `Seek`, `Stat`, and release to the same ordered STA.
+- `ShellFolderEnumerator` は `IEnumShellItems` を所有し、範囲を限定した各バッチを同じ順序付き STA へ送ります。
+- `ShellReadStream` は仮想 `IStream` を所有し、`Read`、`Seek`、`Stat`、解放を同じ順序付き STA へ送ります。
 
-Neither wrapper exposes its COM interface.
+どちらのラッパーも COM インターフェースを公開しません。
 
-## Shared Shell resolver
+## 共有 Shell リゾルバー
 
-All Shell item materialization is routed through `WindowsShellItemResolver`. It first attempts `SHCreateItemFromIDList` using the managed PIDL, then falls back to `SHCreateItemFromParsingName` using the locator. The resolver invokes the caller's operation inside the selected STA and returns only managed data or a private affine wrapper.
+すべての Shell 項目の具象化は `WindowsShellItemResolver` を通ります。まず管理対象 PIDL で `SHCreateItemFromIDList` を試し、次にロケーターで `SHCreateItemFromParsingName` へフォールバックします。
+リゾルバーは選択された STA 内で呼び出し元の操作を実行し、管理対象データまたは非公開のアパートメント依存ラッパーだけを返します。
 
 ```mermaid
 flowchart LR
-    ItemFeature["Thumbnail / property item feature"] --> Resolver["WindowsShellItemResolver"]
-    Resolver --> Pidl{"Managed absolute PIDL available?"}
+    ItemFeature["サムネイル/プロパティ項目機能"] --> Resolver["WindowsShellItemResolver"]
+    Resolver --> Pidl{"管理対象の絶対 PIDL がある?"}
     Pidl -->|Yes| FromPidl["SHCreateItemFromIDList"]
     Pidl -->|No or failed| FromName["SHCreateItemFromParsingName"]
-    FromPidl --> STA["Shell STA delegate"]
+    FromPidl --> STA["Shell STA デリゲート"]
     FromName --> STA
-    STA --> Managed["PNG bytes / property dictionary"]
+    STA --> Managed["PNG バイト列/プロパティ辞書"]
 ```
 
-Item feature sources receive the locator, never an `IShellItem` or a raw PIDL pointer. This keeps COM affinity inside the resolver and gives filesystem, virtual Shell, thumbnail, and property paths one materialization boundary.
+項目機能のソースが受け取るのはロケーターであり、`IShellItem` や生の PIDL ポインターではありません。これにより COM の親和性をリゾルバー内に閉じ込め、
+ファイルシステム、仮想 Shell、サムネイル、プロパティの各経路に 1 つの具象化境界を提供します。
 
-## Folder change item feature
+## フォルダー変更項目機能
 
-`WindowsStorageSource` owns one `WindowsShellChangeWatcher`. Each `WindowsFolderChangeSource` created for a model owns one logical source subscription and exposes a `Changed` event. Identical folder registrations are shared by the source, so multiple event handlers do not create extra native registrations; watching several folders still uses the same hidden window.
+`WindowsStorageSource` は `WindowsShellChangeWatcher` を 1 つ所有します。モデル向けに作成される各 `WindowsFolderChangeSource` は論理的なソース購読を 1 つ所有し、
+`Changed` イベントを公開します。同一フォルダーの登録はソースで共有するため、複数のイベントハンドラーが追加のネイティブ登録を作ることはありません。複数フォルダーの監視でも同じ隠しウィンドウを使います。
 
 ```mermaid
 sequenceDiagram
     participant Model as IFolderChangeSource
     participant Watcher as WindowsShellChangeWatcher
-    participant STA as Ordered Shell STA
-    participant Window as Hidden notification window
+    participant STA as 順序付き Shell STA
+    participant Window as 隠し通知ウィンドウ
     participant Shell as Windows Shell
 
     Model->>Watcher: StartAsync(folder locator)
-    Watcher->>STA: Create window and register PIDL
-    STA->>Window: Own WNDPROC and Shell registration
-    Shell-->>Window: Notification message
-    Window->>STA: Lock notification and copy PIDLs
-    Window->>Watcher: Publish managed change after unlock
-    Watcher-->>Model: Changed event
-    Model->>Watcher: DisposeAsync subscription
-    Watcher->>STA: Deregister PIDL
-    Watcher->>STA: Destroy window when last subscription ends
+    Watcher->>STA: ウィンドウを作成して PIDL を登録
+    STA->>Window: WNDPROC と Shell 登録を所有
+    Shell-->>Window: 通知メッセージ
+    Window->>STA: 通知をロックして PIDL をコピー
+    Window->>Watcher: アンロック後に管理対象の変更を公開
+    Watcher-->>Model: Changed イベント
+    Model->>Watcher: DisposeAsync 購読
+    Watcher->>STA: PIDL の登録を解除
+    Watcher->>STA: 最後の購読終了時にウィンドウを破棄
 ```
 
-The source filters absolute PIDLs for non-recursive folder subscriptions using Shell parent checks with a managed-PIDL and Shell-item fallback. Rename notifications preserve the old and new PIDLs. `SHCNE_UPDATEDIR` and notifications without usable item PIDLs become `DirectoryUpdated` or a change with `RequiresRefresh`, allowing the consumer to re-enumerate safely. Each source subscription uses a bounded channel; overflow discards stale detail and emits one directory refresh. No notification is converted to a filesystem path, so virtual Shell items and paths longer than `MAX_PATH` remain supported.
+ソースは、非再帰フォルダー購読に対して、管理対象 PIDL と Shell 項目のフォールバックを使った Shell 親チェックで絶対 PIDL をフィルターします。
+名前変更通知は古い PIDL と新しい PIDL を保持します。`SHCNE_UPDATEDIR` と利用可能な項目 PIDL を持たない通知は `DirectoryUpdated` または `RequiresRefresh` を含む変更になり、
+コンシューマーが安全に再列挙できます。各ソース購読は範囲を限定したチャネルを使い、オーバーフロー時には古い詳細を破棄してディレクトリ更新を 1 回発行します。
+通知をファイルシステムパスへ変換することはないため、仮想 Shell 項目と `MAX_PATH` より長いパスもサポートされます。
 
-## Browse flow
+## 参照の流れ
 
 ```mermaid
 sequenceDiagram
     participant Session as BrowseSession
     participant Source as WindowsStorageSource
     participant Changes as IFolderChangeSource
-    participant STA as Ordered Shell STA
+    participant STA as 順序付き Shell STA
     participant Shell as Windows Shell
     participant Enum as ShellFolderEnumerator
 
     Session->>Source: OpenAsync(FolderLocation)
     Source->>Source: ResolveAsync(reference)
-    Source->>STA: create Shell item
+    Source->>STA: Shell 項目を作成
     STA->>Shell: SHCreateItemFromParsingName
     Shell-->>STA: IShellItem
-    STA-->>Source: managed folder snapshot
+    STA-->>Source: 管理対象フォルダースナップショット
     Source-->>Session: FolderBrowseLocationContext
-    Session->>Changes: subscribe Changed/Faulted and StartAsync
-    Session->>STA: create enumerator
+    Session->>Changes: Changed/Faulted を購読して StartAsync
+    Session->>STA: 列挙子を作成
     STA->>Shell: BHID_EnumItems
     Shell-->>STA: IEnumShellItems
-    STA-->>Session: private affine wrapper
-    loop 32-item bounded batches
+    STA-->>Session: 非公開のアパートメント依存ラッパー
+    loop 32 項目の範囲限定バッチ
         Session->>Enum: ReadNextAsync(32)
-        Enum->>STA: enumerate and copy descriptors
-        STA-->>Enum: managed descriptors
-        Enum-->>Session: Windows child models
+        Enum->>STA: 列挙して記述子をコピー
+        STA-->>Enum: 管理対象の記述子
+        Enum-->>Session: Windows 子モデル
     end
-    Changes-->>Session: coalesced refresh request
+    Changes-->>Session: 集約した更新要求
     Session->>Source: OpenAsync(FolderLocation) again
     Session->>Source: DisposeAsync() on replacement or close
 ```
 
-The session starts the optional watcher before enumeration. Notifications received during enumeration become one refresh request after the new context is committed. Enumeration does not buffer the entire folder. A bounded batch amortizes scheduler transitions while preserving streaming and cancellation between batches.
+セッションは列挙の前に任意のウォッチャーを開始します。列挙中に受信した通知は、新しいコンテキストが確定した後に 1 つの更新要求になります。
+列挙でフォルダー全体をバッファーすることはありません。範囲を限定したバッチでスケジューラー遷移のコストを償却しつつ、バッチ間のストリーミングとキャンセルを維持します。
 
-## File streams
+## ファイルストリーム
 
 ```mermaid
 flowchart TD
     Open["WindowsFile.OpenStreamAsync"]
-    HasPath{"FileSystemPath available?"}
+    HasPath{"FileSystemPath がある?"}
     FileStream["System.IO.FileStream"]
-    ReadOnly{"Read access?"}
-    Bind["Bind BHID_Stream on ordered STA"]
-    ShellStream["ShellReadStream affine wrapper"]
+    ReadOnly{"読み取りアクセス?"}
+    Bind["順序付き STA で BHID_Stream を束縛"]
+    ShellStream["ShellReadStream アパートメント依存ラッパー"]
     Denied["UnauthorizedAccessException"]
 
     Open --> HasPath
@@ -233,87 +239,72 @@ flowchart TD
     ReadOnly -->|No| Denied
 ```
 
-File-system items use `FileStream` with read/write/delete sharing. Virtual
-items request `IStream` through `BHID_Stream`; Core exposes that private
-apartment-safe wrapper as read-only.
+ファイルシステム項目は、読み取り/書き込み/削除共有を設定した `FileStream` を使います。仮想項目は `BHID_Stream` を通じて `IStream` を要求し、
+Core はその非公開でアパートメント安全なラッパーを読み取り専用として公開します。
 
-## Windows Shell operations
+## Windows Shell 操作
 
-`StorageOperationService` selects `WindowsStorageOperationHandler` for
-references owned by one Windows source. The handler supports filesystem
-create, rename, copy, and move plus Shell deletion for filesystem or virtual
-items. It validates the request, resolves immutable input snapshots, and
-schedules `IFileOperation` on the operation STA lane.
+`StorageOperationService` は、1 つの Windows ソースが所有する参照に対して `WindowsStorageOperationHandler` を選択します。
+ハンドラーは、ファイルシステムの作成、名前変更、コピー、移動と、ファイルシステムまたは仮想項目の Shell 削除をサポートします。
+要求を検証し、不変の入力スナップショットを解決し、操作 STA レーンで `IFileOperation` をスケジュールします。
 
 ```mermaid
 sequenceDiagram
     participant Service as StorageOperationService
     participant Handler as WindowsStorageOperationHandler
-    participant STA as Operation STA
+    participant STA as 操作 STA
     participant Shell as IFileOperation
     participant Source as WindowsStorageSource
 
     Service->>Handler: ExecuteAsync(request)
-    Handler->>STA: queue operation
-    STA->>Shell: queue item + PerformOperations
-    Shell-->>STA: completion and abort state
-    STA-->>Handler: operation outcome
-    Handler->>Source: Resolve actual destination
-    Source-->>Handler: result snapshot
-    Handler-->>Service: result reference
+    Handler->>STA: 操作をキューに登録
+    STA->>Shell: 項目をキューに追加して PerformOperations
+    Shell-->>STA: 完了と中止状態
+    STA-->>Handler: 操作結果
+    Handler->>Source: 実際の宛先を解決
+    Source-->>Handler: 結果スナップショット
+    Handler-->>Service: 結果参照
 ```
 
-Rename rechecks the Shell item's filesystem identity immediately before
-queuing the mutation, so a stale parsing name cannot silently target a
-replacement item. Create/copy/move resolve the actual destination after
-completion. A queued HRESULT is never treated as proof that an individual
-item completed; `PerformOperations` and the aborted state are both checked.
+名前変更では、変更をキューに入れる直前に Shell 項目のファイルシステム識別情報を再確認します。そのため古い解析名が置き換え項目を静かに対象にすることはありません。
+作成/コピー/移動では完了後に実際の宛先を解決します。キューに入った HRESULT だけを個別項目の完了の証拠として扱わず、`PerformOperations` と中止状態の両方を確認します。
 
-Names are one validated Windows segment. The handler rejects traversal,
-reserved DOS devices, invalid characters, and trailing spaces/dots.
-Collisions either fail or generate `name (2).ext`. Deletion uses the Recycle
-Bin unless the request explicitly asks for permanent deletion.
+名前は検証済みの Windows の 1 セグメントです。ハンドラーはトラバーサル、予約済み DOS デバイス、不正な文字、末尾の空白/ドットを拒否します。
+衝突時は失敗するか `name (2).ext` を生成します。削除は、要求が明示的に完全削除を指定しない限り、ごみ箱を使用します。
 
-Cancellation is honored while resolution or queued STA work can still be
-prevented. Once the Shell operation has committed, result materialization
-uses `CancellationToken.None`; reporting cancellation after a successful side
-effect would encourage an unsafe retry.
+解決中や STA にキューイングされた作業をまだ防止できる間はキャンセルを尊重します。Shell 操作が確定した後は、結果の具象化に `CancellationToken.None` を使います。
+成功した副作用の後でキャンセルを報告すると、安全でない再試行を促してしまうためです。
 
-## Lifetime
+## ライフタイム
 
-- `FilesDataRoot` owns each `WindowsStorageSource`.
-- A source created without an injected scheduler owns and disposes its `WindowsShellScheduler`.
-- A source given an `IWindowsShellScheduler` borrows it; the composition root owns that shared scheduler.
-- `WindowsStorable` contains only a managed snapshot and is not disposable.
-- The affine enumerator and stream wrappers must finish before their source or shared scheduler is disposed.
-- Source-generated COM projections are generated directly in `Files.Core`; incompatible `Marshal.ReleaseComObject` APIs are not used.
+- `FilesDataRoot` が各 `WindowsStorageSource` を所有します。
+- 注入されたスケジューラーなしで作成されたソースは、`WindowsShellScheduler` を所有して破棄します。
+- `IWindowsShellScheduler` を渡されたソースはそれを借用し、合成ルートが共有スケジューラーを所有します。
+- `WindowsStorable` は管理対象スナップショットだけを含み、破棄可能ではありません。
+- ソースまたは共有スケジューラーを破棄する前に、アパートメント依存の列挙子とストリームラッパーを完了させなければなりません。
+- ソース生成された COM 投影は `Files.Core` 内で直接生成され、互換性のない `Marshal.ReleaseComObject` API は使用しません。
 
-See [Windows Shell threading](threading.md) for lane selection, cancellation, reentrancy, and shutdown.
+レーン選択、キャンセル、再入、終了については [Windows Shell のスレッド処理](threading.md) を参照してください。
 
-## Implemented scope
+## 実装済みの範囲
 
-Implemented:
+実装済み:
 
-- Parsing file-system and virtual Shell items.
-- Resolving known folders, addresses, and persisted references.
-- Versioned source-defined identity from volume serial and file index, with an encoded address fallback for items that cannot expose a stable filesystem ID.
-- Strict reference resolution that refuses to return a different item occupying a stale address.
-- Cold same-directory rename recovery from a filesystem reference.
-- Managed PIDL descriptors and one shared Shell item resolver for storage and item features.
-- Parent lookup.
-- Streaming child enumeration in bounded batches.
-- File-system streams and apartment-safe virtual read streams.
-- Injectable message-pumped STA scheduling.
-- Windows Shell thumbnail extraction through `IShellItemImageFactory`, with PNG materialization inside the concurrent Shell STA lane.
-- Windows Shell folder change subscriptions with a source-owned notification watcher and managed PIDL delivery.
-- Typed Shell properties for item type, size, creation time, and modification
-  time.
-- Stream preview descriptors and Windows Shell preview-handler association,
-  local-server activation, hosting sessions, and deterministic cleanup.
-- Filesystem create, rename, copy, and move plus Shell deletion through
-  `IFileOperation`.
+- ファイルシステムおよび仮想 Shell 項目の解析。
+- 既知のフォルダー、アドレス、永続化参照の解決。
+- ボリュームシリアルとファイルインデックスからのバージョン付きソース定義識別情報、および安定したファイルシステム ID を公開できない項目向けのエンコード済みアドレスフォールバック。
+- 古いアドレスに別の項目が存在する場合に返却を拒否する厳格な参照解決。
+- ファイルシステム参照からの、同じディレクトリ内の冷たい名前変更復旧。
+- 管理対象 PIDL 記述子と、ストレージおよび項目機能で共有する 1 つの Shell 項目リゾルバー。
+- 親の検索。
+- 範囲を限定したバッチによる子項目のストリーミング列挙。
+- ファイルシステムストリームと、アパートメント安全な仮想読み取りストリーム。
+- 注入可能なメッセージポンプ付き STA スケジューリング。
+- `IShellItemImageFactory` による Windows Shell サムネイル抽出。PNG の具象化は並行 Shell STA レーン内で行います。
+- ソースが所有する通知ウォッチャーと管理対象 PIDL の配送による Windows Shell フォルダー変更購読。
+- 項目種別、サイズ、作成時刻、変更時刻の型付き Shell プロパティ。
+- ストリームプレビュー記述子と Windows Shell プレビューハンドラーの関連付け、ローカルサーバーアクティブ化、ホスティングセッション、決定論的クリーンアップ。
+- `IFileOperation` によるファイルシステムの作成、名前変更、コピー、移動と Shell 削除。
 
-Cross-directory cold recovery from only an old reference, additional
-canonical property types, search indexing, context menus, drag/drop data
-packages, and arbitrary Shell verbs remain explicit source or Files.App
-extensions. They do not change the storage/model boundary.
+古い参照だけからのディレクトリ間の冷たい復旧、追加の正規プロパティ型、検索インデックス、コンテキストメニュー、ドラッグ/ドロップデータパッケージ、任意の Shell 動詞は、
+引き続き明示的なソースまたは Files.App 拡張です。これらはストレージ/モデル境界を変更しません。

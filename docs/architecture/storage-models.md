@@ -1,18 +1,15 @@
-# Storage model boundaries
+# ストレージモデルの境界
 
-## CoreModels and AppModels
+## CoreModel と AppModel
 
-CoreModels standardize storage items across sources. For storage, the smallest CoreModels are the OwlCore.Storage interfaces such as `IStorable`, `IFile`, and `IFolder`.
+CoreModel はソースをまたいでストレージ項目を標準化します。ストレージにおける最小の CoreModel は、
+`IStorable`、`IFile`、`IFolder` などの OwlCore.Storage インターフェースです。
 
-Item AppModels wrap CoreModels and add Files-specific composition. They are
-implemented by `Files.Core.Models.IStorableModel` and do not expose WinUI
-concepts. `Files.Core.AppModels` contains the application-state AppModels for
-windows, tabs, and panes; browsing models complete that state graph. These
-are two scopes of AppModel, not competing architectural layers.
+項目 AppModel は CoreModel をラップし、Files 固有の合成を追加します。これは `Files.Core.Models.IStorableModel` として実装され、
+WinUI の概念を公開しません。`Files.Core.AppModels` にはウィンドウ、タブ、ペインのアプリケーション状態 AppModel があり、
+参照モデルがその状態グラフを完成させます。これは AppModel にある 2 つのスコープであり、競合するアーキテクチャレイヤーではありません。
 
-The `Files.Core` project contains both CoreModel adapters and AppModels.
-Project placement must not be used as a substitute for the dependency
-boundaries in this document.
+`Files.Core` プロジェクトには CoreModel アダプターと AppModel の両方を含めます。プロジェクトの配置を、この文書で定める依存境界の代わりに使ってはいけません。
 
 ```mermaid
 classDiagram
@@ -40,42 +37,41 @@ classDiagram
 
     IStorable <|-- IFile
     IStorable <|-- IFolder
-    IStorageSource --> IStorable : resolves
-    IStorableModel --> IStorable : wraps
-    IStorableModel --> IItemFeatures : owns
+    IStorageSource --> IStorable : 解決する
+    IStorableModel --> IStorable : ラップする
+    IStorableModel --> IItemFeatures : 所有する
 ```
 
-`IStorageSource` is not an `IStorable`. It represents a configured connection or namespace capable of producing storage items. A Windows Shell namespace, an FTP account, and an opened archive are storage sources. Their child files and folders are storables.
+`IStorageSource` は `IStorable` ではありません。構成された接続または名前空間を表し、ストレージ項目を生成できます。
+Windows Shell 名前空間、FTP アカウント、開かれたアーカイブはストレージソースです。その子のファイルとフォルダーが storable です。
 
-## Identity and addresses
+## 識別情報とアドレス
 
-Three values have different jobs:
+3 つの値には異なる役割があります。
 
-| Type | Meaning |
+| 型 | 意味 |
 | --- | --- |
-| `StorageSourceId` | Stable identity of a configured source |
-| `IStorageSource.SourceType` | Short implementation category such as `windows-shell` or `ftp`; not item identity |
-| `IStorable.Id` | Source-defined identity within that source |
-| `StorageAddress` | An address that a source may resolve |
+| `StorageSourceId` | 構成されたソースの安定した識別情報 |
+| `IStorageSource.SourceType` | `windows-shell` や `ftp` などの短い実装分類。項目の識別情報ではない |
+| `IStorable.Id` | そのソース内でソースが定義する識別情報 |
+| `StorageAddress` | ソースが解決できる可能性のあるアドレス |
 
-`StorableReference` combines the source ID and item ID. Its equality and hash
-code deliberately use only those two values. `LastKnownAddress` is an
-optional recovery hint and never participates in identity.
+`StorableReference` はソース ID と項目 ID を結合します。等値比較とハッシュコードは意図的にこの 2 つだけを使います。
+`LastKnownAddress` は任意の復旧ヒントであり、識別情報には参加しません。
 
-Windows filesystem items use the versioned `winfs:v1:<volume>:<file-index>` identity when available. Their current `StorageAddress` uses the `file:` scheme and filesystem path, while their Shell parsing name and managed absolute PIDL remain separate locators. Items without a filesystem path use a `shell:` address. Virtual or inaccessible items use the encoded `winshell-address:v1:<address>` identity fallback when a filesystem ID is unavailable.
+Windows ファイルシステム項目は、利用できる場合、バージョン付きの `winfs:v1:<volume>:<file-index>` 識別情報を使います。
+現在の `StorageAddress` は `file:` スキームとファイルシステムパスを使い、Shell 解析名と管理対象の絶対 PIDL は別のロケーターとして扱います。
+ファイルシステムパスを持たない項目は `shell:` アドレスを使います。ファイルシステム ID がない仮想またはアクセス不能な項目は、
+`winshell-address:v1:<address>` というエンコード済み識別情報へフォールバックします。
 
-An FTP connection uses `ftp:<ConnectionId>` as its source ID and a normalized,
-case-preserving remote path as its item ID. FTP exposes no portable stable
-file ID, so rename or move produces a new reference and invalidates the old
-path identity. Its `ftp:`, `ftpes:`, or `ftps:` address contains the endpoint
-and escaped path but never credentials. See [FTP storage](ftp-storage.md).
+FTP 接続はソース ID に `ftp:<ConnectionId>` を使い、大文字小文字の表記を保持した正規化リモートパスを項目 ID にします。
+FTP には移植可能で安定したファイル ID がないため、名前変更または移動では新しい参照を生成し、古いパス識別情報を無効にします。
+`ftp:`、`ftpes:`、`ftps:` アドレスにはエンドポイントとエスケープ済みパスを含めますが、認証情報を決して含めません。
+[FTP ストレージソース](ftp-storage.md)を参照してください。
 
-Resolution validates the resulting identity and rejects a different file that
-has replaced a stale address. The Windows source can cold-resolve a
-same-directory rename by scanning the previous parent. Cross-directory cold
-lookup requires a volume file-ID index or `OpenFileById` strategy; live
-operations return the updated reference and open sessions receive the move
-through their watcher.
+解決では結果の識別情報を検証し、古いアドレスが別のファイルに置き換わっていた場合は拒否します。Windows ソースは以前の親を走査することで、
+同じディレクトリ内の名前変更を冷たい参照から解決できます。ディレクトリをまたぐ冷たい検索には、ボリュームのファイル ID インデックスまたは `OpenFileById` 戦略が必要です。
+ライブ操作は更新済みの参照を返し、開いているセッションはウォッチャー経由で移動を受け取ります。
 
 ```mermaid
 flowchart LR
@@ -89,9 +85,10 @@ flowchart LR
     Address -. fallback .-> Reference
 ```
 
-## Optional item features
+## 項目機能（オプション機能）
 
-Item features remain independent interfaces. A concrete CoreModel may directly implement both `IStorable` and an item feature, but the item feature does not inherit from `IStorable`.
+項目機能は独立したインターフェースです。具体的な CoreModel が `IStorable` と項目機能の両方を直接実装することはありますが、
+項目機能が `IStorable` を継承することはありません。
 
 ```csharp
 public interface IThumbnailSource
@@ -109,7 +106,8 @@ public interface IPropertySource
 }
 ```
 
-An implementation may instead come from a source adapter, a cache wrapper, or an extension. The `ItemFeatureRegistry` combines those options once and stores the result in the AppModel's `IItemFeatures`.
+実装はソースアダプター、キャッシュラッパー、拡張機能から提供できます。`ItemFeatureRegistry` はそれらの選択肢を一度だけ合成し、
+結果を AppModel の `IItemFeatures` に保存します。
 
 ```mermaid
 flowchart LR
@@ -127,27 +125,19 @@ flowchart LR
     Factory --> Model
 ```
 
-See [Item feature composition](item-features.md) for resolution, multiple sources, wrappers, and ownership.
+解決、複数ソース、ラッパー、所有権については[項目機能の合成](item-features.md)を参照してください。
 
-## Ownership
+## 所有権
 
-`IStorableModelFactory` transfers ownership of a newly supplied CoreModel to
-the returned AppModel. The AppModel asynchronously disposes its item feature set
-before disposing the CoreModel. If an item feature or CoreModel supports only
-`IDisposable`, that synchronous cleanup runs inside the same ordered
-disposal.
+`IStorableModelFactory` は、渡された新しい CoreModel の所有権を、返す AppModel へ移します。AppModel は CoreModel を破棄する前に、項目機能セットを非同期で破棄します。
+項目機能または CoreModel が `IDisposable` だけを提供する場合、その同期クリーンアップも同じ破棄順序で実行します。
 
-Browse-session replacement, refresh, incremental delete/rename/update, failed
-navigation, and session shutdown all await `IStorableModel.DisposeAsync`.
-Cleanup attempts every owned item and aggregates failures instead of
-abandoning the remaining models. Synchronous `Dispose` members are
-compatibility bridges; Files.App must keep disposal asynchronous on the UI
-thread.
+参照セッションの置換、更新、差分の削除/名前変更/更新、ナビゲーション失敗、セッション終了では、すべて `IStorableModel.DisposeAsync` を待機します。
+クリーンアップは所有するすべての項目を試行し、残りのモデルを放棄せずに失敗を集約します。同期 `Dispose` メンバーは互換性ブリッジです。
+Files.App は UI スレッド上の破棄を非同期のまま維持しなければなりません。
 
-Storage sources and shared services have a longer lifetime and are owned by `FilesDataRoot` or the application composition root. This keeps native resources bounded by the model graph rather than the visual tree.
+ストレージソースと共有サービスはより長いライフタイムを持ち、`FilesDataRoot` またはアプリケーションの合成ルートが所有します。
+これにより、ネイティブリソースの数をビジュアルツリーではなくモデルグラフに対応させて制限できます。
 
-An opened archive is a scoped exception to the process-wide source lifetime:
-its selected `IArchiveMount` exposes an item source only for the active
-`ArchiveBrowseLocationContext`. Inner entries use a backend-neutral outer
-`StorableReference` plus normalized entry path for navigation. See
-[Archive browsing](archives.md).
+開かれたアーカイブは、プロセス全体のソースライフタイムに対するスコープ付きの例外です。選択された `IArchiveMount` は、アクティブな `ArchiveBrowseLocationContext` の間だけ項目ソースを公開します。
+内部エントリは、バックエンドに依存しない外側の `StorableReference` と正規化されたエントリパスを使ってナビゲートします。[アーカイブ参照](archives.md)を参照してください。

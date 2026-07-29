@@ -1,26 +1,24 @@
-# Archive browsing
+# アーカイブ参照
 
-Archive browsing is a UI-independent Files.Core vertical slice. It treats an
-archive as a mountable browse location while preserving the original file's
-`StorableReference`. Windows Shell is preferred when it exposes the archive
-as a folder; SevenZipSharp is the Windows 10, encrypted archive, remote
-stream, and unsupported-Shell fallback.
+アーカイブ参照は UI に依存しない Files.Core の垂直スライスです。元ファイルの
+`StorableReference` を保持したまま、アーカイブをマウント可能な参照場所として扱います。
+Windows Shell がアーカイブをフォルダーとして公開する場合は Shell を優先します。Windows 10、
+暗号化アーカイブ、リモートストリーム、Shell が未対応の場合は SevenZipSharp へフォールバックします。
 
-## Terminology
+## 用語
 
-`OpenAsync` is not a SevenZipSharp API in this design. There are three
-separate operations:
+この設計で `OpenAsync` は SevenZipSharp の API ではありません。3 つの操作を分離します。
 
-| Operation | Responsibility |
+| 操作 | 責務 |
 | --- | --- |
-| `ArchiveBrowseLocationHandler.OpenAsync` | Opens an `ArchiveLocation` for a browse session |
-| `IArchiveBackend.TryMountAsync` | Attempts to select and mount one backend |
-| `IArchiveMount.ResolveAsync` | Resolves the root or one entry inside the selected mount |
+| `ArchiveBrowseLocationHandler.OpenAsync` | 参照セッションのために `ArchiveLocation` を開く |
+| `IArchiveBackend.TryMountAsync` | 1 つのバックエンドを選択してマウントを試みる |
+| `IArchiveMount.ResolveAsync` | 選択されたマウント内のルートまたはエントリを解決する |
 
-SevenZipSharp itself is opened by constructing `SevenZipExtractor` over a
-seekable stream and forcing `ArchiveFileData` to load.
+SevenZipSharp では、シーク可能なストリームに対して `SevenZipExtractor` を構築し、`ArchiveFileData` を
+読み込むことで開きます。
 
-## End-to-end open flow
+## エンドツーエンドのオープンフロー
 
 ```mermaid
 sequenceDiagram
@@ -36,58 +34,55 @@ sequenceDiagram
     participant Mount as IArchiveMount
     participant Context as ArchiveBrowseLocationContext
 
-    User->>App: Open example.7z
+    User->>App: example.7z を開く
     App->>App: model.Get<IArchiveSource>()
     App->>Session: NavigateAsync(ArchiveLocation)
     Session->>Resolver: OpenAsync(ArchiveLocation)
     Resolver->>Handler: OpenAsync(ArchiveLocation)
     Handler->>Selector: TryMountAsync(backing item)
 
-    opt Shell exposes the archive as WindowsFolder
+    opt Shell がアーカイブを WindowsFolder として公開
         Selector->>Probe: ProbeAsync(backing item)
         Probe-->>Selector: Unencrypted / Encrypted / CredentialRequired
     end
 
-    alt Unencrypted or encryption unknown
+    alt 暗号化されていない、または暗号化が不明
         Selector->>Shell: TryMountAsync(backing item)
-        alt Shell enumeration succeeds
+        alt Shell の列挙に成功
             Shell-->>Selector: Success(WindowsShellArchiveMount)
-        else Windows 10, non-Shell item, or Shell failure
+        else Windows 10、Shell 項目でない、または Shell が失敗
             Shell-->>Selector: Unsupported
             Selector->>SevenZip: TryMountAsync(backing stream)
             SevenZip-->>Selector: Success(SevenZipArchiveMount)
         end
-    else Encrypted
+    else 暗号化
         Selector->>SevenZip: TryMountAsync(backing stream, credential)
-        alt Credential is missing or rejected
+        alt 認証情報がない、または拒否
             SevenZip-->>Handler: CredentialRequired
             Handler->>App: IArchiveCredentialResolver
-            App-->>Handler: ArchiveCredential or cancel
-            Handler->>Selector: Retry with credential
-        else Credential is accepted
+            App-->>Handler: ArchiveCredential またはキャンセル
+            Handler->>Selector: 認証情報付きで再試行
+        else 認証情報が受理
             SevenZip-->>Selector: Success(SevenZipArchiveMount)
         end
     end
 
     Selector-->>Handler: Success(selected mount)
     Handler->>Mount: ResolveAsync(entryPath)
-    Handler->>Context: Create(selected mount + folder model)
+    Handler->>Context: 選択したマウント + フォルダーモデルを作成
     Context-->>Session: IBrowseLocationContext
     Session->>Context: GetItemsAsync()
-    Context->>Mount: Enumerate selected backend
-    Mount-->>Session: IStorableModel entries
+    Context->>Mount: 選択したバックエンドを列挙
+    Mount-->>Session: IStorableModel entry
 ```
 
-Selection happens before any archive entries are committed to the browse
-session. Shell children and SevenZip children are never combined. Their
-identity, path normalization, metadata, and mutation behavior are not
-assumed to match.
+アーカイブエントリが参照セッションへ確定される前に選択を完了させます。Shell の子と SevenZip の子を混在させません。
+識別情報、パスの正規化、メタデータ、変更動作が同じだとは仮定しません。
 
-## Files.App entry point
+## Files.App のエントリーポイント
 
-Both a Shell archive folder and a normal file can expose
-`IArchiveSource`. Files.App must check this item feature before treating an
-`IFolderModel` as an ordinary folder:
+Shell のアーカイブフォルダーと通常のファイルは、どちらも `IArchiveSource` を公開できます。
+Files.App は `IFolderModel` を通常のフォルダーとして扱う前に、この項目機能を確認しなければなりません。
 
 ```csharp
 BrowseLocation CreateOpenLocation(IStorableModel item)
@@ -107,9 +102,8 @@ BrowseLocation CreateOpenLocation(IStorableModel item)
 }
 ```
 
-Folders returned by the SevenZip backend implement `IArchiveEntry`.
-Opening one creates another `ArchiveLocation` with the same outer archive and
-its normalized entry path:
+SevenZip バックエンドから返されるフォルダーは `IArchiveEntry` を実装します。これを開くと、同じ外側アーカイブと
+正規化されたエントリパスを持つ別の `ArchiveLocation` が作成されます。
 
 ```csharp
 if (item is IFolderModel
@@ -119,50 +113,43 @@ if (item is IFolderModel
 }
 ```
 
-The `ArchiveLocation` never contains a password:
+`ArchiveLocation` にパスワードを含めてはいけません。
 
 ```text
 ArchiveLocation
-├── Archive: StorableReference to example.7z
-└── EntryPath: "" or "Documents/Reports"
+├── Archive: example.7z への StorableReference
+└── EntryPath: "" または "Documents/Reports"
 ```
 
-## Backend selection
+## バックエンドの選択
 
-The default registration order is:
+既定の登録順序は次のとおりです。
 
-| Priority | Backend | Eligible when |
+| 優先度 | バックエンド | 適用条件 |
 | ---: | --- | --- |
-| 200 | `WindowsShellArchiveBackend` | The backing source is `WindowsStorageSource`, the item is an `IFolder` with `SFGAO_STREAM`, and Shell enumeration succeeds |
-| 100 | `SevenZipArchiveBackend` | A seekable archive stream can be opened by SevenZipSharp |
+| 200 | `WindowsShellArchiveBackend` | backing source が `WindowsStorageSource`、項目が `SFGAO_STREAM` を持つ `IFolder`、Shell 列挙に成功 |
+| 100 | `SevenZipArchiveBackend` | SevenZipSharp でシーク可能なアーカイブストリームを開ける |
 
-The SevenZip probe runs before selecting a Shell folder so encrypted
-archives do not appear to browse successfully and then fail when an entry is
-read. The probe is advisory for other storage items; Windows 10 `.7z` files
-and remote files proceed directly to the SevenZip mount and are not parsed
-twice.
+暗号化アーカイブがエントリ読み取り時に初めて失敗するのを避けるため、Shell フォルダーを選ぶ前に SevenZip の probe を実行します。
+他のストレージ項目では probe は補助的な判断です。Windows 10 の `.7z` ファイルとリモートファイルは直接 SevenZip マウントへ進み、2 回解析しません。
 
-For Windows items, archive-extension detection uses the filesystem or Shell
-parsing name rather than the UI display name, so Explorer's “hide known file
-extensions” preference cannot change item feature composition.
+Windows 項目では、アーカイブ拡張子の検出に UI 表示名ではなくファイルシステム名または Shell 解析名を使います。そのため Explorer の「既知のファイル拡張子を隠す」設定で項目機能の合成が変わりません。
 
-Do not select by OS version. A Windows build, installed Shell extension,
-format, association, or policy can change whether the item is exposed as a
-folder. The actual storage shape and enumeration attempt are the item feature
-probe.
+OS のバージョンだけで選択してはいけません。Windows のビルド、インストールされた Shell 拡張、形式、関連付け、ポリシーによって、項目がフォルダーとして公開されるかは変わります。
+実際のストレージ形状と列挙の試行が項目機能の probe です。
 
-## SevenZip mount
+## SevenZip のマウント
 
 ```mermaid
 flowchart TD
     Reference["Outer StorableReference"]
-    Resolve["Resolve backing CoreModel"]
-    Stream["Open read stream"]
-    Seek{"Stream is seekable?"}
-    Spool["Spool to delete-on-close temp file"]
+    Resolve["backing CoreModel を解決"]
+    Stream["読み取りストリームを開く"]
+    Seek{"ストリームはシーク可能?"}
+    Spool["delete-on-close の一時ファイルへ spool"]
     Extractor["SevenZipExtractor(stream, password)"]
-    Entries["Force ArchiveFileData"]
-    Index["Build normalized entry index"]
+    Entries["ArchiveFileData を強制読み込み"]
+    Index["正規化されたエントリインデックスを構築"]
     Mount["SevenZipArchiveMount"]
     Root["SevenZipArchiveFolder root"]
 
@@ -178,31 +165,20 @@ flowchart TD
     Mount --> Root
 ```
 
-`ArchiveFileData` is flat. `SevenZipArchiveIndex` synthesizes missing parent
-folders and provides immediate-child lookup. Entry paths use `/`, are
-case-sensitive, and reject rooted paths, NUL characters, and `..` traversal.
-Unsafe entries are not published.
+`ArchiveFileData` はフラットです。`SevenZipArchiveIndex` は不足している親フォルダーを合成し、直下の子を検索できるようにします。
+エントリパスには `/` を使い、大文字小文字を区別します。ルート化されたパス、NUL 文字、`..` トラバーサルは拒否し、安全でないエントリを公開しません。
 
-Opening an inner file calls `ExtractFileAsync` into a seekable,
-delete-on-close temporary stream. This avoids loading an arbitrarily large
-entry into one `MemoryStream`. Access to a mount's `SevenZipExtractor` is
-serialized because the native extractor is not treated as thread-safe.
+内部ファイルを開くと、シーク可能で delete-on-close の一時ストリームへ `ExtractFileAsync` します。これにより、任意に大きなエントリを 1 つの `MemoryStream` へ読み込むことを避けます。
+ネイティブ extractor をスレッドセーフとは扱わないため、マウントの `SevenZipExtractor` へのアクセスを直列化します。
 
-SevenZipSharp does not provide cooperative cancellation for the native
-extraction already in progress. Cancellation is checked before and after the
-native call, and the temporary output is deleted on failure.
+SevenZipSharp は、実行中のネイティブ抽出に対する協調的キャンセルを提供しません。ネイティブ呼び出しの前後でキャンセルを確認し、失敗時には一時出力を削除します。
 
-SevenZipSharp is a managed wrapper around the native 7-Zip library. The
-application package must continue to deploy the architecture-matched
-`7z.dll`, `7z64.dll`, or `7zArm64.dll`; the existing `Files.App.csproj`
-already includes these files. Files.Core owns the abstraction and managed
-backend, but application packaging remains responsible for native
-deployment.
+SevenZipSharp はネイティブ 7-Zip ライブラリのマネージドラッパーです。アプリケーションパッケージはアーキテクチャに合った `7z.dll`、`7z64.dll`、`7zArm64.dll` を引き続き配置しなければなりません。
+既存の `Files.App.csproj` はこれらのファイルをすでに含んでいます。Files.Core は抽象化とマネージドバックエンドを所有しますが、ネイティブ配置はアプリケーションパッケージの責務です。
 
-## Credentials
+## 認証情報
 
-Files.Core defines `IArchiveCredentialResolver`; Files.App supplies its
-implementation. Core never creates a dialog:
+Files.Core は `IArchiveCredentialResolver` を定義し、Files.App が実装を提供します。Core はダイアログを作りません。
 
 ```csharp
 public sealed class ArchiveCredentialResolver
@@ -220,22 +196,16 @@ public sealed class ArchiveCredentialResolver
 }
 ```
 
-Missing or rejected passwords produce a typed
-`ArchiveMountResult.CredentialRequired`. The handler asks the resolver and
-retries before returning a context. Without a configured resolver,
-`ArchiveCredentialRequiredException` is surfaced. Credentials are not
-stored in `StorableReference`, `StorageAddress`, history, or view settings.
-`ArchiveCredential.ToString()` is intentionally redacted; application
-telemetry must still avoid serializing its `Password` property.
+パスワードがない、または拒否されると、型付きの `ArchiveMountResult.CredentialRequired` になります。ハンドラーはリゾルバーへ問い合わせ、
+コンテキストを返す前に再試行します。リゾルバーが設定されていなければ `ArchiveCredentialRequiredException` を表面化します。
+認証情報を `StorableReference`、`StorageAddress`、履歴、ビュー設定へ保存してはいけません。`ArchiveCredential.ToString()` は意図的に秘匿化されますが、
+アプリケーションのテレメトリでも `Password` プロパティをシリアライズしてはいけません。
 
-Some ZIP formats expose unencrypted directory metadata and validate the
-password only when an encrypted entry is extracted. The SevenZip mount
-retains the same credential-resolver contract, serializes a new prompt,
-recreates its extractor over the seekable backing stream, clears partial
-output, and retries. Files.App's resolver must therefore be safe to call from
-both location opening and later entry-stream opening.
+一部の ZIP 形式は暗号化されていないディレクトリメタデータを公開し、暗号化エントリを抽出するときだけパスワードを検証します。
+SevenZip マウントは同じ認証情報リゾルバー契約を維持し、新しいプロンプトを直列化し、シーク可能な backing stream 上に extractor を作り直し、部分出力をクリアして再試行します。
+そのため Files.App のリゾルバーは、場所のオープンと後続のエントリストリームのオープンの両方から安全に呼び出せなければなりません。
 
-## Ownership
+## 所有権
 
 ```mermaid
 flowchart TB
@@ -243,7 +213,7 @@ flowchart TB
     Outer["Outer archive IStorableModel"]
     Folder["Current IFolderModel"]
     Mount["Selected IArchiveMount"]
-    Stream["Backing or spooled stream"]
+    Stream["Backing または spooled stream"]
     Extractor["SevenZipExtractor"]
     Index["Archive entry index"]
 
@@ -255,30 +225,24 @@ flowchart TB
     Mount --> Index
 ```
 
-The context disposes the current folder model, then the mount, then the
-outer archive model. The SevenZip mount closes its extractor and backing
-stream. A Shell mount does not own the process-wide Windows source; it only
-adapts it for the current browse context.
+コンテキストは現在のフォルダーモデル、マウント、外側アーカイブモデルの順に破棄します。SevenZip マウントは extractor と backing stream を閉じます。
+Shell マウントはプロセス全体の Windows ソースを所有せず、現在の参照コンテキストへ適応するだけです。
 
-## Scope
+## 実装範囲
 
-Implemented:
+実装済み:
 
-- Shell-first browse selection;
-- Windows 10 and unsupported-Shell fallback;
-- encrypted archive credential flow;
-- local and non-seekable backing streams;
-- normalized folder enumeration;
-- read-only entry streams;
-- deterministic asynchronous cleanup.
+- Shell 優先の参照選択。
+- Windows 10 と Shell 未対応時のフォールバック。
+- 暗号化アーカイブの認証情報フロー。
+- ローカルおよびシーク不可の backing stream。
+- 正規化されたフォルダー列挙。
+- 読み取り専用のエントリストリーム。
+- 決定論的な非同期クリーンアップ。
 
-Separate archive operation handlers are still required for compression,
-extract-all, entry creation, entry deletion, rename, update, split volumes,
-and progress/collision policy. Those operations must reuse the same Core
-result and credential contracts without placing dialogs in Files.Core.
+圧縮、全件抽出、エントリ作成・削除、名前変更、更新、分割ボリューム、進行状況/競合ポリシーには、別のアーカイブ操作ハンドラーが必要です。
+これらの操作はダイアログを Files.Core に置かず、同じ Core の結果と認証情報契約を再利用しなければなりません。
 
-A nested archive inside a SevenZip-backed archive is not advertised as a new
-`IArchiveSource` yet. Its backing entry belongs to a scoped mount and cannot
-be cold-resolved through `FilesDataRoot` after that context is replaced.
-Supporting it requires an explicit mount-chain reference or a ref-counted
-mount registry; it must not be approximated with a stale scoped source ID.
+SevenZip ベースのアーカイブ内の入れ子アーカイブは、まだ新しい `IArchiveSource` として公開していません。その backing entry はスコープ付きマウントに属し、
+コンテキストが置き換わった後に `FilesDataRoot` から冷たい参照を解決できないためです。対応するには明示的なマウントチェーン参照または参照カウント付きマウントレジストリが必要であり、
+古いスコープ付きソース ID で近似してはいけません。

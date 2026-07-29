@@ -1,19 +1,21 @@
-# Windows Shell threading
+# Windows Shell のスレッド処理
 
-Windows Shell COM work is isolated behind `IWindowsShellScheduler`. The scheduler is a Files-specific service that can be injected, shared, and replaced in tests.
+Windows Shell の COM 処理は `IWindowsShellScheduler` の背後に隔離します。このスケジューラーは Files 固有のサービスであり、
+注入、共有、テスト用の置換が可能です。
 
-Its low-level STA mechanism follows the useful part of the ReFiles experiment—OLE initialization plus a Win32 message pump—but it does not adopt ReFiles' source, item feature, or root-model architecture. Files keeps its own CoreModel and item feature flow.
+低レベルの STA 機構は、ReFiles 実験から有用な OLE 初期化と Win32 メッセージポンプの部分に従います。
+ただし ReFiles のソース、項目機能、ルートモデルのアーキテクチャは採用しません。Files は独自の CoreModel と項目機能フローを維持します。
 
-## Lanes
+## レーン
 
 ```mermaid
 flowchart TB
-    App["AppModels and item feature implementations"]
+    App["AppModel と項目機能の実装"]
     Scheduler["IWindowsShellScheduler"]
-    Ordered["Ordered STA\n1 worker"]
-    Concurrent["Concurrent STA pool\n2 to 4 workers by default"]
-    Operations["Operation STA\n1 worker"]
-    Shell["Windows Shell and extensions"]
+    Ordered["順序付き STA\n1 ワーカー"]
+    Concurrent["並列 STA プール\n既定 2～4 ワーカー"]
+    Operations["操作 STA\n1 ワーカー"]
+    Shell["Windows Shell と拡張"]
 
     App --> Scheduler
     Scheduler --> Ordered
@@ -24,73 +26,70 @@ flowchart TB
     Operations --> Shell
 ```
 
-| API | Intended work | Ordering and affinity |
+| API | 想定する処理 | 順序と親和性 |
 | --- | --- | --- |
-| `InvokeAsync` | Item creation, metadata, enumeration, apartment-affine wrappers | One ordered worker; use for an object that must be revisited on its creating apartment |
-| `InvokeConcurrentAsync` | Independent thumbnail/icon extraction with no retained COM object | Small worker pool; calls may run on different apartments |
-| `InvokeOperationAsync` | Long `IFileOperation`-style mutations | Separate ordered worker so a copy dialog cannot block metadata and browsing |
+| `InvokeAsync` | 項目作成、メタデータ、列挙、アパートメント依存ラッパー | 順序付きワーカー 1 つ。生成元アパートメントに戻る必要があるオブジェクトに使う |
+| `InvokeConcurrentAsync` | 保持された COM オブジェクトを持たない独立したサムネイル/アイコン抽出 | 小さなワーカープール。呼び出しは別アパートメントで実行される場合がある |
+| `InvokeOperationAsync` | 長時間の `IFileOperation` 型の変更 | 別の順序付きワーカー。コピーのダイアログがメタデータや参照をブロックしない |
 
-The operation lane executes long-running Shell mutations such as rename without blocking ordered metadata work.
+操作レーンは名前変更などの長時間の Shell 変更を実行し、順序付きメタデータ処理をブロックしません。
 
-Windows Shell preview handlers use a separate
-`WindowsShellScheduler(concurrentWorkerCount: 1)` owned by
-`FilesCoreRuntime`. Handler activation, initialization, calls, and release
-therefore cannot block storage metadata or operation lanes, and one preview
-session remains on one message-pumped STA.
+Windows Shell プレビューハンドラーは、`FilesCoreRuntime` が所有する別の `WindowsShellScheduler(concurrentWorkerCount: 1)` を使います。
+そのためハンドラーのアクティブ化、初期化、呼び出し、解放はストレージメタデータや操作レーンをブロックせず、1 つのプレビューセッションが 1 つのメッセージポンプ付き STA に残ります。
 
-## Worker behavior
+## ワーカーの動作
 
 ```mermaid
 stateDiagram-v2
     [*] --> Starting
-    Starting --> Running: OleInitialize succeeds
-    Starting --> Faulted: initialization fails
-    Running --> Running: pump messages
-    Running --> Running: execute one synchronous delegate
+    Starting --> Running: OleInitialize 成功
+    Starting --> Faulted: 初期化失敗
+    Running --> Running: メッセージをポンプ
+    Running --> Running: 同期デリゲートを 1 つ実行
     Running --> Stopping: DisposeAsync
-    Running --> Faulted: worker failure
-    Stopping --> Stopped: all workers exit
-    Faulted --> Stopped: all workers exit
+    Running --> Faulted: ワーカー失敗
+    Stopping --> Stopped: すべてのワーカー終了
+    Faulted --> Stopped: すべてのワーカー終了
     Stopped --> [*]
 ```
 
-Each worker:
+各ワーカーは次の処理をします。
 
-1. enters an STA and calls `OleInitialize`;
-2. creates a Win32 message queue;
-3. waits for either a queue semaphore or window messages through `MsgWaitForMultipleObjectsEx`;
-4. pumps messages before continuing queued work;
-5. pairs successful initialization with `OleUninitialize`.
+1. STA に入り `OleInitialize` を呼び出す。
+2. Win32 メッセージキューを作成する。
+3. `MsgWaitForMultipleObjectsEx` でキューのセマフォまたはウィンドウメッセージを待つ。
+4. キューに入った処理を続行する前にメッセージをポンプする。
+5. 初期化成功と対になる `OleUninitialize` を呼び出す。
 
-This matters because Shell extensions and sources can depend on message dispatch and COM reentrancy even when Files has no visible window on that worker.
+Shell 拡張とソースは、ワーカーに表示ウィンドウがなくてもメッセージディスパッチと COM の再入に依存する場合があるため、これは重要です。
 
-## Rules at the boundary
+## 境界の規則
 
 ```mermaid
 flowchart LR
-    Delegate["Synchronous scheduler delegate"]
-    COM["Shell COM interfaces"]
-    Snapshot["Managed snapshot"]
-    Affine["Private affine wrapper"]
-    Caller["Caller"]
+    Delegate["同期スケジューラーデリゲート"]
+    COM["Shell COM インターフェース"]
+    Snapshot["管理対象スナップショット"]
+    Affine["非公開アパートメント依存ラッパー"]
+    Caller["呼び出し元"]
 
     Delegate --> COM
     COM --> Snapshot
     COM --> Affine
     Snapshot --> Caller
     Affine --> Caller
-    Affine -. every COM access returns .-> Delegate
-    COM -. forbidden .-> Caller
+    Affine -. すべての COM アクセスが戻る .-> Delegate
+    COM -. 禁止 .-> Caller
 ```
 
-- Scheduler delegates are synchronous `Func<T>`. An `async` delegate would resume after leaving the STA contract.
-- Raw Shell or COM interfaces do not escape to arbitrary callers.
-- Prefer copying data into an immutable managed snapshot.
-- If an object must stay alive, a private wrapper may retain it only when every access is scheduled back to the same ordered lane.
-- Work already running is not forcibly canceled. The cancellation token cancels work while it waits to start; a delegate may also observe the token itself.
-- A nested call from the same scheduler runs inline to avoid queuing behind itself and deadlocking.
+- スケジューラーデリゲートは同期 `Func<T>` です。`async` デリゲートは STA 契約の外で再開するため使いません。
+- 生の Shell/COM インターフェースを任意の呼び出し元へ逃がしません。
+- データは不変の管理対象スナップショットへコピーすることを優先します。
+- オブジェクトを生存させる必要がある場合は、すべてのアクセスを同じ順序付きレーンへスケジュールする非公開ラッパーだけが保持できます。
+- 実行中の処理を強制的にキャンセルしません。キャンセルトークンは開始待ちの処理をキャンセルし、デリゲート自身もトークンを確認できます。
+- 同じスケジューラーからの入れ子の呼び出しは、後ろにキューイングされてデッドロックするのを避けるためインラインで実行します。
 
-## Enumeration sequence
+## 列挙のシーケンス
 
 ```mermaid
 sequenceDiagram
@@ -100,25 +99,21 @@ sequenceDiagram
     participant Shell as IEnumShellItems
 
     Caller->>Wrapper: ReadNextAsync(32, token)
-    Wrapper->>Queue: enqueue synchronous batch
-    Queue->>Shell: Next repeated up to 32 times
-    Shell-->>Queue: child IShellItem values
-    Queue->>Queue: copy managed snapshots
-    Queue-->>Wrapper: snapshot list
-    Wrapper-->>Caller: apartment-neutral batch
+    Wrapper->>Queue: 同期バッチをキューに登録
+    Queue->>Shell: 最大 32 回 Next
+    Shell-->>Queue: child IShellItem value
+    Queue->>Queue: 管理対象スナップショットへコピー
+    Queue-->>Wrapper: スナップショット一覧
+    Wrapper-->>Caller: アパートメント非依存のバッチ
 ```
 
-Cancellation between batches is prompt without paying one scheduler transition per child.
+バッチ間のキャンセルは、子ごとにスケジューラー遷移のコストを払わず、すぐに処理できます。
 
-## Shutdown and ownership
+## 終了と所有権
 
-`WindowsShellScheduler` is an instance service rather than a static global.
-Disposal atomically stops accepting work, faults queued work with
-`ObjectDisposedException`, wakes every worker, waits for any already-running
-delegate to finish, and then disposes the queue handles.
+`WindowsShellScheduler` は static global ではなくインスタンスサービスです。破棄では処理の受付をアトミックに停止し、キュー済みの処理を `ObjectDisposedException` で fault させ、
+すべてのワーカーを起こし、実行中のデリゲートが終了するのを待ってからキューハンドルを破棄します。
 
-The application root disposes item models and affine streams before storage
-sources and schedulers. An injected scheduler is borrowed by
-`WindowsStorageSource`; a source-created scheduler is owned by that source.
-Source and runtime disposal are idempotent and continue through independent
-cleanup failures.
+アプリケーションルートはストレージソースとスケジューラーより先に、項目モデルとアパートメント依存ストリームを破棄します。
+注入されたスケジューラーは `WindowsStorageSource` から借用され、ソースが作成したスケジューラーはそのソースが所有します。
+ソースとランタイムの破棄は冪等で、独立したクリーンアップ失敗があっても処理を継続します。

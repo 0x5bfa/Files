@@ -1,25 +1,21 @@
-# Clipboard, drag/drop, and Shell integration
+# クリップボード、ドラッグ/ドロップ、Shell 連携
 
-Clipboard, drag/drop, and Windows Shell context menus connect the new
-Files.App model graph to other applications and native extensions. They are
-high-risk platform adapters: they combine untrusted external data, HWND and
-OLE STA affinity, delayed streams, mutable selection, and destructive storage
-operations.
+クリップボード、ドラッグ/ドロップ、Windows Shell のコンテキストメニューは、新しい Files.App のモデルグラフを他のアプリケーションやネイティブ拡張へ接続します。
+これらは、信頼できない外部データ、HWND と OLE STA の親和性、遅延ストリーム、可変な選択、破壊的なストレージ操作を組み合わせる高リスクなプラットフォームアダプターです。
 
-Files.App owns these adapters. Files.Core supplies stable item references,
-source resolution, same-source operations, and a future cross-source transfer
-coordinator. No WinUI or OLE data object enters a CoreModel or AppModel.
+これらのアダプターを所有するのは Files.App です。Files.Core は安定した項目参照、ソース解決、同一ソース操作、将来のソース間転送コーディネーターを提供します。
+WinUI や OLE のデータオブジェクトを CoreModel や AppModel に入れてはいけません。
 
-## Boundary
+## 境界
 
 ```mermaid
 flowchart TB
-    Views["WinUI input surfaces"]
-    Commands["Window command manager"]
-    Adapters["Clipboard, DnD, Shell adapters"]
-    Transfer["Transfer coordinator"]
-    Operations["Storage operation service"]
-    Sources["Storage sources"]
+    Views["WinUI 入力サーフェス"]
+    Commands["ウィンドウコマンドマネージャー"]
+    Adapters["クリップボード、DnD、Shell アダプター"]
+    Transfer["転送コーディネーター"]
+    Operations["ストレージ操作サービス"]
+    Sources["ストレージソース"]
 
     Views --> Commands
     Commands --> Adapters
@@ -29,10 +25,9 @@ flowchart TB
     Operations --> Sources
 ```
 
-The adapters translate between native formats and application intent. They do
-not implement file copies themselves and do not edit browse collections.
+アダプターはネイティブ形式とアプリケーションの意図を相互変換します。ファイルコピーを自分で実装したり、参照コレクションを編集したりはしません。
 
-## Proposed source layout
+## 提案するソース配置
 
 ```text
 src/Files.App/
@@ -64,14 +59,12 @@ src/Files.App/
     StgMediumLease.cs
 ```
 
-Native declarations, generated interfaces, and `NativeMethods.txt` live in
-`Files.Core`. Add missing APIs to the generator input or an existing wrapper;
-do not add duplicate ad hoc P/Invokes or edit generated output.
+ネイティブ宣言、生成されたインターフェース、`NativeMethods.txt` は `Files.Core` に置きます。不足する API はジェネレーター入力または既存のラッパーへ追加し、
+重複するアドホック P/Invoke を追加したり、生成出力を編集したりしてはいけません。
 
-## Shared transfer intent
+## 共有転送の意図
 
-Clipboard paste and drop converge on the same UI-independent transfer
-request:
+クリップボード貼り付けとドロップは、同じ UI 非依存の転送要求へ集約します。
 
 ```csharp
 public enum TransferIntent
@@ -98,37 +91,32 @@ public interface IStorageTransferService
 }
 ```
 
-`IStorageTransferService` belongs in Files.Core because it moves streams
-between arbitrary storage sources without knowing whether the request came
-from paste, drop, or another UI. Its routing rules are:
+`IStorageTransferService` は Files.Core に属します。貼り付け、ドロップ、別の UI のどこから要求されたかを知らずに、任意のストレージソース間でストリームを移動するためです。
+ルーティング規則は次のとおりです。
 
-1. use the source's native `IStorageOperationHandler` for a supported
-   same-source copy or move;
-2. otherwise copy through readable and writable OwlCore storage streams;
-3. write to a source-owned temporary sibling when possible;
-4. flush, close, and publish the temporary item before reporting success;
-5. for a cross-source move, delete the source only after the copy commits;
-6. report copy success plus delete failure as partial success;
-7. never claim transactionality across two sources.
+1. サポートされる同一ソースのコピーまたは移動には、ソース固有のネイティブ `IStorageOperationHandler` を使う。
+2. それ以外は、読み取り可能な OwlCore ストレージストリームと書き込み可能なストリームを介してコピーする。
+3. 可能ならソース所有の一時兄弟項目へ書き込む。
+4. 成功を報告する前に、一時項目を flush、close し、公開する。
+5. ソース間移動では、コピーが確定した後にだけソースを削除する。
+6. コピー成功と削除失敗を部分成功として報告する。
+7. 2 つのソースをまたぐトランザクション性を決して主張しない。
 
-Link is handled only when the destination source explicitly supports a link
-operation. It never silently degrades to copy.
+リンクは、宛先ソースがリンク操作を明示的にサポートする場合だけ扱います。コピーへ暗黙的に劣化させてはいけません。
 
-Conflict prompting remains in Files.App. Core receives a resolved policy or a
-source-neutral callback contract; it does not display UI.
+競合のプロンプトは Files.App に残します。Core には解決済みのポリシーまたはソース非依存のコールバック契約を渡し、UI は表示させません。
 
-## Clipboard architecture
+## クリップボードアーキテクチャ
 
-### Internal format
+### 内部形式
 
-Files writes one versioned private format in addition to applicable Windows
-formats:
+Files は、適用可能な Windows 形式に加えて、バージョン付きのプライベート形式を 1 つ書き込みます。
 
 ```text
 application/vnd.files.storable-references+json
 ```
 
-The payload contains:
+ペイロードは次のようになります。
 
 ```json
 {
@@ -145,230 +133,195 @@ The payload contains:
 }
 ```
 
-`sourceId` and `itemId` are identity. `lastKnownAddress` is optional recovery
-metadata and is never trusted as proof that the same item still exists. The
-payload never contains an FTP password, access token, credential key,
-thumbnail bytes, retained model, PIDL pointer, or process-local object handle.
+`sourceId` と `itemId` が識別情報です。`lastKnownAddress` は任意の復旧メタデータで、同じ項目がまだ存在する証明として信頼してはいけません。
+ペイロードには FTP パスワード、アクセストークン、認証キー、サムネイルバイト列、保持されたモデル、PIDL ポインター、プロセス内オブジェクトハンドルを決して含めません。
 
-The parser enforces:
+パーサーは次を強制します。
 
-- an explicit supported schema version;
-- maximum item count and payload size;
-- valid source and item ID lengths;
-- known intent values;
-- no duplicate operation or item entries;
-- strict reference resolution before execution.
+- 明示的にサポートされたスキーマバージョン。
+- 項目数とペイロードサイズの最大値。
+- ソース ID と項目 ID の有効な長さ。
+- 既知の意図値。
+- 重複する操作または項目エントリがないこと。
+- 実行前の厳格な参照解決。
 
-External applications can forge the private format. Treat it as untrusted
-input even when it contains a Files operation ID.
+外部アプリケーションはプライベート形式を偽造できます。Files の操作 ID が含まれていても、信頼できない入力として扱います。
 
-### Windows formats
+### Windows 形式
 
-Publish the richest formats supported by the selected items:
+選択された項目がサポートする、最も豊富な形式を公開します。
 
-| Format | Use |
+| 形式 | 用途 |
 | --- | --- |
-| Files private format | Lossless in-app and cross-window references |
-| `CFSTR_PREFERREDDROPEFFECT` | Copy or move intent |
-| `CFSTR_SHELLIDLIST` | Native Shell items, including virtual namespace items |
-| `CF_HDROP` | Filesystem paths for broad legacy compatibility |
-| `CFSTR_FILEDESCRIPTORW` | Metadata for remote or virtual files |
-| `CFSTR_FILECONTENTS` | Delayed stream for each virtual file |
+| Files プライベート形式 | アプリ内およびウィンドウ間の損失のない参照 |
+| `CFSTR_PREFERREDDROPEFFECT` | コピーまたは移動の意図 |
+| `CFSTR_SHELLIDLIST` | 仮想名前空間項目を含むネイティブ Shell 項目 |
+| `CF_HDROP` | 幅広い旧来互換性のためのファイルシステムパス |
+| `CFSTR_FILEDESCRIPTORW` | リモートまたは仮想ファイルのメタデータ |
+| `CFSTR_FILECONTENTS` | 各仮想ファイルの遅延ストリーム |
 
-Do not advertise `CF_HDROP` for FTP or archive items that do not have a real
-filesystem path. A fabricated path creates incorrect identity and lifetime
-semantics.
+実際のファイルシステムパスを持たない FTP やアーカイブ項目に `CF_HDROP` を告知してはいけません。偽のパスは、誤った識別情報とライフタイムの意味を作ります。
 
-For a Windows-only selection, obtain Shell identity through the Windows
-storage bridge and publish Shell-native formats. For mixed or remote
-selection, always publish the private format; publish virtual-file formats
-only when the external consumer can receive a bounded stream.
+Windows だけの選択では、Windows ストレージブリッジを通じて Shell 識別情報を取得し、Shell ネイティブ形式を公開します。
+混在またはリモートの選択では、常にプライベート形式を公開します。仮想ファイル形式を公開するのは、外部コンシューマーが範囲を限定したストリームを受信できる場合だけです。
 
-### OLE adapter
+### OLE アダプター
 
-`OleClipboardService` uses OLE `IDataObject` as the canonical Windows
-boundary. WinUI `DataPackage` may adapt simple formats at the view edge, but
-it is not the authoritative representation because it cannot faithfully
-model every indexed `CFSTR_FILECONTENTS` stream and Shell data object.
+`OleClipboardService` は、OLE `IDataObject` を標準の Windows 境界として使います。WinUI `DataPackage` はビュー境界で単純な形式を適応できますが、
+インデックス付きのすべての `CFSTR_FILECONTENTS` ストリームと Shell データオブジェクトを忠実にモデル化できないため、権威ある表現ではありません。
 
-All calls to `OleGetClipboard`, `OleSetClipboard`, and `OleFlushClipboard`
-run on an initialized STA. Clipboard reads copy or lease each `STGMEDIUM`
-according to its ownership rules and always call `ReleaseStgMedium`.
+`OleGetClipboard`、`OleSetClipboard`、`OleFlushClipboard` のすべての呼び出しは、初期化済み STA 上で実行します。クリップボード読み取りでは、所有権規則に従って各 `STGMEDIUM` をコピーまたはリースし、
+必ず `ReleaseStgMedium` を呼び出します。
 
-`ClipboardSnapshot` captures:
+`ClipboardSnapshot` が取得するもの:
 
-- the clipboard sequence number;
-- recognized formats;
-- decoded references or external item descriptors;
-- preferred effect;
-- the Files operation ID when present.
+- クリップボードのシーケンス番号。
+- 認識した形式。
+- デコードされた参照または外部項目記述子。
+- 優先する効果。
+- 存在する場合の Files 操作 ID。
 
-The snapshot does not retain borrowed native pointers after its data object
-lease ends.
+スナップショットは、データオブジェクトのリースが終了した後に借用したネイティブポインターを保持しません。
 
-### Copy, cut, and paste
+### コピー、切り取り、貼り付け
 
-Copy and cut only publish data. Cut does not rename, delete, dim, or otherwise
-mutate an item. The UI may render cut state by matching the active clipboard
-operation ID and references.
+コピーと切り取りはデータを公開するだけです。切り取りによって項目の名前変更、削除、淡色表示、その他の変更を行ってはいけません。
+UI はアクティブなクリップボード操作 ID と参照を照合して切り取り状態を描画できます。
 
 ```mermaid
 sequenceDiagram
-    participant Command as Clipboard command
-    participant Clipboard as OLE clipboard
-    participant Resolver as Reference resolver
-    participant Transfer as Transfer service
-    participant Session as Browse session
+    participant Command as クリップボードコマンド
+    participant Clipboard as OLE クリップボード
+    participant Resolver as 参照リゾルバー
+    participant Transfer as 転送サービス
+    participant Session as 参照セッション
 
-    Command->>Clipboard: Read snapshot
-    Clipboard-->>Command: References and intent
-    Command->>Resolver: Strictly resolve references
-    Resolver-->>Command: Current source items
-    Command->>Transfer: Execute into destination
-    Transfer-->>Command: Per-item results
-    Command-->>Session: Request refresh if no watcher
-    Command->>Clipboard: Clear cut state if still owned
+    Command->>Clipboard: スナップショットを読む
+    Clipboard-->>Command: 参照と意図
+    Command->>Resolver: 参照を厳格に解決
+    Resolver-->>Command: 現在のソース項目
+    Command->>Transfer: 宛先へ実行
+    Transfer-->>Command: 項目ごとの結果
+    Command-->>Session: ウォッチャーがなければ更新要求
+    Command->>Clipboard: まだ所有していれば切り取り状態をクリア
 ```
 
-Paste captures the destination reference and clipboard sequence before
-showing any conflict prompt. Before execution it verifies that the clipboard
-sequence and destination pane are still valid. A replacement clipboard is
-never cleared after a delayed paste finishes.
+貼り付けでは、競合プロンプトを表示する前に宛先参照とクリップボードシーケンスを取得します。実行前にクリップボードのシーケンスと宛先ペインがまだ有効か確認します。
+遅延貼り付けが完了した後、置き換わったクリップボードをクリアしてはいけません。
 
-After a successful cut-paste, clear or replace cut state only when:
+切り取り貼り付けに成功した後で切り取り状態をクリアまたは置き換えるのは、次のすべてを満たすときだけです。
 
-- the clipboard still contains the same operation ID;
-- its sequence number is unchanged;
-- every requested move succeeded.
+- クリップボードにまだ同じ操作 ID が含まれている。
+- シーケンス番号が変わっていない。
+- 要求された移動がすべて成功している。
 
-Partial moves keep the failed references available and report the successful
-subset.
+部分的な移動では失敗した参照を利用可能なままにし、成功したサブセットを報告します。
 
-### Clipboard lifetime
+### クリップボードのライフタイム
 
-The process may call `OleFlushClipboard` for small, fully materialized
-formats so copied local files remain available after Files exits. It must not
-pretend that delayed FTP or archive streams can outlive their source and
-runtime. For virtual files, either materialize to an owned temporary export
-with an explicit cleanup lifetime or keep the process serving the data
-object.
+Files プロセスは、小さく完全に具象化された形式について `OleFlushClipboard` を呼び出し、コピーされたローカルファイルを Files 終了後も利用可能にできます。
+遅延された FTP やアーカイブのストリームがソースとランタイムより長く生存できるように見せかけてはいけません。仮想ファイルでは、明示的なクリーンアップライフタイムを持つ所有された一時エクスポートへ具象化するか、
+データオブジェクトをプロセスで提供し続けます。
 
-Temporary exports are never placed at an unresolved broad path and are
-deleted only when Files can prove ownership.
+一時エクスポートを解決されていない広範なパスへ置いてはいけません。Files が所有権を証明できる場合だけ削除します。
 
-## Drag and drop
+## ドラッグとドロップ
 
-### Drag session
+### ドラッグセッション
 
-`DragSession` is window-owned and short-lived. It captures:
+`DragSession` はウィンドウが所有する短命のオブジェクトです。次を取得します。
 
-- source window and pane IDs;
-- browse generation and item version;
-- immutable selected references;
-- allowed effects;
-- a unique operation ID;
-- cancellation and data-object lifetime.
+- ソースのウィンドウ ID とペイン ID。
+- 参照世代と項目バージョン。
+- 不変の選択参照。
+- 許可された効果。
+- 一意な操作 ID。
+- キャンセルとデータオブジェクトのライフタイム。
 
-It does not retain `BrowseItemViewModel`, `IStorableModel`, XAML controls, or
-borrowed PIDLs.
+`BrowseItemViewModel`、`IStorableModel`、XAML コントロール、借用 PIDL を保持してはいけません。
 
-The same native data object builder used by the clipboard supplies drag
-formats. `DoDragDrop` and the OLE modal loop stay on the owning UI STA.
-Source stream reads may execute asynchronously behind delayed rendering,
-but COM callbacks are marshaled through the data object's owning apartment.
+クリップボードで使うものと同じネイティブデータオブジェクトビルダーが、ドラッグ形式を提供します。`DoDragDrop` と OLE モーダルループは所有 UI STA に残します。
+遅延レンダリング中のソースストリーム読み取りは非同期に実行して構いませんが、COM コールバックはデータオブジェクトを所有するアパートメントを通じてマーシャリングします。
 
-### Drop negotiation
+### ドロップ交渉
 
-`DropNegotiator` makes drag-over decisions from cached metadata only:
+`DropNegotiator` はキャッシュ済みメタデータだけからドラッグ中の判断を行います。
 
-- whether the target is a folder-like destination;
-- source and destination source IDs;
-- source-declared operation support;
-- allowed source effects;
-- keyboard modifiers;
-- application policy.
+- ターゲットがフォルダー形状の宛先かどうか。
+- ソースと宛先のソース ID。
+- ソースが宣言した操作サポート。
+- 許可されたソース効果。
+- キーボード修飾キー。
+- アプリケーションポリシー。
 
-Drag-over never opens a network connection, enumerates a folder, prompts, or
-performs strict identity recovery. Drop performs full validation again.
+ドラッグ中にネットワーク接続を開いたり、フォルダーを列挙したり、プロンプトを表示したり、厳格な識別情報復旧を行ったりしてはいけません。ドロップ時には完全な検証をもう一度行います。
 
-Default intent follows Windows conventions:
+既定の意図は Windows の規約に従います。
 
-| Condition | Default |
+| 条件 | 既定値 |
 | --- | --- |
-| Same source and native move supported | Move |
-| Different sources | Copy |
-| Ctrl held | Copy |
-| Shift held and move is safe | Move |
-| Alt held and link supported | Link |
+| 同一ソースでネイティブ移動がサポートされる | 移動 |
+| 異なるソース | コピー |
+| Ctrl を押している | コピー |
+| Shift を押していて移動が安全 | 移動 |
+| Alt を押していてリンクがサポートされる | リンク |
 
-The cursor effect is advisory. The drop handler may still reject execution if
-strict resolution or source item feature changes.
+カーソル効果は助言にすぎません。厳格な解決やソース項目機能の変更により、ドロップハンドラーが実行を拒否することがあります。
 
-### Drop flow
+### ドロップの流れ
 
 ```mermaid
 sequenceDiagram
-    participant Source as Drag source
-    participant Target as Drop target
-    participant Parser as Format reader
-    participant Commands as Command adapter
-    participant Transfer as Transfer service
+    participant Source as ドラッグソース
+    participant Target as ドロップターゲット
+    participant Parser as 形式リーダー
+    participant Commands as コマンドアダプター
+    participant Transfer as 転送サービス
 
-    Source->>Target: IDataObject and allowed effects
-    Target->>Target: Cheap drag-over negotiation
-    Target-->>Source: Proposed effect
+    Source->>Target: IDataObject と許可効果
+    Target->>Target: 安価なドラッグ中交渉
+    Target-->>Source: 提案された効果
     Source->>Target: Drop
-    Target->>Parser: Decode best supported format
-    Parser-->>Target: References or external streams
-    Target->>Commands: Confirm conflicts and intent
-    Commands->>Transfer: Execute request
-    Transfer-->>Commands: Progress and item results
+    Target->>Parser: 最適なサポート形式をデコード
+    Parser-->>Target: 参照または外部ストリーム
+    Target->>Commands: 競合と意図を確認
+    Commands->>Transfer: 要求を実行
+    Transfer-->>Commands: 進行状況と項目結果
 ```
 
-Format precedence for an incoming drop is:
+受信ドロップの形式の優先順位は次のとおりです。
 
-1. validated Files private references;
-2. Shell ID list;
-3. `CF_HDROP`;
-4. virtual file descriptors and contents;
-5. WinUI storage items as a compatibility adapter.
+1. 検証済み Files プライベート参照。
+2. Shell ID リスト。
+3. `CF_HDROP`。
+4. 仮想ファイルの記述子と内容。
+5. 互換アダプターとしての WinUI ストレージ項目。
 
-The reader does not merge duplicate representations of the same item.
+リーダーは同じ項目を表す重複表現を結合しません。
 
-### External virtual files
+### 外部仮想ファイル
 
-Incoming `CFSTR_FILEDESCRIPTORW` entries are untrusted. Validate descriptor
-count, name length, attributes, and stream index. Strip path components from
-display names and reject `.` and `..`. Each `CFSTR_FILECONTENTS` medium is
-consumed once or copied into an owned stream according to `TYMED`.
+受信した `CFSTR_FILEDESCRIPTORW` エントリは信頼できません。記述子数、名前の長さ、属性、ストリームインデックスを検証します。
+表示名からパス成分を取り除き、`.` と `..` を拒否します。各 `CFSTR_FILECONTENTS` メディアは 1 回だけ消費するか、`TYMED` に従って所有ストリームへコピーします。
 
-Outgoing virtual files expose one indexed content stream per descriptor.
-Folders require an explicit recursive packaging policy; the first
-implementation may disable dragging remote folders to other applications
-rather than silently materializing an unbounded tree.
+送信する仮想ファイルは、記述子ごとにインデックス付きのコンテンツストリームを 1 つ公開します。フォルダーには明示的な再帰パッケージポリシーが必要です。
+最初の実装では、範囲を限定できないツリーを暗黙的に具象化するより、リモートフォルダーの他アプリへのドラッグを無効にして構いません。
 
-Cancellation closes source streams and completes the COM async-operation
-contract. It does not delete a destination item that the transfer service did
-not create.
+キャンセルではソースストリームを閉じ、COM 非同期操作契約を完了します。転送サービスが作成していない宛先項目を削除してはいけません。
 
-## Windows Shell context menus
+## Windows Shell コンテキストメニュー
 
-### Why the menu stays native
+### メニューをネイティブのままにする理由
 
-Shell extensions may be owner-drawn, create submenus lazily, require
-`IContextMenu2` or `IContextMenu3` message forwarding, and assume command IDs
-remain valid only for one menu session. Enumerating their labels and copying
-them into a XAML `MenuFlyout` loses those behaviors.
+Shell 拡張はオーナー描画、遅延したサブメニューの作成、`IContextMenu2` または `IContextMenu3` のメッセージ転送を行い、
+コマンド ID が 1 つのメニューセッション中だけ有効であることを前提にする場合があります。ラベルを列挙して XAML の `MenuFlyout` にコピーすると、それらの動作を失います。
 
-The new implementation displays a native `HMENU` for a Windows Shell
-selection. Files-native commands continue through
-`WindowCommandManager`; non-Windows sources receive a Files-native menu only.
+新しい実装では、Windows Shell の選択に対してネイティブ `HMENU` を表示します。Files 標準コマンドは引き続き `WindowCommandManager` を通り、
+Windows 以外のソースには Files 標準メニューだけを表示します。
 
-### Shell target bridge
+### Shell ターゲットブリッジ
 
-Files.App must not rebuild Windows identity from a path. Add a narrow
-Windows-specific bridge that converts current `StorableReference` values into
-immutable Shell target descriptors:
+Files.App はパスから Windows の識別情報を再構築してはいけません。現在の `StorableReference` 値を不変の Shell ターゲット記述子へ変換する、狭い Windows 固有ブリッジを追加します。
 
 ```csharp
 public sealed record ShellSelectionTarget(
@@ -383,119 +336,101 @@ public interface IWindowsShellSelectionTargetResolver
 }
 ```
 
-The descriptor contains copied PIDL bytes, not borrowed pointers or live COM
-objects. Files.App reconstructs owned PIDLs and binds the parent folder on the
-menu's STA. The resolver verifies every reference and returns `null` when the
-selection is not representable.
+記述子に含めるのはコピーされた PIDL バイト列であり、借用ポインターや生存中の COM オブジェクトではありません。Files.App は所有する PIDL を再構築し、メニューの STA で親フォルダーを束縛します。
+リゾルバーはすべての参照を検証し、選択を表現できないときは `null` を返します。
 
-The first implementation supports items with one common Shell parent. Mixed
-parents fall back to Files-native commands. Do not silently build a context
-menu for only part of the selection.
+最初の実装では、共通の Shell 親を 1 つ持つ項目をサポートします。親が混在する場合は Files 標準コマンドにフォールバックします。選択の一部だけのコンテキストメニューを黙って構築してはいけません。
 
-### Menu session
+### メニューセッション
 
-`ShellContextMenuSession` owns:
+`ShellContextMenuSession` が所有するもの:
 
-- reconstructed absolute and child PIDLs;
-- the parent `IShellFolder`;
-- `IContextMenu` and optional `IContextMenu2`/`IContextMenu3`;
-- the popup `HMENU`;
-- the reserved command ID range;
-- owner HWND and invocation point;
-- temporary window-message forwarding.
+- 再構築された絶対 PIDL と子 PIDL。
+- 親 `IShellFolder`。
+- `IContextMenu` と任意の `IContextMenu2`/`IContextMenu3`。
+- ポップアップ `HMENU`。
+- 予約済みコマンド ID 範囲。
+- 所有者 HWND と呼び出し位置。
+- 一時的なウィンドウメッセージ転送。
 
 ```mermaid
 sequenceDiagram
     participant App as Files.App
-    participant Resolver as Shell target resolver
-    participant Menu as Shell menu session
-    participant Window as Owner window
-    participant Extension as Shell extension
+    participant Resolver as Shell ターゲットリゾルバー
+    participant Menu as Shell メニューセッション
+    participant Window as 所有ウィンドウ
+    participant Extension as Shell 拡張
 
-    App->>Resolver: Resolve selected references
-    Resolver-->>App: Copied PIDL descriptor
-    App->>Menu: Create on window STA
+    App->>Resolver: 選択参照を解決
+    Resolver-->>App: コピー済み PIDL 記述子
+    App->>Menu: ウィンドウ STA で作成
     Menu->>Extension: QueryContextMenu
-    Menu->>Window: Install message forwarding
+    Menu->>Window: メッセージ転送をインストール
     Menu->>Menu: TrackPopupMenuEx
     Window->>Extension: HandleMenuMsg2
     Menu->>Extension: InvokeCommand
-    Menu->>Window: Remove forwarding
-    Menu->>Menu: Dispose native state
+    Menu->>Window: 転送を削除
+    Menu->>Menu: ネイティブ状態を破棄
 ```
 
-The session is created, displayed, invoked, and released on the owning
-window's STA. It forwards `WM_INITMENUPOPUP`, `WM_DRAWITEM`,
-`WM_MEASUREITEM`, and `WM_MENUCHAR` while active. `IContextMenu3.HandleMenuMsg2`
-is preferred, with `IContextMenu2.HandleMenuMsg` as fallback.
+セッションの作成、表示、呼び出し、解放は所有ウィンドウの STA で行います。アクティブ中は `WM_INITMENUPOPUP`、`WM_DRAWITEM`、`WM_MEASUREITEM`、`WM_MENUCHAR` を転送します。
+`IContextMenu3.HandleMenuMsg2` を優先し、`IContextMenu2.HandleMenuMsg` をフォールバックにします。
 
-`QueryContextMenu` receives a reserved ID range that cannot collide with
-Files commands. Shift adds extended verbs according to Shell policy.
-`InvokeCommand` supplies the owner HWND, Unicode flag, invocation point,
-working directory when meaningful, and selected numeric command offset.
+`QueryContextMenu` には Files コマンドと衝突しない予約済み ID 範囲を渡します。Shift では Shell ポリシーに従って拡張動詞を追加します。
+`InvokeCommand` には所有者 HWND、Unicode フラグ、呼び出し位置、意味がある場合の作業ディレクトリ、選択された数値コマンドオフセットを渡します。
 
-Do not cache `IContextMenu`, `HMENU`, or numeric command IDs on a storable.
-Their validity is scoped to one selection and one popup session.
+`IContextMenu`、`HMENU`、数値コマンド ID を storable にキャッシュしてはいけません。それらの有効性は 1 つの選択と 1 つのポップアップセッションに限定されます。
 
-### Files and Shell commands together
+### Files と Shell コマンドを同時に扱う
 
-Use one of two deliberate surfaces:
+意図的に次のどちらかのサーフェスを使います。
 
-- a Files XAML menu for built-in and source-contributed commands, with a
-  “Show more options” item that opens the native Shell menu; or
-- a native menu where Files reserves its own non-overlapping command IDs and
-  then lets `IContextMenu` populate the Shell range.
+- 組み込みコマンドとソース提供コマンド用の Files XAML メニュー。ネイティブ Shell メニューを開く「その他のオプションを表示」項目を含める。
+- Files が重複しない独自のコマンド ID を予約し、`IContextMenu` に Shell 範囲を設定させるネイティブメニュー。
 
-The first option is simpler and matches modern Windows behavior. Both invoke
-Files commands through `WindowCommandManager`; neither duplicates command
-logic in the menu control.
+最初の選択肢の方が単純で、現代の Windows 動作にも合います。どちらも `WindowCommandManager` を通じて Files コマンドを呼び出し、メニューコントロールにコマンドロジックを重複させません。
 
-Canonical verbs such as `properties` or `openas` may be invoked directly
-through a short-lived session when a built-in command explicitly requires
-them. Unknown verbs remain menu-scoped and are never persisted as command
-IDs.
+`properties` や `openas` のような標準動詞は、組み込みコマンドが明示的に必要とする場合に、短命のセッションを通じて直接呼び出して構いません。
+未知の動詞はメニューのスコープに残し、コマンド ID として永続化しません。
 
-## Threading
+## スレッド処理
 
-| Operation | Required context |
+| 操作 | 必須コンテキスト |
 | --- | --- |
-| Capture command context | Owning window dispatcher |
-| OLE clipboard calls | Initialized STA |
-| `DoDragDrop` and drop callbacks | Owning UI STA |
-| `IDataObject` format callbacks | Data object's owning apartment |
-| Shell menu creation and tracking | Owner window STA |
-| Shell menu message forwarding | Owner window procedure |
-| Source stream I/O | Backend scheduler or async worker |
-| Core transfer execution | UI-independent async path |
+| コマンドコンテキストの取得 | 所有ウィンドウの dispatcher |
+| OLE クリップボード呼び出し | 初期化済み STA |
+| `DoDragDrop` とドロップコールバック | 所有 UI STA |
+| `IDataObject` 形式コールバック | データオブジェクト所有のアパートメント |
+| Shell メニューの作成と追跡 | 所有ウィンドウ STA |
+| Shell メニューのメッセージ転送 | 所有ウィンドウプロシージャ |
+| ソースストリーム I/O | バックエンドスケジューラーまたは非同期ワーカー |
+| Core 転送の実行 | UI 非依存の非同期経路 |
 
-Do not use the general Windows Shell metadata scheduler to display an
-`HMENU`; it does not own the window or its message route. Do not block the UI
-STA waiting synchronously for FTP or archive streams.
+一般的な Windows Shell メタデータスケジューラーを `HMENU` の表示に使ってはいけません。ウィンドウやメッセージ経路を所有しないためです。
+FTP やアーカイブのストリームを同期的に待って UI STA をブロックしてはいけません。
 
-## Security and validation
+## セキュリティと検証
 
-- Treat every external format as hostile and enforce size and count limits.
-- Strictly resolve Files references; never trust `LastKnownAddress` alone.
-- Reject paths containing traversal when creating destination child names.
-- Never serialize credentials, tokens, raw pointers, or source session IDs.
-- Do not hydrate, download, execute, or invoke a Shell verb during drag-over.
-- Show destructive and elevation prompts through the owning window.
-- Release every `STGMEDIUM`, COM interface, PIDL, `HMENU`, and temporary
-  subclass on every success, cancellation, and failure path.
-- Do not invoke a command ID after its menu session has closed.
-- Record format and source categories in telemetry, not paths or clipboard
-  contents.
+- すべての外部形式を悪意あるものとして扱い、サイズと数の制限を強制する。
+- Files の参照を厳格に解決し、`LastKnownAddress` だけを信頼しない。
+- 宛先の子名を作るとき、トラバーサルを含むパスを拒否する。
+- 認証情報、トークン、生ポインター、ソースセッション ID をシリアライズしない。
+- ドラッグ中に hydration、ダウンロード、実行、Shell 動詞の呼び出しを行わない。
+- 破壊的操作と昇格のプロンプトは所有ウィンドウを通して表示する。
+- 成功、キャンセル、失敗のすべての経路で、各 `STGMEDIUM`、COM インターフェース、PIDL、`HMENU`、一時サブクラスを解放する。
+- メニューセッションが閉じた後でコマンド ID を呼び出さない。
+- テレメトリには形式とソースのカテゴリだけを記録し、パスやクリップボード内容は記録しない。
 
-## Ownership and shutdown
+## 所有権と終了
 
 ```mermaid
 flowchart TB
-    Window["Window host"]
-    Clipboard["Clipboard service"]
-    Drag["Active drag session"]
-    Drop["Drop target"]
-    Menu["Shell menu session"]
-    Streams["Delayed source streams"]
+    Window["ウィンドウホスト"]
+    Clipboard["クリップボードサービス"]
+    Drag["アクティブなドラッグセッション"]
+    Drop["ドロップターゲット"]
+    Menu["Shell メニューセッション"]
+    Streams["遅延ソースストリーム"]
 
     Window --> Clipboard
     Window --> Drag
@@ -504,102 +439,93 @@ flowchart TB
     Drag --> Streams
 ```
 
-The process owns the clipboard service. Each window owns its drop target and
-active drag or menu session. The data object owns delayed streams and
-source leases until OLE signals completion.
+プロセスがクリップボードサービスを所有します。各ウィンドウがドロップターゲットとアクティブなドラッグ/メニューセッションを所有します。
+データオブジェクトは、OLE が完了を通知するまで遅延ストリームとソースリースを所有します。
 
-Window shutdown:
+ウィンドウ終了:
 
-1. reject new paste, drag, drop, and menu requests;
-2. revoke the drop target;
-3. cancel active transfers and delayed rendering;
-4. close the native menu and remove message forwarding;
-5. release data objects and native media;
-6. dispose the window command manager;
-7. dispose ViewModels and the Core window model.
+1. 新しい貼り付け、ドラッグ、ドロップ、メニュー要求を拒否する。
+2. ドロップターゲットを無効化する。
+3. アクティブな転送と遅延レンダリングをキャンセルする。
+4. ネイティブメニューを閉じ、メッセージ転送を削除する。
+5. データオブジェクトとネイティブメディアを解放する。
+6. ウィンドウのコマンドマネージャーを破棄する。
+7. ViewModel と Core のウィンドウモデルを破棄する。
 
-Process shutdown flushes only materialized clipboard data, disposes the
-clipboard service, then disposes `FilesCoreRuntime`.
+プロセス終了では、具象化済みのクリップボードデータだけを flush し、クリップボードサービスを破棄してから `FilesCoreRuntime` を破棄します。
 
-## Testing
+## テスト
 
-Platform-neutral unit tests cover:
+プラットフォーム非依存のユニットテストでは次をカバーします。
 
-- private payload round-trip and schema rejection;
-- payload count, size, duplicate, and traversal limits;
-- format precedence and duplicate suppression;
-- copy, cut, and paste effect mapping;
-- clipboard sequence and operation-ID ownership;
-- drop intent negotiation;
-- same-source and cross-source routing;
-- partial cross-source move results;
-- stale browse generation and destination rejection;
-- Shell selection common-parent validation;
-- deterministic native resource disposal using fakes.
+- プライベートペイロードの往復とスキーマ拒否。
+- ペイロード数、サイズ、重複、トラバーサルの制限。
+- 形式の優先順位と重複抑制。
+- コピー、切り取り、貼り付けの効果対応付け。
+- クリップボードシーケンスと操作 ID の所有権。
+- ドロップ意図の交渉。
+- 同一ソースとソース間のルーティング。
+- ソース間移動の部分結果。
+- 古い参照世代と宛先の拒否。
+- Shell 選択の共通親検証。
+- 偽オブジェクトを使ったネイティブリソース破棄の決定性。
 
-Windows integration tests run on an STA with a message pump and cover:
+Windows 統合テストは、メッセージポンプ付き STA で実行し、次をカバーします。
 
-- `CF_HDROP` and preferred effect interoperability;
-- indexed virtual-file content;
-- OLE clipboard replacement during paste;
-- drag cancellation and delayed stream cleanup;
-- a temporary-file `IContextMenu3` session;
-- owner-drawn message forwarding;
-- menu cancellation without invocation;
-- window shutdown during each active session.
+- `CF_HDROP` と優先効果の相互運用性。
+- インデックス付き仮想ファイルコンテンツ。
+- 貼り付け中の OLE クリップボード置換。
+- ドラッグキャンセルと遅延ストリームのクリーンアップ。
+- 一時ファイルに対する `IContextMenu3` セッション。
+- オーナー描画メッセージの転送。
+- 呼び出しなしのメニューキャンセル。
+- 各アクティブセッション中のウィンドウ終了。
 
-Do not depend on installed third-party Shell extensions for deterministic CI.
-Use first-party temporary items and fake menu/data-object wrappers for failure
-injection.
+決定論的な CI のために、インストール済みの第三者 Shell 拡張に依存してはいけません。ファーストパーティの一時項目と、失敗注入用の偽メニュー/データオブジェクトラッパーを使います。
 
-## Migration from the existing implementation
+## 既存実装からの移行
 
-The current code already contains useful Shell and virtual-file interop, but
-it mixes path identity, cached `IContextMenu` objects, global clipboard state,
-WinUI packages, and storage execution.
+現在のコードには有用な Shell と仮想ファイルの相互運用処理がありますが、パス識別情報、キャッシュされた `IContextMenu` オブジェクト、グローバルなクリップボード状態、
+WinUI パッケージ、ストレージ実行が混在しています。
 
-Migrate by behavior:
+動作単位で移行します。
 
-1. introduce the private reference format and parser;
-2. move clipboard ownership behind `IClipboardService`;
-3. route paste through the new command and transfer services;
-4. share the data-object builder with drag sources;
-5. add strict incoming format readers and drop negotiation;
-6. add the Shell target resolver using current Windows references;
-7. replace cached context menus with short-lived native sessions;
-8. migrate one UI surface at a time;
-9. remove legacy path-only and global clipboard helpers after the final
-   caller moves.
+1. プライベート参照形式とパーサーを導入する。
+2. `IClipboardService` の背後にクリップボード所有権を移す。
+3. 新しいコマンドサービスと転送サービスを通じて貼り付けをルーティングする。
+4. データオブジェクトビルダーをドラッグソースと共有する。
+5. 受信形式の厳格なリーダーとドロップ交渉を追加する。
+6. 現在の Windows 参照を使う Shell ターゲットリゾルバーを追加する。
+7. キャッシュされたコンテキストメニューを短命のネイティブセッションに置き換える。
+8. UI サーフェスを 1 つずつ移行する。
+9. 最後の呼び出し元を移行した後、従来のパス限定ヘルパーとグローバルクリップボードヘルパーを削除する。
 
-Existing CsWin32 declarations and proven wrappers may be reused after their
-ownership and apartment assumptions are made explicit. Generated interop code
-is not copied into Files.Core.
+既存の CsWin32 宣言と実績のあるラッパーは、所有権とアパートメントの前提を明示した上で再利用して構いません。生成された相互運用コードを Files.Core へコピーしてはいけません。
 
-## Implementation order
+## 実装順序
 
-1. Implement the Core cross-source transfer contract and tests.
-2. Implement the private clipboard payload and strict parser.
-3. Implement OLE clipboard copy, cut, and paste.
-4. Implement internal drag/drop using the same payload.
-5. Add `CF_HDROP` and Shell ID-list interoperability.
-6. Add bounded virtual-file streaming.
-7. Implement the Shell selection target bridge.
-8. Implement short-lived native Shell menu sessions and forwarding.
-9. Integrate commands, progress, error policy, and shutdown.
-10. Remove the corresponding legacy helpers.
+1. Core のソース間転送契約とテストを実装する。
+2. プライベートクリップボードペイロードと厳格なパーサーを実装する。
+3. OLE クリップボードのコピー、切り取り、貼り付けを実装する。
+4. 同じペイロードを使う内部ドラッグ/ドロップを実装する。
+5. `CF_HDROP` と Shell ID リストの相互運用性を追加する。
+6. 範囲を限定した仮想ファイルストリーミングを追加する。
+7. Shell 選択ターゲットブリッジを実装する。
+8. 短命のネイティブ Shell メニューセッションと転送を実装する。
+9. コマンド、進行状況、エラーポリシー、終了を統合する。
+10. 対応するレガシーヘルパーを削除する。
 
-## Anti-patterns
+## アンチパターン
 
-Do not:
+次のことをしてはいけません。
 
-- store an `IDataObject`, PIDL pointer, `IContextMenu`, or `HMENU` on an item
-  model;
-- treat a path or `CF_HDROP` entry as stable item identity;
-- put FTP credentials or source handles in a clipboard format;
-- run network or Shell work during drag-over;
-- copy dynamic Shell menu labels into XAML and discard their native behavior;
-- perform a cross-source move by deleting before the destination commits;
-- clear a clipboard that changed while a paste prompt was open;
-- mutate a browse collection directly after paste or drop;
-- assume delayed virtual-file streams survive process shutdown;
-- release COM, `STGMEDIUM`, or menu resources from an unrelated apartment.
+- `IDataObject`、PIDL ポインター、`IContextMenu`、`HMENU` を項目モデルに保存する。
+- パスまたは `CF_HDROP` エントリを安定した項目識別情報として扱う。
+- FTP 認証情報やソースハンドルをクリップボード形式に入れる。
+- ドラッグ中にネットワークまたは Shell の処理を行う。
+- 動的な Shell メニューラベルを XAML にコピーしてネイティブ動作を失わせる。
+- 宛先が確定する前に削除してソース間移動を実装する。
+- 貼り付けプロンプト中に変更されたクリップボードをクリアする。
+- 貼り付けやドロップの後に参照コレクションを直接変更する。
+- 遅延された仮想ファイルストリームがプロセス終了後も存続すると仮定する。
+- COM、`STGMEDIUM`、メニューリソースを別のアパートメントから解放する。

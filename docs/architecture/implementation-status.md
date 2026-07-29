@@ -1,77 +1,54 @@
-# Files.Core completion boundary
+# Files.Core の完了境界
 
-Files.Core is complete as the UI-independent foundation required to begin the
-new Files.App. “Complete” here means the architectural contracts plus the
-Windows and FTP vertical slices are usable end to end; it does not mean every
-future storage source or Files feature is implemented.
+`Files.Core` は、新しい Files.App を開始するために必要な UI 非依存基盤です。ここでいう「完了」とは、
+アーキテクチャ契約と Windows/FTP の垂直スライスをエンドツーエンドで利用できることを意味します。
+将来のすべてのストレージソースや Files の機能が実装済みという意味ではありません。
 
-## Ready for Files.App
+## Files.App が利用できるもの
 
-| Area | Ready behavior |
+| 領域 | 利用できる動作 |
 | --- | --- |
-| Model graph | Application, windows, tabs, split panes, browse sessions |
-| Navigation | Home, folder, back, forward, up, refresh, bounded history |
-| Archives | Shell-first browsing, SevenZip fallback, encrypted credentials, read-only entry streams |
-| Items | Stable identity, immutable model replacement, selection |
-| Presentation | View settings, sorting, item changes, viewport prefetch |
-| Item features | Factories, per-contract combiners, wrappers, ownership |
-| Thumbnails | Windows Shell PNG bytes, shared cache, invalidation |
-| Properties | Item-bound and batch-source contracts, typed Windows values |
-| Folder changes | Shared `SHChangeNotifyRegister` source and incremental updates |
-| Previews | Stream results and Windows Shell preview sessions |
-| Operations | Create, case-preserving rename, copy, move, Recycle Bin/permanent delete, collision policy |
-| FTP | FTP/FTPS resolution, streams, properties, same-source mutations, previews and archive reuse |
-| Composition | One builder/runtime with deterministic ownership |
-| Quality | Unit tests, Windows integration tests, benchmarks, Core CI |
+| モデルグラフ | application、window、tab、split pane、browse session |
+| ナビゲーション | home、folder、back、forward、up、refresh、上限付き履歴 |
+| アーカイブ | Shell 優先の参照、SevenZip フォールバック、暗号化認証情報、読み取り専用エントリストリーム |
+| 項目 | 安定した識別情報、不変モデルの置換、選択 |
+| 表示 | ビュー設定、並べ替え、項目変更、ビューポート先読み |
+| 項目機能 | ファクトリ、契約ごとの combiner、ラッパー、所有権 |
+| サムネイル | Windows Shell の PNG バイト列、共有キャッシュ、無効化 |
+| プロパティ | 項目単位とバッチソースの契約、型付き Windows 値 |
+| フォルダー変更 | 共有 `SHChangeNotifyRegister` ソースと差分更新 |
+| プレビュー | ストリーム結果と Windows Shell プレビューセッション |
+| 操作 | 作成、大文字小文字を保持する名前変更、コピー、移動、ごみ箱/完全削除、競合ポリシー |
+| FTP | FTP/FTPS 解決、ストリーム、プロパティ、同一ソースの変更、プレビューとアーカイブの再利用 |
+| 合成 | 所有関係が決定的な 1 つの builder/runtime |
+| 品質 | ユニットテスト、Windows 統合テスト、ベンチマーク、Core CI |
 
-## Deliberate extension boundaries
+## 意図的に残す拡張境界
 
-These do not block the new Files.App:
+次の項目は新しい Files.App の開始を妨げません。
 
-- Search and tag have typed `BrowseLocation` values but require a chosen
-  index/backend and corresponding location handler.
-- Cloud, MTP, SFTP, and other sources implement the same source, item feature,
-  location, and operation contracts as later vertical slices.
-- FTP profiles are composed before `Build`. Runtime add/remove needs a mutable
-  source registry with explicit ownership semantics.
-- Cross-source copies such as Windows-to-FTP need a generic stream-transfer
-  coordinator; the FTP source deliberately owns only same-source requests.
-- Archive browsing and read streams are implemented. Compression,
-  extract-all, entry mutations, split volumes, and archive operation
-  progress remain separate operation-source work.
-- Cold recovery of a moved Windows file from only an old same-volume address
-  needs a file-ID index or `OpenFileById` strategy. Live operations already
-  return an updated reference and watchers update open sessions.
-- Windows property extraction currently covers the typed values used by the
-  first details view. Additional canonical properties can be added to
-  `WindowsPropertyReader` without changing AppModels.
-- Context menus, Shell verbs, drag/drop data packages, sharing, and
-  application activation are Files.App/platform adapters, not item storage
-  item features. Their command, OLE, transfer, threading, and ownership design
-  is specified in [Files.App command execution](commands.md) and
-  [Clipboard, drag/drop, and Shell integration](platform-interactions.md).
-- Durable view settings, window-session serialization, telemetry, and policy
-  implementations belong to the application composition root.
-- `Files.Core.Storage` and `Files.App.Storage` have been retired, and CsWin32
-  generation now lives directly in `Files.Core`. Moving the remaining
-  Files.App consumers and deciding the future of `Files.Shared` are separate
-  migrations.
+- 検索とタグには型付き `BrowseLocation` 値がありますが、インデックス/バックエンドと対応する場所ハンドラーを選択する必要があります。
+- Cloud、MTP、SFTP などのソースは、後続の垂直スライスとして同じソース、項目機能、場所、操作契約を実装します。
+- FTP プロファイルは `Build` 前に合成します。ランタイム中の追加・削除には、明示的な所有権の意味を持つ可変ソースレジストリが必要です。
+- Windows から FTP へのソース間コピーには汎用ストリーム転送コーディネーターが必要です。FTP ソースは意図的に同一ソースの要求だけを所有します。
+- アーカイブの参照と読み取りストリームは実装済みです。圧縮、全件抽出、エントリの変更、分割ボリューム、アーカイブ操作の進行状況は別の作業として残ります。
+- 古い同一ボリュームアドレスだけから移動済み Windows ファイルを冷たく復旧するには、ファイル ID インデックスまたは `OpenFileById` 戦略が必要です。ライブ操作は更新済み参照を返し、ウォッチャーが開いているセッションを更新します。
+- Windows のプロパティ抽出は、最初の詳細ビューで使う型付き値を現在扱います。追加の正規プロパティは AppModel を変更せず `WindowsPropertyReader` へ追加できます。
+- コンテキストメニュー、Shell 動詞、ドラッグ/ドロップデータパッケージ、共有、アプリケーションのアクティブ化は Files.App/プラットフォームアダプターです。項目ストレージ機能ではありません。コマンド、OLE、転送、スレッド、所有権の設計は[Files.App のコマンド実行](commands.md)と[クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)に記載しています。
+- 永続的なビュー設定、ウィンドウセッションのシリアライズ、テレメトリ、ポリシーの実装はアプリケーション合成ルートに属します。
+- `Files.Core.Storage` と `Files.App.Storage` は廃止され、CsWin32 の生成は直接 `Files.Core` へ移動済みです。残りの Files.App コンシューマーの移行と `Files.Shared` の今後の判断は別の移行作業です。
 
-## Definition of done for the next session
+## 次のセッションの完了条件
 
-The next session can start Files.App when:
+次のセッションは、以下を満たせば Files.App を開始できます。
 
-1. `FilesCoreRuntime` is created once at process startup;
-2. a persisted `IViewSettingsStore` and production preview policies are
-   selected;
-3. `WindowViewModel`, `TabViewModel`, and `PaneViewModel` adapt the existing
-   AppModels;
-4. one item-collection adapter applies versioned browse changes on the UI
-   dispatcher;
-5. thumbnail and preview presenters convert Core results into WinUI objects;
-6. one window-scoped command manager adapts navigation and storage requests;
-7. clipboard, drag/drop, and Shell sessions remain window/platform adapters;
-8. ViewModels, commands, and preview/platform sessions are disposed before
-   the runtime.
+1. プロセス起動時に `FilesCoreRuntime` を 1 回だけ作成する。
+2. 永続化された `IViewSettingsStore` と本番プレビュー・ポリシーを選択する。
+3. `WindowViewModel`、`TabViewModel`、`PaneViewModel` が既存 AppModel を適応する。
+4. 1 つの項目コレクションアダプターが、バージョン付き参照変更を UI dispatcher へ適用する。
+5. サムネイルとプレビュープレゼンターが Core の結果を WinUI オブジェクトへ変換する。
+6. ウィンドウ単位のコマンドマネージャーがナビゲーションとストレージ要求を適応する。
+7. クリップボード、ドラッグ/ドロップ、Shell セッションをウィンドウ/プラットフォームアダプターに残す。
+8. ランタイムより先に ViewModel、コマンド、プレビュー/プラットフォームセッションを破棄する。
 
-The concrete Files.App blueprint is in [New Files.App architecture](files-app.md).
+具体的な Files.App の設計図は[新 Files.App アーキテクチャ](files-app.md)にあります。

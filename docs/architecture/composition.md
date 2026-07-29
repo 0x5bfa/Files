@@ -1,16 +1,15 @@
-# Composition root
+# 合成ルート
 
-`FilesCoreBuilder` is the supported composition boundary for the new model
-graph. It gathers source-scoped services before any item model exists and
-produces one owned `FilesCoreRuntime`.
+`FilesCoreBuilder` は新しいモデルグラフの正式な合成境界です。項目モデルを作成する前に、ソース単位のサービスを集め、
+それらを所有する `FilesCoreRuntime` を生成します。
 
 ```mermaid
 flowchart TB
     Builder["FilesCoreBuilder"]
-    Sources["Storage sources"]
+    Sources["ストレージソース"]
     Registry["ItemFeatureRegistry"]
-    Handlers["Location handlers"]
-    Operations["Operation handlers"]
+    Handlers["場所ハンドラー"]
+    Operations["操作ハンドラー"]
     Runtime["FilesCoreRuntime"]
 
     Sources --> Builder
@@ -20,30 +19,27 @@ flowchart TB
     Builder --> Runtime
 ```
 
-## Default Core services
+## Core の標準サービス
 
-The builder always installs:
+builder は常に次を登録します。
 
-| Service | Default |
+| サービス | 既定値 |
 | --- | --- |
-| Thumbnail composition | Priority fallback through `ThumbnailSourceCombiner` |
-| Property composition | Priority merge through `PropertySourceCombiner` |
-| Preview composition | Priority routing through `PreviewSourceCombiner` |
-| Thumbnail wrapper | Shared `MemoryThumbnailCache` |
-| View settings | `InMemoryViewSettingsStore` |
-| Locations | `HomeBrowseLocationHandler` and `FolderBrowseLocationHandler` |
-| AppModels | `BrowsePaneFactory` and `FilesApplicationModel` |
-| Operations | `StorageOperationService` over registered handlers |
+| サムネイルの合成 | `ThumbnailSourceCombiner` による優先度フォールバック |
+| プロパティの合成 | `PropertySourceCombiner` による優先度マージ |
+| プレビューの合成 | `PreviewSourceCombiner` による優先度ルーティング |
+| サムネイルラッパー | 共有 `MemoryThumbnailCache` |
+| ビュー設定 | `InMemoryViewSettingsStore` |
+| 場所 | `HomeBrowseLocationHandler` と `FolderBrowseLocationHandler` |
+| AppModel | `BrowsePaneFactory` と `FilesApplicationModel` |
+| 操作 | 登録済みハンドラーを使う `StorageOperationService` |
 
-Files.App should inject its persisted `IViewSettingsStore` and any durable or
-instrumented `IThumbnailCache` before `Build`.
+Files.App は `Build` の前に、永続化された `IViewSettingsStore` と durable または instrumented な `IThumbnailCache` を注入します。
 
-## Windows vertical slice
+## Windows の垂直スライス
 
-`AddWindowsStorage` registers one `WindowsStorageSource`, its operation
-handler, Windows thumbnail/property/folder-change factories, stream
-preview loaders, the Windows Shell preview loader, and default archive
-browsing.
+`AddWindowsStorage` は、1 つの `WindowsStorageSource`、その操作ハンドラー、Windows のサムネイル/プロパティ/フォルダー変更ファクトリ、
+ストリームプレビューローダー、Windows Shell プレビューローダー、既定のアーカイブ参照を登録します。
 
 ```csharp
 var builder = new FilesCoreBuilder(
@@ -58,26 +54,19 @@ builder.AddWindowsStorage(
 await using var runtime = builder.Build();
 ```
 
-Known stream formats have priority 200. Windows Shell preview descriptors
-have priority 100. A stream loader that returns `null` falls through to the
-Shell loader; a blocked stream result is terminal.
+既知のストリーム形式の優先度は 200 です。Windows Shell プレビュー記述子の優先度は 100 です。
+ストリームローダーが `null` を返すと Shell ローダーへフォールバックし、ブロック結果は終端結果になります。
 
-`AddWindowsStorage(enablePreviews: false)` omits both preview paths. The
-permissive policy defaults are useful for tests and early integration.
-Production Files.App should inject policies that account for cloud hydration,
-trust, managed policy, and user settings.
+`AddWindowsStorage(enablePreviews: false)` は 2 つのプレビュー経路を省略します。寛容な既定ポリシーはテストと初期統合に便利です。
+本番の Files.App では、クラウド hydration、信頼、管理ポリシー、ユーザー設定を考慮するポリシーを注入します。
 
-`AddWindowsStorage(enableArchives: false)` omits archive item features and its
-location handler. `AddArchiveBrowsing` can also be registered independently
-with custom backends, probe, and credential resolver. The default selector
-uses Windows Shell at priority 200 and SevenZipSharp at priority 100.
+`AddWindowsStorage(enableArchives: false)` はアーカイブ項目機能とその場所ハンドラーを省略します。
+`AddArchiveBrowsing` はカスタムバックエンド、probe、認証情報リゾルバーを使って独立して登録できます。既定のセレクターは Windows Shell を優先度 200、SevenZipSharp を優先度 100 で使います。
 
-## FTP vertical slice
+## FTP の垂直スライス
 
-Each `AddFtpStorage` call registers one configured `FtpStorageSource`, its
-operation handler, and its source-scoped property factory. Generic
-stream previews and archive browsing are registered once and work through
-the FTP `IFile` stream.
+各 `AddFtpStorage` 呼び出しは、構成済みの `FtpStorageSource`、その操作ハンドラー、ソース単位のプロパティファクトリを登録します。
+汎用ストリームプレビューとアーカイブ参照は 1 回だけ登録し、FTP の `IFile` ストリームを通して動作します。
 
 ```csharp
 builder.AddFtpStorage(
@@ -92,15 +81,12 @@ builder.AddFtpStorage(
 	archiveCredentialResolver: archiveCredentials);
 ```
 
-The profile contains no password. Files.App supplies an
-`IFtpCredentialResolver` backed by protected application infrastructure.
-Call `AddFtpStorage` once per saved profile before `Build`; see
-[FTP storage](ftp-storage.md) for identity, stream ownership, and current
-runtime-registration limits.
+プロファイルにパスワードを含めてはいけません。Files.App は保護されたアプリケーション基盤を背後に持つ `IFtpCredentialResolver` を提供します。
+保存済みプロファイルごとに `Build` の前に `AddFtpStorage` を 1 回呼び出してください。識別情報、ストリーム所有権、現在のランタイム登録制限は[FTP ストレージソース](ftp-storage.md)を参照してください。
 
-## Extending Core
+## Core の拡張
 
-A backend supplies three independent kinds of registration:
+バックエンドは、独立した 3 種類の登録を提供します。
 
 ```csharp
 builder
@@ -115,75 +101,63 @@ builder.ItemFeatures.Add<IPropertySource>(
 	origin: "Git");
 ```
 
-- Storage sources resolve CoreModels and own their connections.
-- Item feature factories create optional item-bound behavior.
-- Location handlers open an owned context for a typed `BrowseLocation`.
-- Operation handlers execute mutations for references they own.
+- ストレージソースは CoreModel を解決し、自分の接続を所有します。
+- 項目機能ファクトリは、項目単位のオプション処理を作成します。
+- 場所ハンドラーは、型付き `BrowseLocation` の所有されるコンテキストを開きます。
+- 操作ハンドラーは、自分が所有する参照の変更を実行します。
 
-Registering an item feature does not register a process-wide service locator
-entry. `model.Get<T>()` can resolve only item feature contracts from that
-model's registry and context.
+項目機能を登録しても、プロセス全体のサービスロケーターエントリは登録されません。`model.Get<T>()` で解決できるのは、そのモデルのレジストリとコンテキストにある項目機能契約だけです。
 
-## Runtime surface
+## ランタイムの公開面
 
-`FilesCoreRuntime` exposes explicit roots:
+`FilesCoreRuntime` は明示的なルートを公開します。
 
-| Property | Consumer |
+| プロパティ | コンシューマー |
 | --- | --- |
-| `Application` | Window-level Files.App host |
-| `PaneFactory` | Tests or specialized window restoration |
-| `LocationResolver` | Diagnostics and custom AppModels |
-| `DataRoot` | Source discovery and explicit reference resolution |
-| `StorageOperations` | Command adapters |
-| `ViewSettingsStore` | Settings diagnostics or migration |
-| `ThumbnailCache` | Invalidation and telemetry |
-| `WindowsShellPreviewSessions` | WinUI Shell preview presenter |
+| `Application` | ウィンドウ単位の Files.App ホスト |
+| `PaneFactory` | テストまたはウィンドウ復元を行う特殊ホスト |
+| `LocationResolver` | 診断とカスタム AppModel |
+| `DataRoot` | ソース検出と明示的な参照解決 |
+| `StorageOperations` | コマンドアダプター |
+| `ViewSettingsStore` | 設定の診断または移行 |
+| `ThumbnailCache` | 無効化とテレメトリ |
+| `WindowsShellPreviewSessions` | WinUI Shell プレビュープレゼンター |
 
-These are construction-time dependencies. A leaf ViewModel should receive
-the one AppModel or adapter it needs; it should not receive the runtime and
-use it as a service locator.
+これらは構築時の依存関係です。末端の ViewModel には必要な 1 つの AppModel またはアダプターだけを渡し、runtime をサービスロケーターとして渡して使わせないでください。
 
-## Build and disposal guarantees
+## Build と dispose の保証
 
-A builder can build only once. Duplicate `StorageSourceId` values and a
-second Shell preview session factory are rejected. If any custom handler
-factory fails during construction, already-created sources, application
-models, and owned services are all cleaned up; cleanup failures are
-aggregated with the construction failure.
+builder は 1 回だけ build できます。重複する `StorageSourceId` と、2 つ目の Shell プレビューセッションファクトリは拒否します。
+カスタムハンドラーファクトリの構築に失敗した場合は、作成済みソース、アプリケーションモデル、所有するサービスをすべてクリーンアップし、
+クリーンアップ失敗を構築失敗と一緒に集約します。
 
-`FilesCoreBuilder` is itself asynchronously disposable. Disposing an unbuilt
-builder cleans every source and owned service it has accepted. A successful
-`Build` transfers those resources to `FilesCoreRuntime`; disposing the builder
-after that transfer is therefore a no-op, and the runtime becomes the sole
-owner.
+`FilesCoreBuilder` 自体は非同期で破棄できます。未構築の builder を破棄すると、受け入れたすべてのソースと所有サービスをクリーンアップします。
+成功した `Build` は所有権を `FilesCoreRuntime` へ移すため、その後 builder を破棄しても何もせず、runtime が唯一の所有者になります。
 
-The runtime disposes in this order:
+runtime は次の順で破棄します。
 
 ```mermaid
 flowchart TD
-    UI["Files.App ViewModels and presenters"]
+    UI["Files.App ViewModel とプレゼンター"]
     App["Application model graph"]
-    Shared["Core-owned shared services"]
-    Sources["FilesDataRoot and sources"]
+    Shared["Core が所有する共有サービス"]
+    Sources["FilesDataRoot とソース"]
 
     UI --> App
     App --> Shared
     Shared --> Sources
 ```
 
-The first node is owned by Files.App and must be disposed before the runtime.
-Inside the runtime, application models are disposed first, dedicated services
-such as the preview STA next, and storage sources last. Each stage continues
-after an error and final disposal is idempotent.
+最初のノードは Files.App が所有し、runtime より先に破棄しなければなりません。runtime 内部では、アプリケーションモデル、プレビュー STA などの専用サービス、ストレージソースの順に破棄します。
+各段階はエラー後も継続し、最終破棄は冪等です。
 
-## Anti-patterns
+## アンチパターン
 
-Do not:
+次のことをしてはいけません。
 
-- call `Build` once per window;
-- create a scheduler, cache, or source once per item;
-- resolve dependencies from a global IoC container inside a model;
-- register WinUI renderers as item features;
-- let Files.App dispose a source borrowed from `FilesDataRoot`;
-- keep a `WindowsStorable` model alive as a substitute for a
-  `StorableReference`.
+- ウィンドウごとに `Build` を呼ぶ。
+- 項目ごとにスケジューラー、キャッシュ、ソースを作る。
+- モデル内部でグローバル IoC コンテナーから依存関係を解決する。
+- WinUI レンダラーを項目機能として登録する。
+- `FilesDataRoot` から借りたソースを Files.App が破棄する。
+- `WindowsStorable` モデルを `StorableReference` の代わりに保持する。

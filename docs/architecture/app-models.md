@@ -1,8 +1,7 @@
-# Application model graph
+# アプリケーションモデルグラフ
 
-`Files.Core.AppModels` is the UI-independent state graph for the Files
-process. It is the middle of trickle-down MVVM: ViewModels adapt these models,
-while the models own browsing state and never reference WinUI.
+`Files.Core.AppModels` は、Files プロセスの UI 非依存な状態グラフです。trickle-down MVVM の中間層にあたり、
+ViewModel はこのモデルを適応し、モデルは参照状態を所有しますが WinUI を参照しません。
 
 ```mermaid
 flowchart TB
@@ -11,7 +10,7 @@ flowchart TB
     Tab["TabModel"]
     Pane["PaneModel"]
     Browse["BrowseSessionModel"]
-    Work["Preview + prefetch"]
+    Work["プレビュー + 先読み"]
 
     App --> Window
     Window --> Tab
@@ -20,56 +19,49 @@ flowchart TB
     Pane --> Work
 ```
 
-## Responsibilities
+## 責務
 
-| Model | Owns | Does not own |
+| モデル | 所有するもの | 所有しないもの |
 | --- | --- | --- |
-| `FilesApplicationModel` | Windows and active-window identity | WinUI `Application` or activation |
-| `WindowModel` | Ordered tabs and active tab | `Window`, `AppWindow`, title bar |
-| `TabModel` | One or two panes, active pane, split orientation | Tab controls or drag visuals |
-| `PaneModel` | Navigation history, browse session, preview model, prefetch coordinator | `Frame`, list control, preview HWND |
-| `BrowseSessionModel` | Location context, item models, projection, selection, presentation values, view settings | Observable collections or XAML objects |
+| `FilesApplicationModel` | ウィンドウとアクティブウィンドウの識別情報 | WinUI `Application` やアクティブ化 |
+| `WindowModel` | 順序付きタブとアクティブタブ | `Window`、`AppWindow`、タイトルバー |
+| `TabModel` | 1～2 個のペイン、アクティブペイン、分割方向 | タブコントロールやドラッグ表示 |
+| `PaneModel` | ナビゲーション履歴、参照セッション、プレビューモデル、先読みコーディネーター | `Frame`、リストコントロール、プレビュー HWND |
+| `BrowseSessionModel` | 場所コンテキスト、項目モデル、投影、選択、表示値、ビュー設定 | observable collection や XAML オブジェクト |
 
-The model IDs are process-local correlation IDs. Storage identity comes from
-`StorableReference`, not from window, tab, or pane IDs.
+モデル ID はプロセス内の相関 ID です。ストレージの識別情報はウィンドウ、タブ、ペインの ID ではなく、
+`StorableReference` から得ます。
 
-## Responsibility audit
+## 責務の確認
 
-`BrowseSessionModel` is the aggregate root for the state of one browsable
-pane. Its public surface coordinates a navigation transaction, the active
-location context, immutable item snapshots, selection, and presentation
-state. It is not a destination for every browser-related behavior.
+`BrowseSessionModel` は、1 つの参照可能なペインの状態をまとめる aggregate root です。公開面は、
+ナビゲーションのトランザクション、アクティブな場所コンテキスト、不変の項目スナップショット、選択、表示状態を調整します。
+ブラウザーに関係するすべての処理を詰め込む場所ではありません。
 
-Existing responsibility boundaries are:
+現在の責務の境界は次のとおりです。
 
-| Concern | Owner |
+| 関心事 | 所有者 |
 | --- | --- |
-| Back/forward history and pane lifetime | `PaneModel` and `BrowseNavigationHistory` |
-| Location-specific opening and enumeration | `IBrowseLocationHandler` and `IBrowseLocationContext` |
-| Item ordering and granular collection changes | `BrowseItemProjection` |
-| Properties and thumbnail scheduling | `BrowsePrefetchCoordinator` |
-| Preview selection and lifetime | `BrowsePreviewModel` |
-| Create, rename, copy, move, and delete | `IStorageOperationService` |
-| Observable collections and dispatcher application | Files.App collection adapter |
-| Commands, dialogs, and visual state | Files.App |
+| 戻る/進むの履歴とペインのライフタイム | `PaneModel` と `BrowseNavigationHistory` |
+| 場所ごとのオープンと列挙 | `IBrowseLocationHandler` と `IBrowseLocationContext` |
+| 項目の順序と細粒度のコレクション変更 | `BrowseItemProjection` |
+| プロパティとサムネイルのスケジュール | `BrowsePrefetchCoordinator` |
+| プレビューの選択とライフタイム | `BrowsePreviewModel` |
+| 作成、名前変更、コピー、移動、削除 | `IStorageOperationService` |
+| observable collection と dispatcher への適用 | Files.App のコレクションアダプター |
+| コマンド、ダイアログ、表示状態 | Files.App |
 
-Keep `IBrowseSessionModel` stable through the first Files.App adoption slice.
-When new behavior introduces its own lifetime, queue, or consistency
-invariant, extract an internal collaborator behind this aggregate instead of
-adding another responsibility directly. Likely extraction seams are
-navigation preparation, folder-change reconciliation, and presentation
-state. Do not extract them merely to reduce the source file length; use the
-first UI consumer to prove an independently testable boundary.
+最初の Files.App 導入スライスでは `IBrowseSessionModel` を安定させます。新しい処理が独自のライフタイム、キュー、整合性不変条件を持つ場合、
+責務を直接追加せず、この aggregate の背後に内部コラボレーターを抽出します。候補はナビゲーション準備、フォルダー変更の調整、表示状態です。
+ソースファイルを短くするだけの目的で抽出せず、最初の UI コンシューマーで独立してテストできる境界を確認してください。
 
-The following never belong in `BrowseSessionModel`: WinUI types, observable
-collections, localized strings, command implementations, dialogs, Shell
-interop, source-specific branching, or process service lookup.
+次のものを `BrowseSessionModel` に入れてはいけません。WinUI 型、observable collection、ローカライズ文字列、コマンド実装、ダイアログ、
+Shell 相互運用、ソース固有の分岐、プロセスサービスの検索です。
 
-## Creating the graph
+## グラフの作成
 
-Applications normally receive a ready `FilesApplicationModel` from
-`FilesCoreRuntime`. Tests and specialized hosts can construct the graph from
-`BrowsePaneFactory`.
+通常のアプリケーションは `FilesCoreRuntime` から準備済みの `FilesApplicationModel` を受け取ります。テストや特殊なホストでは、
+`BrowsePaneFactory` からグラフを構築できます。
 
 ```csharp
 await using var runtime = new FilesCoreBuilder()
@@ -82,8 +74,7 @@ var window = await runtime.Application.CreateWindowAsync(
 var pane = window.ActiveTab!.ActivePane!;
 ```
 
-`CreateWindowAsync` creates one tab and one pane. A tab may contain at most
-two panes:
+`CreateWindowAsync` は 1 つのタブと 1 つのペインを作ります。タブが持てるペインは最大 2 つです。
 
 ```csharp
 var secondPane = await window.ActiveTab!.OpenSplitAsync(
@@ -91,14 +82,12 @@ var secondPane = await window.ActiveTab!.OpenSplitAsync(
 	cancellationToken: cancellationToken);
 ```
 
-Closing a child disposes its complete subtree before the close operation
-completes.
+子を閉じると、終了操作が完了する前にサブツリー全体を破棄します。
 
-## Pane navigation
+## ペインのナビゲーション
 
-`PaneModel` serializes navigation. A successful push removes the old forward
-branch; replace updates the current history entry. Back and forward move the
-history cursor only after the browse session accepts the destination.
+`PaneModel` はナビゲーションを直列化します。push が成功すると古い forward 分岐を削除し、replace は現在の履歴エントリを更新します。
+戻ると進むでは、参照セッションが宛先を受け入れた後にだけ履歴カーソルを移動します。
 
 ```mermaid
 sequenceDiagram
@@ -111,46 +100,35 @@ sequenceDiagram
     VM->>Pane: NavigateAsync(location)
     Pane->>Session: NavigateAsync(location)
     Session->>Resolver: OpenAsync(location)
-    Resolver-->>Session: owned context
-    Session-->>Pane: committed location
+    Resolver-->>Session: 所有されるコンテキスト
+    Session-->>Pane: 確定した場所
     Pane->>History: Push(location)
     Pane-->>VM: StateChanged
 ```
 
-The history contains `BrowseLocation` values, not paths. `FolderLocation`
-contains a stable `StorableReference`; replacing its recovery address does
-not create a duplicate entry. The latest location value replaces the old
-entry so `LastKnownAddress` remains fresh.
+履歴にはパスではなく `BrowseLocation` の値を格納します。`FolderLocation` は安定した `StorableReference` を持ち、復旧アドレスを置き換えても重複エントリを作りません。
+最新の場所の値が古いエントリを置き換えるため、`LastKnownAddress` は新鮮に保たれます。
 
-`ArchiveLocation` contains the outer archive's stable reference plus a
-normalized logical entry path. It never contains a scoped archive-entry
-source ID or credential.
+`ArchiveLocation` は外側アーカイブの安定した参照と、正規化された論理エントリパスを含みます。スコープ付きアーカイブエントリのソース ID や認証情報を含めてはいけません。
 
-`BrowseNavigationHistorySnapshot` is immutable and validates its cursor. It
-is suitable for a Files.App persistence DTO after translating polymorphic
-`BrowseLocation` values into an explicit serialized schema. Storage and
-versioning of window sessions belong to Files.App because they include
-application activation and user settings policy.
+`BrowseNavigationHistorySnapshot` は不変で、カーソルを検証します。多相な `BrowseLocation` の値を明示的なシリアライズスキーマへ変換すれば、
+Files.App の永続化 DTO に適しています。ウィンドウセッションの保存とバージョン管理は、アプリケーションのアクティブ化とユーザー設定ポリシーを含むため Files.App に属します。
 
-## Up navigation
+## 上位へのナビゲーション
 
-`PaneModel.GoUpAsync` first honors
-`IBrowseLocationParentResolver` for logical locations such as archives.
-Inside an archive, Up creates another `ArchiveLocation`; from the archive
-root, it resolves the outer storage item's parent. Other folders use the
-current `IFolderModel`, capture the parent's stable reference, and dispose
-that temporary parent model after navigation. A root or non-folder location
-returns `false`.
+`PaneModel.GoUpAsync` はまず、アーカイブのような論理的な場所について `IBrowseLocationParentResolver` を尊重します。アーカイブ内では別の `ArchiveLocation` を作り、
+アーカイブのルートからは外側ストレージ項目の親を解決します。その他のフォルダーでは現在の `IFolderModel` を使い、親の安定した参照を取得して一時的な親モデルを作り、
+ナビゲーション後に破棄します。ルートまたはフォルダーでない場所では `false` を返します。
 
 ```mermaid
 flowchart TD
-    Pane["Current pane"]
-    Logical{"Logical parent resolver?"}
-    Folder{"Folder model?"}
-    Parent["Resolve parent model"]
+    Pane["現在のペイン"]
+    Logical{"論理的な親リゾルバー?"}
+    Folder{"フォルダーモデル?"}
+    Parent["親モデルを解決"]
     Target["BrowseLocation"]
-    Navigate["Navigate and push"]
-    Stop["Return false"]
+    Navigate["ナビゲートして push"]
+    Stop["false を返す"]
 
     Pane --> Logical
     Logical -->|Yes| Target
@@ -161,12 +139,11 @@ flowchart TD
     Target --> Navigate
 ```
 
-## Selection and item access
+## 選択と項目アクセス
 
-Selection is stored in `BrowseSessionModel` as stable `StorableKey` values.
-Use `GetFocusedItem()` and `GetSelectedItems()` when an operation needs the
-current model snapshots. Do not retain those snapshots across navigation or
-folder-change events; capture `StorableReference` values instead.
+選択はモデル参照やアドレスではなく、安定した `StorableKey` の値として `BrowseSessionModel` に保存します。
+操作で現在のモデルスナップショットが必要な場合は、`GetFocusedItem()` と `GetSelectedItems()` を使います。
+ナビゲーションやフォルダー変更イベントをまたいでスナップショットを保持せず、代わりに `StorableReference` の値を取得してください。
 
 ```csharp
 var selectedReferences = pane.BrowseSession
@@ -175,34 +152,27 @@ var selectedReferences = pane.BrowseSession
 	.ToArray();
 ```
 
-## Viewport work
+## ビューポート処理
 
-The ViewModel reports the visible item range through
-`PaneModel.UpdateViewport`. The pane delegates to
-`BrowsePrefetchCoordinator`, which requests properties and thumbnails for a
-bounded region and rejects results from an obsolete generation.
+ViewModel は `PaneModel.UpdateViewport` で表示されている項目範囲を報告します。ペインは `BrowsePrefetchCoordinator` に委譲し、範囲を限定したプロパティとサムネイルを要求し、
+古い世代の結果を拒否します。
 
-The UI should call this after range changes, not once per realized element.
-The coordinator already prioritizes the visible range and cancels superseded
-work.
+UI は実体化された要素ごとではなく、範囲が変わった後にこれを呼び出します。コーディネーターは表示範囲を優先し、置き換えられた処理をキャンセルします。
 
-## Events and UI dispatch
+## イベントと UI dispatch
 
-AppModel events are raised on the thread that commits the model transition.
-They are not guaranteed to run on the WinUI dispatcher. Files.App must:
+AppModel のイベントは、モデル遷移を確定したスレッドで発生します。WinUI dispatcher 上で実行される保証はありません。Files.App は次を行います。
 
-1. capture an immutable model snapshot in the event handler;
-2. enqueue one update on the window dispatcher;
-3. verify that the ViewModel is still attached;
-4. apply the item changes or reset to its observable projection.
+1. イベントハンドラーで不変のモデルスナップショットを取得する。
+2. ウィンドウ dispatcher に 1 回の更新をキューへ登録する。
+3. ViewModel がまだ接続されていることを検証する。
+4. 項目の変更を適用するか、observable projection をリセットする。
 
-AppModel event invocation isolates subscriber exceptions and writes them to
-tracing. An observer cannot roll back a committed model transition or stop
-other observers.
+AppModel のイベント呼び出しは、購読者の例外を分離してトレースへ書き込みます。observer が確定済みのモデル遷移をロールバックしたり、他の observer を停止させたりすることはできません。
 
-## Cancellation and lifetime
+## キャンセルとライフタイム
 
-Every parent owns its children:
+すべての親が子を所有します。
 
 ```mermaid
 flowchart TD
@@ -220,15 +190,14 @@ flowchart TD
     Pane --> Session
 ```
 
-Disposal is idempotent. Each model:
+破棄は冪等です。各モデルは次を行います。
 
-- stops accepting new mutations;
-- cancels its lifetime token;
-- waits for its mutation semaphore;
-- detaches child events;
-- disposes children in reverse ownership order;
-- aggregates cleanup failures without abandoning later children.
+- 新しい変更の受付を停止する。
+- ライフタイムトークンをキャンセルする。
+- 変更用セマフォを待つ。
+- 子イベントの購読を解除する。
+- 所有権と逆の順序で子を破棄する。
+- 後続の子を放棄せず、クリーンアップ失敗を集約する。
 
-Files.App disposes ViewModels and active Shell preview sessions first, then
-disposes `FilesCoreRuntime`. Synchronous blocking on these asynchronous
-disposal paths from the UI thread is prohibited.
+Files.App はまず ViewModel とアクティブな Shell プレビューセッションを破棄し、その後 `FilesCoreRuntime` を破棄します。
+UI スレッドからこれらの非同期破棄経路を同期的にブロックしてはいけません。

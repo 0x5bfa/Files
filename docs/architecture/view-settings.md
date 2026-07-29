@@ -1,9 +1,9 @@
-# Browse view settings
+# 参照ビュー設定
 
-Details-view column widths, layout mode, sort selection, and item size describe how a browse location is presented. They are not properties or item features of one storage item.
+詳細ビューの列幅、レイアウトモード、並べ替えの選択、項目サイズは、参照場所の表示方法を表します。
+1 つのストレージ項目のプロパティや項目機能ではありません。
 
-Files.Core therefore places them on `IBrowseSessionModel` and persists them
-through `IViewSettingsStore`.
+そのため `Files.Core` では `IBrowseSessionModel` に配置し、`IViewSettingsStore` を通して保存します。
 
 ```mermaid
 flowchart TD
@@ -12,7 +12,7 @@ flowchart TD
     Session["BrowseSessionModel"]
     Settings["BrowseViewSettings"]
     VM["ViewModel"]
-    View["WinUI layout"]
+    View["WinUI レイアウト"]
 
     Location --> Store
     Store --> Settings
@@ -20,23 +20,23 @@ flowchart TD
     Settings --> Session
     Session --> VM
     VM --> View
-    View -. width or layout change .-> VM
+    View -. width または layout の変更 .-> VM
     VM -->|UpdateViewSettingsAsync| Session
     Session --> Store
 ```
 
-## Model
+## モデル
 
-`BrowseViewSettings` currently contains:
+現在の `BrowseViewSettings` には次が含まれます。
 
-- `ViewLayoutMode` (`Details`, `List`, `Grid`, or `Columns`);
-- ordered `ViewColumnSettings` with property ID, width, order, and visibility;
-- sort property ID and direction;
-- optional item size.
+- `ViewLayoutMode`（`Details`、`List`、`Grid`、`Columns`）。
+- プロパティ ID、幅、順序、表示状態を持つ順序付き `ViewColumnSettings`。
+- 並べ替えプロパティ ID と方向。
+- 任意の項目サイズ。
 
-Column IDs use the same stable identifiers returned by `IPropertySource`. ViewModels translate those IDs into localized labels and WinUI column objects.
+列 ID には `IPropertySource` が返す安定した識別子と同じものを使います。ViewModel はその ID をローカライズされたラベルと WinUI 列オブジェクトへ変換します。
 
-## Navigation flow
+## ナビゲーションフロー
 
 ```mermaid
 sequenceDiagram
@@ -48,46 +48,55 @@ sequenceDiagram
 
     VM->>Session: NavigateAsync(location)
     Session->>Resolver: OpenAsync(location)
-    Resolver-->>Session: owned location context
+    Resolver-->>Session: 所有される場所コンテキスト
     Session->>Context: GetItemsAsync()
-    Context-->>Session: item models
-    Session-->>VM: StateChanged with context, items + settings
+    Context-->>Session: 項目モデル
+    Session-->>VM: コンテキスト、項目、設定を含む StateChanged
     VM->>Session: UpdateViewSettingsAsync(new settings)
     Session->>Store: SetAsync(location, settings)
     Session-->>VM: StateChanged
 ```
 
-If no store is supplied directly to a session, it keeps an in-memory value per
-`BrowseLocation`. `FilesCoreBuilder` supplies `InMemoryViewSettingsStore` by
-default. Files.App should inject a persisted store backed by the Files
-settings database.
+セッションにストアを直接渡さない場合は、`BrowseLocation` ごとにメモリ内の値を保持します。`FilesCoreBuilder` は既定で `InMemoryViewSettingsStore` を渡します。
+Files.App は Files の設定データベースをバックエンドにした永続ストアを注入してください。
 
-The session replaces the active context and item list only after the new context has finished loading. A failed or cancelled navigation disposes the new context and partial items while preserving the current context and items. Replacing or disposing the session disposes both the item models and the context that owns the location model.
+セッションは新しいコンテキストの読み込みが完了した後にだけ、アクティブなコンテキストと項目リストを置き換えます。
+ナビゲーションが失敗またはキャンセルされた場合は、新しいコンテキストと部分的な項目を破棄し、現在のコンテキストと項目を保持します。
+セッションを置き換えるか破棄すると、項目モデルと場所モデルを所有するコンテキストも破棄します。
 
-When the active context exposes `IFolderChangeSource`, the session subscribes to `Changed` and `Faulted` before enumerating items. A bounded queue preserves detailed change order. The refresh pump applies complete create, delete, rename, and update notifications incrementally; incomplete, ambiguous, overflowed, or directory-wide notifications request one full refresh. Changes from the context currently being prepared are deferred until that context becomes active instead of being consumed repeatedly. A failed refresh leaves the displayed context and items in place while setting `Error`.
+アクティブなコンテキストが `IFolderChangeSource` を公開する場合、セッションは項目列挙の前に `Changed` と `Faulted` を購読します。
+範囲を限定したキューが変更の詳細な順序を保持します。更新ポンプは完全な作成、削除、名前変更、更新通知を差分適用します。
+不完全、曖昧、オーバーフロー、ディレクトリ全体の通知では、完全更新を 1 回要求します。準備中のコンテキストからの変更は、そのコンテキストがアクティブになるまで保留し、何度も消費しません。
+更新に失敗しても表示中のコンテキストと項目を残し、`Error` を設定します。
 
-## Projection and selection
+## 投影と選択
 
-`BrowseSessionModel` owns the UI-agnostic ordered projection. It publishes immutable item snapshots and versioned `BrowseItemChange` values. Add, remove, replace, and single-item reposition operations remain granular. A settings or property-value resort publishes one `BrowseItemsReset`, because a set of final-index move records is not generally valid when a consumer applies the records sequentially.
+`BrowseSessionModel` は UI 非依存の順序付き投影を所有します。不変の項目スナップショットと、バージョン付き `BrowseItemChange` 値を公開します。
+追加、削除、置換、単一項目の位置変更は細粒度のまま保ちます。設定またはプロパティ値による再並べ替えでは `BrowseItemsReset` を公開します。
+コンシューマーがレコードを順番に適用すると、最終インデックスの移動レコードの集合は一般に有効でないためです。
 
-The projection sorts `name` and `System.ItemNameDisplay` directly from `IStorableModel.Name`. Other property IDs use values already published into `BrowseItemPresentation`. Unavailable values remain at the end in either direction, with name and stable identity as deterministic tie-breakers.
+投影は `name` と `System.ItemNameDisplay` を `IStorableModel.Name` から直接並べ替えます。その他のプロパティ ID には、`BrowseItemPresentation` にすでに公開されている値を使います。
+利用できない値はどちらの方向でも最後に置き、名前と安定した識別情報を決定論的なタイブレーカーにします。
 
-Selection is stored as stable `StorableKey` values rather than model references or addresses. Synchronous UI selection updates normalize against one `ItemsVersion`; if an item mutation races that normalization, the update retries against the new snapshot. Rename migrates selection only when the source identity changes.
+選択はモデル参照やアドレスではなく、安定した `StorableKey` の値として保存します。同期的な UI 選択の更新は、1 つの `ItemsVersion` に対して正規化します。
+変更がその正規化と競合したら、新しいスナップショットに対して再試行します。名前変更で選択を移行するのは、ソース識別情報が変わった場合だけです。
 
-Session events isolate each subscriber exception and continue to later subscribers, so a faulty observer cannot roll back an already committed model transition. Handlers should remain short and schedule asynchronous follow-up work instead of synchronously waiting on another session mutation.
+セッションイベントは各購読者の例外を分離し、後続の購読者へ継続します。そのため壊れた observer が、すでに確定したモデル遷移をロールバックすることはできません。
+ハンドラーは短く保ち、別のセッション変更を同期的に待たず、後続処理を非同期にスケジュールします。
 
-## Viewport prefetch
+## ビューポートの先読み
 
-`BrowsePrefetchCoordinator` processes the visible range first, then a bounded number of items after and before it. It does not scan the rest of a large folder. Each viewport request supersedes the previous request.
+`BrowsePrefetchCoordinator` は最初に表示範囲を処理し、その前後から限られた数の項目を処理します。大きなフォルダーの残りを走査しません。
+各ビューポート要求は前の要求を置き換えます。
 
 ```mermaid
 flowchart TD
     Viewport["Viewport + settings"]
-    Work["Capture generation + content version"]
-    ItemFeature["Property and thumbnail sources"]
-    Validate{"Snapshot still current?"}
+    Work["Generation + content version を取得"]
+    ItemFeature["Property と thumbnail source"]
+    Validate{"スナップショットはまだ最新?"}
     Presentation["BrowseItemPresentation"]
-    Discard["Discard stale result"]
+    Discard["古い結果を破棄"]
 
     Viewport --> Work
     Work --> ItemFeature
@@ -96,20 +105,23 @@ flowchart TD
     Validate -->|No| Discard
 ```
 
-The session uses two independent counters:
+セッションは独立した 2 つのカウンターを使います。
 
-- `Generation` changes when a browse context is replaced.
-- The internal content version changes whenever item model membership or a model snapshot changes within that context.
+- `Generation` は参照コンテキストが置き換わったときに変化します。
+- 内部コンテンツバージョンは、そのコンテキスト内で項目モデルの所属またはモデルスナップショットが変化するたびに変化します。
 
-The coordinator checks both before and after every awaited item feature call. The session then checks both again and verifies that the exact model instance is still present before accepting the result. An incremental rename, update, delete, or create therefore cancels old work even though `Generation` is unchanged.
+コーディネーターは、待機する項目機能呼び出しの前後で両方を確認します。セッションもさらに両方を確認し、まったく同じモデルインスタンスがまだ存在することを検証してから結果を受け入れます。
+そのため差分の名前変更、更新、削除、作成は `Generation` が変わらなくても古い処理をキャンセルします。
 
-Accepted properties and copied thumbnail bytes are retained in `BrowseItemPresentation`. Consumers read them with `TryGetPresentation` and observe `ItemPresentationChanged`; property-based sorting re-evaluates as requested values arrive. This store is snapshot-scoped and is cleared or invalidated when models are replaced, so the prefetch result is useful even when no item feature wrapper provides a shared cache.
+受け入れたプロパティとコピー済みのサムネイルバイトは `BrowseItemPresentation` に保持します。コンシューマーは `TryGetPresentation` で読み、`ItemPresentationChanged` を監視します。
+プロパティに基づく並べ替えは、要求された値が届くたびに再評価します。このストアはスナップショット単位で、モデルの置換時にクリアまたは無効化されます。
+共有キャッシュを提供する項目機能ラッパーがなくても、先読み結果を有効に利用できます。
 
-## Why this is not `FolderModel.Get<IViewSettings>()`
+## `FolderModel.Get<IViewSettings>()` ではない理由
 
-- Home, search, and tag pages have view settings but are not folders.
-- The same folder can be open in two panes with independent transient presentation state.
-- A storage source should not know column pixel widths or the user's preferred layout.
-- Item features disappear with an item model; saved view settings must survive model recreation.
+- Home、検索、タグページにはビュー設定がありますが、フォルダーにはありません。
+- 同じフォルダーを 2 つのペインで開いた場合、一時的な表示状態は独立します。
+- ストレージソースは列のピクセル幅やユーザーの好みのレイアウトを知るべきではありません。
+- 項目機能は項目モデルとともに消えますが、保存済みのビュー設定はモデルを再作成しても残る必要があります。
 
-The session owns current state and its UI-agnostic projection, the store owns persistence, and the ViewModel adapts versioned model changes and presentation values into WinUI collections and image objects.
+セッションは現在の状態と UI 非依存の投影を所有し、ストアは永続化を所有します。ViewModel はバージョン付きのモデル変更と表示値を、WinUI コレクションと画像オブジェクトへ適応します。

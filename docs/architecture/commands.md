@@ -1,42 +1,37 @@
-# Files.App command execution
+# Files.App のコマンド実行
 
-Files.App needs one command path for command bars, keyboard shortcuts, context
-menus, the command palette, and automation. The command path adapts
-window-scoped UI intent to the navigation and storage use cases already
-implemented by Files.Core.
+Files.App は、コマンドバー、キーボードショートカット、コンテキストメニュー、コマンドパレット、
+自動化から利用できる 1 つのコマンド経路を必要とします。この経路は、ウィンドウ単位の UI 意図を、
+Files.Core にすでに実装されているナビゲーションとストレージのユースケースへ適応します。
 
-This is an application boundary. Files.Core continues to own navigation
-state, storage operation requests, source selection, and result contracts.
-Files.App owns localized presentation, input gestures, prompts, progress UI,
-and error policy.
+これはアプリケーション境界です。Files.Core はナビゲーション状態、ストレージ操作要求、ソース選択、
+結果の契約を引き続き所有します。Files.App はローカライズされた表示、入力ジェスチャー、プロンプト、
+進行状況 UI、エラーポリシーを所有します。
 
-## Goals
+## 目標
 
-- Give every built-in command a stable ID independent of its label, icon, and
-  shortcut.
-- Capture an immutable invocation context before asynchronous work begins.
-- Use the same handler regardless of which UI surface invoked the command.
-- Derive enabled, visible, and checked state from the active window model.
-- Make cancellation and concurrent invocation behavior explicit.
-- Keep handlers testable without constructing XAML controls.
-- Allow selection-scoped command contributions without turning the command
-  registry into a service locator.
+- 組み込みコマンドごとに、ラベル、アイコン、ショートカットから独立した安定した ID を与える。
+- 非同期処理が始まる前に不変の呼び出しコンテキストを取得する。
+- どの UI サーフェスから呼び出しても同じハンドラーを使う。
+- アクティブなウィンドウモデルから有効、表示、チェック状態を導出する。
+- キャンセルと同時呼び出しの動作を明示する。
+- XAML コントロールを構築せずにハンドラーをテスト可能にする。
+- コマンドレジストリをサービスロケーターに変えず、選択範囲に限定したコマンド拡張を許可する。
 
-The command system does not replace `PaneModel`,
-`IStorageOperationService`, source item feature composition, or WinUI input
-routing. It coordinates those existing boundaries.
+コマンドシステムは `PaneModel`、`IStorageOperationService`、ソース項目機能の合成、WinUI の入力ルーティングを
+置き換えません。これら既存の境界を調整するものです。
 
-## Dependency boundary
+## 依存関係の境界
 
 ```mermaid
 flowchart TB
-    Surfaces["Command bar, keys, menus"]
-    Binding["Command binding"]
+    Surfaces["コマンドバー、キー、メニュー"]
+    Binding["コマンドバインディング"]
     Manager["WindowCommandManager"]
-    Handler["Command handler"]
-    Models["Pane and browse models"]
-    Operations["Storage operations"]
-    Platform["Platform adapters"]
+    Handler["コマンドハンドラー"]
+    Models["ペインと参照モデル"]
+    Operations["ストレージ操作"]
+    Platform["プラットフォームアダプター"]
 
     Surfaces --> Binding
     Binding --> Manager
@@ -46,12 +41,11 @@ flowchart TB
     Handler --> Platform
 ```
 
-Files.Core must not reference `ICommand`, `XamlUICommand`, localized resource
-loaders, dialogs, window handles, or keyboard types. Files.App handlers may
-depend on a direct AppModel and the narrow adapter interfaces they need; they
-must not resolve dependencies from a global container.
+Files.Core は `ICommand`、`XamlUICommand`、ローカライズリソースローダー、ダイアログ、ウィンドウハンドル、
+キーボード型を参照してはいけません。Files.App のハンドラーは、直接渡された AppModel と必要最小限のアダプター
+インターフェースには依存できますが、グローバルコンテナーから依存関係を解決してはいけません。
 
-## Proposed source layout
+## 提案するソース配置
 
 ```text
 src/Files.App/Commands/
@@ -76,16 +70,14 @@ src/Files.App/Commands/
     CommandContribution.cs
 ```
 
-`CommandRegistry` is an immutable catalog built during application
-composition. `WindowCommandManager` is created once per window and owns the
-state and execution lifetime of that window's commands.
+`CommandRegistry` はアプリケーションの合成中に構築する不変のカタログです。`WindowCommandManager` はウィンドウごとに
+1 回作成し、そのウィンドウのコマンドの状態と実行のライフタイムを所有します。
 
-## Core contracts
+## Core の契約
 
-### Stable identity and presentation
+### 安定した識別子と表示
 
-Persist shortcuts and customization by a stable string ID. Never persist a
-localized label or enum ordinal.
+ショートカットとカスタマイズは安定した文字列 ID で永続化します。ローカライズされたラベルや enum の序数を永続化してはいけません。
 
 ```csharp
 public readonly record struct CommandId
@@ -109,17 +101,15 @@ public sealed record CommandDescriptor(
 	IReadOnlyList<KeyGesture> DefaultGestures);
 ```
 
-Built-in IDs use a version-independent namespace such as
-`files.navigation.back`, `files.item.rename`, and `files.clipboard.paste`.
-Removing or renaming an ID requires a settings migration.
+組み込み ID には、`files.navigation.back`、`files.item.rename`、`files.clipboard.paste` のようなバージョンに依存しない
+名前空間を使います。ID の削除や名前変更には設定の移行が必要です。
 
-The descriptor contains resource and icon keys, not constructed WinUI
-objects. `CommandBindingViewModel` resolves those keys for its window and
-creates the dispatcher-affine icon or `XamlUICommand`.
+記述子に含めるのはリソースキーとアイコンキーであり、構築済みの WinUI オブジェクトではありません。
+`CommandBindingViewModel` がウィンドウ用にキーを解決し、dispatcher に依存するアイコンまたは `XamlUICommand` を作成します。
 
-### Immutable invocation context
+### 不変の呼び出しコンテキスト
 
-The manager captures context when the command is invoked:
+マネージャーはコマンドが呼び出された時点でコンテキストを取得します。
 
 ```csharp
 public sealed record CommandContext(
@@ -134,20 +124,16 @@ public sealed record CommandContext(
 	CommandInvocationSource InvocationSource);
 ```
 
-The context contains references and model IDs, not retained
-`IStorableModel` instances or XAML controls. A handler resolves a reference
-again if it needs a current model. A handler that depends on the current
-browse snapshot verifies the generation and item version after each awaited
-prompt or platform call.
+コンテキストに保持するのは参照とモデル ID であり、`IStorableModel` インスタンスや XAML コントロールではありません。
+現在のモデルが必要ならハンドラーが参照をもう一度解決します。現在の参照スナップショットに依存するハンドラーは、
+待機したプロンプトやプラットフォーム呼び出しの後に世代と項目バージョンを検証します。
 
-`CommandContextFactory` is window-scoped and reads the active tab, pane,
-selection, and focused item atomically on the UI dispatcher. The command
-manager does not accept arbitrary `object` parameters from a view.
+`CommandContextFactory` はウィンドウスコープで、UI dispatcher 上のアクティブなタブ、ペイン、選択、フォーカス項目をアトミックに読み取ります。
+コマンドマネージャーはビューから任意の `object` パラメーターを受け付けません。
 
-### State and execution
+### 状態と実行
 
-State queries must be cheap and synchronous because selection, focus, and
-loading changes can invalidate many bindings at once.
+選択、フォーカス、読み込みの変更で多くのバインディングが同時に無効になるため、状態クエリは安価で同期的でなければなりません。
 
 ```csharp
 public sealed record CommandState(
@@ -171,13 +157,11 @@ public interface ICommandHandler
 }
 ```
 
-`GetState` may inspect AppModel state and call cheap methods such as
-`IStorageOperationService.CanHandle`. It must not enumerate a folder, query a
-network source, activate COM, read the clipboard, or display UI. Unknown
-expensive state remains enabled when execution can provide a useful failure,
-or is supplied by an asynchronously refreshed cache.
+`GetState` は AppModel の状態を確認し、`IStorageOperationService.CanHandle` のような安価なメソッドを呼び出せます。
+フォルダーの列挙、ネットワークソースへの問い合わせ、COM のアクティブ化、クリップボードの読み取り、UI の表示をしてはいけません。
+高コストで未知の状態は、実行時に有用な失敗を返せるなら有効のままにするか、非同期に更新するキャッシュで供給します。
 
-Execution returns an explicit outcome:
+実行は明示的な結果を返します。
 
 ```csharp
 public enum CommandExecutionStatus
@@ -195,108 +179,93 @@ public sealed record CommandExecutionResult(
 	Exception? Error = null);
 ```
 
-Expected cancellation is not an error dialog. Multi-item commands retain
-per-item results instead of collapsing partial success into one exception.
+想定されるキャンセルはエラーダイアログではありません。複数項目コマンドでは、部分成功を 1 つの例外に潰さず、項目ごとの結果を保持します。
 
-## Registry and window manager
+## レジストリとウィンドウマネージャー
 
-`CommandRegistryBuilder` accepts explicit handler factories at process
-composition. Duplicate built-in IDs are rejected. `Build` produces an
-immutable registry and can be called only once.
+`CommandRegistryBuilder` はプロセスの合成時に明示的なハンドラーファクトリを受け取ります。組み込み ID の重複は拒否します。
+`Build` は不変のレジストリを生成し、1 回だけ呼び出せます。
 
-Factories receive explicit application services. Leaf handlers never receive
-`IServiceProvider`, `FilesCoreRuntime`, or the registry itself.
+ファクトリには明示的なアプリケーションサービスを渡します。末端のハンドラーに `IServiceProvider`、`FilesCoreRuntime`、レジストリ自体を渡してはいけません。
 
-`WindowCommandManager`:
+`WindowCommandManager` の責務:
 
-- owns one handler instance per registered window-scoped command;
-- owns each command's active cancellation token and concurrency gate;
-- exposes stable `CommandBindingViewModel` instances to Views;
-- recomputes state when the active pane, selection, browse generation,
-  clipboard snapshot, or operation state changes;
-- raises one coalesced state-change notification on its window dispatcher;
-- rejects invocation after disposal.
+- 登録されたウィンドウスコープの各コマンドにつき 1 つのハンドラーインスタンスを所有する。
+- 各コマンドのアクティブなキャンセルトークンと同時実行ゲートを所有する。
+- ビューに安定した `CommandBindingViewModel` インスタンスを公開する。
+- アクティブなペイン、選択、参照世代、クリップボードスナップショット、操作状態が変わったら状態を再計算する。
+- ウィンドウの dispatcher 上で、まとめられた状態変更通知を 1 回発行する。
+- 破棄後の呼び出しを拒否する。
 
-The binding implements WinUI's command interface as a presentation adapter.
-Its `Execute` method starts the manager task and forwards failures to the
-window error policy; no `async void` handler contains command logic.
+バインディングは WinUI のコマンドインターフェースを表示用アダプターとして実装します。その `Execute` はマネージャーのタスクを開始し、
+失敗をウィンドウのエラーポリシーへ転送します。`async void` ハンドラーにコマンドロジックを含めてはいけません。
 
-## Invocation flow
+## 呼び出しの流れ
 
 ```mermaid
 sequenceDiagram
-    participant UI as Command surface
+    participant UI as コマンドサーフェス
     participant Manager as WindowCommandManager
-    participant Context as Context factory
-    participant Handler as Command handler
-    participant Core as AppModel or Core service
+    participant Context as コンテキストファクトリ
+    participant Handler as コマンドハンドラー
+    participant Core as AppModel または Core サービス
 
     UI->>Manager: Execute(command ID)
-    Manager->>Context: Capture active context
-    Context-->>Manager: Immutable snapshot
+    Manager->>Context: アクティブなコンテキストを取得
+    Context-->>Manager: 不変スナップショット
     Manager->>Handler: GetState(snapshot)
-    alt disabled or hidden
-        Manager-->>UI: Unsupported result
-    else executable
-        Manager->>Manager: Apply concurrency policy
+    alt 無効または非表示
+        Manager-->>UI: Unsupported 結果
+    else 実行可能
+        Manager->>Manager: 同時実行ポリシーを適用
         Manager->>Handler: ExecuteAsync(snapshot)
-        Handler->>Core: Invoke use case
-        Core-->>Handler: Result
-        Handler-->>Manager: Command result
-        Manager-->>UI: State and completion
+        Handler->>Core: ユースケースを呼び出す
+        Core-->>Handler: 結果
+        Handler-->>Manager: コマンド結果
+        Manager-->>UI: 状態と完了
     end
 ```
 
-State is checked again at invocation. A stale `CanExecute` value rendered by
-the UI never authorizes an operation by itself.
+呼び出し時には状態をもう一度確認します。UI に表示された古い `CanExecute` 値だけで操作を許可してはいけません。
 
-## Concurrency and cancellation
+## 同時実行とキャンセル
 
-Each descriptor selects one policy:
+各記述子が 1 つのポリシーを選択します。
 
-| Policy | Behavior | Typical commands |
+| ポリシー | 動作 | 代表的なコマンド |
 | --- | --- | --- |
-| `CancelPrevious` | Cancel the previous invocation, then start the new one | Navigate, refresh, search |
-| `RejectWhileRunning` | Keep one invocation and disable repeats | Rename, create, properties |
-| `Serialize` | Queue invocations in order | Clipboard paste, ordered batch operations |
-| `AllowParallel` | Run independently with separate progress | Open in new window |
+| `CancelPrevious` | 前の呼び出しをキャンセルしてから新しい呼び出しを開始 | 移動、更新、検索 |
+| `RejectWhileRunning` | 1 つだけ実行し、繰り返しを無効化 | 名前変更、作成、プロパティ |
+| `Serialize` | 呼び出しを順番にキューへ入れる | クリップボード貼り付け、順序付き一括操作 |
+| `AllowParallel` | 個別の進行状況で独立に実行 | 新しいウィンドウで開く |
 
-Cancellation is linked to the window, pane, and command invocation. Closing a
-pane cancels pane commands; closing a window cancels all of its commands.
-Disposing the process host happens only after every window manager has
-stopped.
+キャンセルはウィンドウ、ペイン、コマンド呼び出しにリンクします。ペインを閉じるとペインのコマンドをキャンセルし、
+ウィンドウを閉じるとそのウィンドウのすべてのコマンドをキャンセルします。プロセスホストを破棄するのは、すべてのウィンドウマネージャーが停止してからです。
 
-Do not hold the UI dispatcher while waiting for a storage operation. Prompts
-and state updates marshal to the dispatcher through the window's
-`IUiDispatcher`.
+ストレージ操作の完了を待つ間に UI dispatcher を占有してはいけません。プロンプトと状態更新は、ウィンドウの `IUiDispatcher` を通じて dispatcher へマーシャリングします。
 
-## Navigation adapter
+## ナビゲーションアダプター
 
-`NavigationCommandAdapter` calls the direct `PaneModel` supplied at window
-construction.
+`NavigationCommandAdapter` はウィンドウ構築時に直接渡された `PaneModel` を呼び出します。
 
-| Command ID | Model action | State source |
+| コマンド ID | モデル操作 | 状態ソース |
 | --- | --- | --- |
-| `files.navigation.back` | `GoBackAsync` | `CanGoBack` and `IsLoading` |
-| `files.navigation.forward` | `GoForwardAsync` | `CanGoForward` and `IsLoading` |
-| `files.navigation.up` | `GoUpAsync` | `CanGoUp` and `IsLoading` |
-| `files.navigation.refresh` | `RefreshAsync` | Pane membership and loading policy |
-| `files.item.open` | Resolve an appropriate `BrowseLocation` | Focused item and selection count |
+| `files.navigation.back` | `GoBackAsync` | `CanGoBack` と `IsLoading` |
+| `files.navigation.forward` | `GoForwardAsync` | `CanGoForward` と `IsLoading` |
+| `files.navigation.up` | `GoUpAsync` | `CanGoUp` と `IsLoading` |
+| `files.navigation.refresh` | `RefreshAsync` | ペイン所属と読み込みポリシー |
+| `files.item.open` | 適切な `BrowseLocation` を解決 | フォーカス項目と選択数 |
 
-Open checks `IArchiveEntry` and `IArchiveSource` before ordinary folder
-shape. This preserves Shell-first archive behavior and the encrypted archive
-fallback. Opening a non-browsable file is routed to a platform launch
-adapter, not treated as folder navigation.
+開く処理では通常のフォルダー形状より先に `IArchiveEntry` と `IArchiveSource` を確認します。これにより Shell 優先のアーカイブ動作と、
+暗号化アーカイブのフォールバックを維持できます。参照できないファイルを開く場合は、フォルダーナビゲーションではなくプラットフォーム起動アダプターへ送ります。
 
-Navigation cancellation does not mutate history until the new location has
-opened successfully. The pane remains the authoritative history owner.
+ナビゲーションのキャンセルでは、新しい場所が正常に開くまで履歴を変更しません。ペインが履歴の権威ある所有者です。
 
-## Storage adapter
+## ストレージアダプター
 
-`StorageCommandAdapter` translates application intent into existing
-`StorageOperationRequest` values.
+`StorageCommandAdapter` はアプリケーションの意図を既存の `StorageOperationRequest` 値へ変換します。
 
-| Command ID | Request |
+| コマンド ID | 要求 |
 | --- | --- |
 | `files.item.rename` | `RenameOperationRequest` |
 | `files.item.createFile` | `CreateItemOperationRequest` |
@@ -305,35 +274,28 @@ opened successfully. The pane remains the authoritative history owner.
 | `files.item.moveTo` | `MoveOperationRequest` |
 | `files.item.delete` | `DeleteOperationRequest` |
 
-The adapter owns UI policy around the request:
+アダプターは要求に関する UI ポリシーを所有します。
 
-1. capture references from `CommandContext`;
-2. request a name, destination, conflict choice, or delete confirmation;
-3. verify that the pane and relevant browse generation still exist;
-4. call `IStorageOperationService`;
-5. aggregate progress and per-item outcomes;
-6. use returned references only for reveal or focus intent.
+1. `CommandContext` から参照を取得する。
+2. 名前、宛先、競合時の選択、削除確認を要求する。
+3. ペインと関連する参照世代がまだ存在することを確認する。
+4. `IStorageOperationService` を呼び出す。
+5. 進行状況と項目ごとの結果を集約する。
+6. 返された参照は、表示またはフォーカスの意図にだけ使う。
 
-It never edits the visible item collection after a successful operation.
-Folder change notifications reconcile the session. If a source does not
-provide change notifications, the adapter requests one bounded refresh after
-the operation completes.
+成功した操作の後に表示項目コレクションを直接編集することはありません。フォルダー変更通知がセッションを調整します。
+ソースが変更通知を提供しない場合、アダプターは操作完了後に範囲を限定した更新を 1 回要求します。
 
-The existing operation request is intentionally single-item. Multi-selection
-uses bounded scheduling and preserves every item result. A future handler
-may add a specialized batch request, but Files.App must not claim atomicity
-when a backend cannot provide it.
+既存の操作要求は意図的に単一項目です。複数選択では範囲を限定したスケジューリングを使い、すべての項目結果を保持します。
+将来、ハンドラーが専用の一括要求を追加することはできますが、バックエンドが提供できない原子性を Files.App が主張してはいけません。
 
-Same-source requests continue through `IStorageOperationService`.
-Windows-to-FTP and other cross-source commands require the separate generic
-transfer coordinator described in
-[Clipboard, drag/drop, and Shell integration](platform-interactions.md).
+同一ソースの要求は引き続き `IStorageOperationService` を通ります。Windows と FTP 間などソースをまたぐコマンドには、
+[クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md) で説明する別の汎用転送コーディネーターが必要です。
 
-## Dynamic command contributions
+## 動的なコマンド拡張
 
-Built-in commands have stable process registrations. Context-dependent
-commands from extensions or non-Shell integrations use a selection-scoped
-command source:
+組み込みコマンドには安定したプロセス登録があります。拡張機能または Shell 以外の統合から提供されるコンテキスト依存コマンドには、
+選択範囲に限定したコマンドソースを使います。
 
 ```csharp
 public interface ISelectionCommandSource
@@ -349,65 +311,53 @@ public interface ISelectionCommandSource
 }
 ```
 
-Contributions contain a descriptor, source-owned opaque token, and the
-generation for which they were created. The manager discards them when the
-selection or browse generation changes.
+拡張は記述子、ソースが所有する不透明なトークン、作成対象の世代を含みます。選択または参照世代が変わると、マネージャーは拡張を破棄します。
 
-This is not `item.Get<ICommand>()`. Commands often depend on multiple selected
-items, their common parent, the destination, and window policy. An item
-feature cannot represent that context correctly.
+これは `item.Get<ICommand>()` ではありません。コマンドは、複数の選択項目、共通の親、宛先、ウィンドウポリシーに依存することが多く、
+項目機能ではそのコンテキストを正しく表現できません。
 
-Windows Shell verbs use a native menu session rather than this contribution
-contract because owner-drawn, dynamic, and nested Shell extensions cannot be
-faithfully copied into XAML. Files-native and plugin commands may use the
-contract.
+Windows Shell 動詞には、この拡張契約ではなくネイティブメニューセッションを使います。オーナー描画、動的、入れ子の Shell 拡張を XAML に忠実にコピーできないためです。
+Files 標準とプラグインのコマンドでは、この契約を使えます。
 
-## Shortcuts and presentation
+## ショートカットと表示
 
-Shortcut settings map `CommandId` to serialized gestures. At load:
+ショートカット設定は `CommandId` をシリアライズされたジェスチャーへ対応付けます。読み込み時には次を行います。
 
-1. discard malformed gestures;
-2. detect duplicates deterministically;
-3. prefer an explicit user binding over a default;
-4. report unresolved conflicts without rewriting unrelated settings;
-5. retain unknown command IDs so a temporarily unavailable extension does not
-   destroy its customization.
+1. 不正なジェスチャーを破棄する。
+2. 重複を決定論的に検出する。
+3. 既定値より明示的なユーザーバインディングを優先する。
+4. 関係のない設定を書き換えずに、解決できない競合を報告する。
+5. 一時的に利用できない拡張がカスタマイズを破壊しないよう、未知のコマンド ID を保持する。
 
-Input routing resolves the active window and pane before invoking the
-command. A process-global shortcut must still produce a window-scoped
-`CommandContext`.
+入力ルーティングは、コマンドを呼び出す前にアクティブなウィンドウとペインを解決します。プロセス全体のショートカットでも、
+ウィンドウスコープの `CommandContext` を生成しなければなりません。
 
-Labels, descriptions, access keys, icons, and automation names remain
-presentation metadata. A handler contains no localized strings and constructs
-no UI elements.
+ラベル、説明、アクセスキー、アイコン、オートメーション名は表示メタデータとして残します。ハンドラーにローカライズ文字列を含めたり、UI 要素を構築させたりしません。
 
-## Error and telemetry policy
+## エラーとテレメトリのポリシー
 
-The manager records command ID, invocation source, duration, final status, and
-backend category. It never records item names, paths, FTP credentials,
-clipboard contents, or Shell command parameters by default.
+マネージャーは、コマンド ID、呼び出し元、所要時間、最終状態、バックエンドカテゴリを記録します。項目名、パス、FTP 認証情報、
+クリップボードの内容、Shell コマンドパラメーターは、既定では記録しません。
 
-Files.App maps outcomes as follows:
+Files.App は結果を次のように扱います。
 
-- canceled: no error UI;
-- unsupported: disable the command or show a concise explanation;
-- access denied: offer the applicable permission or elevation path;
-- partial success: show the failed subset and keep successful work;
-- unexpected failure: log the exception and show a stable error code.
+- キャンセル: エラー UI を表示しない。
+- 未サポート: コマンドを無効にするか、簡潔な説明を表示する。
+- アクセス拒否: 適用可能な権限または昇格の経路を提示する。
+- 部分成功: 失敗した項目だけを表示し、成功した作業は保持する。
+- 想定外の失敗: 例外をログに記録し、安定したエラーコードを表示する。
 
-Handlers return backend errors unchanged when Files.App needs to choose the
-message. They do not swallow exceptions and pretend that the command
-succeeded.
+Files.App がメッセージを選ぶ必要がある場合、ハンドラーはバックエンドのエラーを変更せずに返します。例外を握りつぶしてコマンドを成功したように見せてはいけません。
 
-## Ownership
+## 所有権
 
 ```mermaid
 flowchart TB
     Host["FilesAppHost"]
     Registry["CommandRegistry"]
     Window["WindowCommandManager"]
-    Bindings["Command bindings"]
-    Invocations["Active invocations"]
+    Bindings["コマンドバインディング"]
+    Invocations["アクティブな呼び出し"]
 
     Host --> Registry
     Host --> Window
@@ -415,80 +365,73 @@ flowchart TB
     Window --> Invocations
 ```
 
-The host owns the immutable registry. Each window owns its manager, binding
-objects, context factory, subscriptions, and active invocations. Closing the
-window:
+ホストは不変のレジストリを所有します。各ウィンドウはマネージャー、バインディングオブジェクト、コンテキストファクトリ、購読、アクティブな呼び出しを所有します。
+ウィンドウを閉じるときは次の順で行います。
 
-1. stops new command execution;
-2. cancels active invocations;
-3. unsubscribes state inputs;
-4. disposes command handlers and platform sessions;
-5. disposes ViewModels;
-6. releases the Core window model.
+1. 新しいコマンド実行を停止する。
+2. アクティブな呼び出しをキャンセルする。
+3. 状態入力の購読を解除する。
+4. コマンドハンドラーとプラットフォームセッションを破棄する。
+5. ViewModel を破棄する。
+6. Core のウィンドウモデルを解放する。
 
-## Testing
+## テスト
 
-Unit tests cover:
+ユニットテストでは次をカバーします。
 
-- duplicate command ID rejection;
-- context capture using references rather than model instances;
-- state recomputation and notification coalescing;
-- every concurrency policy;
-- cancellation during prompts and operations;
-- stale browse generation rejection;
-- navigation mapping and archive-open precedence;
-- storage request construction;
-- multi-item partial success and bounded concurrency;
-- shortcut conflict resolution;
-- contribution invalidation after selection changes.
+- コマンド ID 重複の拒否。
+- モデルインスタンスではなく参照を使ったコンテキスト取得。
+- 状態の再計算と通知の集約。
+- すべての同時実行ポリシー。
+- プロンプト中および操作中のキャンセル。
+- 古い参照世代の拒否。
+- ナビゲーションの対応付けとアーカイブを開く順序。
+- ストレージ要求の構築。
+- 複数項目の部分成功と同時実行数の制限。
+- ショートカット競合の解決。
+- 選択変更後の拡張無効化。
 
-Use fake handlers and direct AppModels. Command tests do not construct WinUI
-controls. A small Windows integration suite verifies only the binding and
-dispatcher adapters.
+偽のハンドラーと直接の AppModel を使います。コマンドテストでは WinUI コントロールを構築しません。小さな Windows 統合スイートでは、
+バインディングと dispatcher アダプターだけを検証します。
 
-## Migration from the existing command system
+## 既存コマンドシステムからの移行
 
-The current `IRichCommand` combines WinUI objects, localization, hotkeys,
-state, and execution and resolves services through global IoC. Do not move it
-wholesale into the new folders.
+現在の `IRichCommand` は、WinUI オブジェクト、ローカライズ、ホットキー、状態、実行を組み合わせ、グローバル IoC からサービスを解決しています。
+これをそのまま新しいフォルダーへ移してはいけません。
 
-Migrate incrementally:
+段階的に移行します。
 
-1. introduce stable `CommandId` values compatible with existing command
-   settings;
-2. build the registry and one window manager;
-3. implement navigation handlers against the new `PaneModel`;
-4. implement storage handlers against `IStorageOperationService`;
-5. adapt existing command bar and shortcut surfaces to
-   `CommandBindingViewModel`;
-6. migrate clipboard and Shell commands to platform adapters;
-7. remove old `IAction` and `IRichCommand` registrations after their final
-   consumer moves.
+1. 既存のコマンド設定と互換性のある安定した `CommandId` 値を導入する。
+2. レジストリと 1 つのウィンドウマネージャーを構築する。
+3. 新しい `PaneModel` に対するナビゲーションハンドラーを実装する。
+4. `IStorageOperationService` に対するストレージハンドラーを実装する。
+5. 既存のコマンドバーとショートカットサーフェスを `CommandBindingViewModel` に適応する。
+6. クリップボードと Shell コマンドをプラットフォームアダプターへ移行する。
+7. 古い `IAction` と `IRichCommand` の最終利用者が移行した後、登録を削除する。
 
-During migration, a temporary legacy handler may invoke an old action, but
-new handlers must not depend on `Ioc.Default`.
+移行中は、一時的なレガシーハンドラーが古いアクションを呼び出しても構いません。ただし新しいハンドラーは `Ioc.Default` に依存してはいけません。
 
-## Implementation order
+## 実装順序
 
-1. Add the value contracts and registry builder.
-2. Add `CommandContextFactory` and `WindowCommandManager`.
-3. Add navigation handlers and unit tests.
-4. Add storage handlers, progress aggregation, and unit tests.
-5. Add WinUI binding and shortcut adapters.
-6. Add clipboard and drag/drop commands.
-7. Add Shell and plugin contributions.
-8. Remove the corresponding legacy command path.
+1. 値の契約とレジストリビルダーを追加する。
+2. `CommandContextFactory` と `WindowCommandManager` を追加する。
+3. ナビゲーションハンドラーとユニットテストを追加する。
+4. ストレージハンドラー、進行状況の集約、ユニットテストを追加する。
+5. WinUI バインディングとショートカットアダプターを追加する。
+6. クリップボードとドラッグ/ドロップのコマンドを追加する。
+7. Shell とプラグインの拡張を追加する。
+8. 対応するレガシーコマンド経路を削除する。
 
-## Anti-patterns
+## アンチパターン
 
-Do not:
+次のことをしてはいけません。
 
-- add `ICommand` or WinUI types to Files.Core;
-- resolve handlers from global IoC during execution;
-- retain an `IStorableModel` across a prompt or long operation;
-- use labels, indexes, or enum ordinals as persisted command identity;
-- perform network, COM, or enumeration work in `GetState`;
-- mutate `BrowseSessionModel.Items` after an operation;
-- represent a multi-selection command as an item feature;
-- copy native Shell menu items into XAML and assume all extensions still work;
-- let an `async void` method own execution or error handling.
+- Files.Core に `ICommand` または WinUI 型を追加する。
+- 実行時にグローバル IoC からハンドラーを解決する。
+- プロンプトまたは長時間の操作をまたいで `IStorableModel` を保持する。
+- 永続化するコマンド識別にラベル、インデックス、enum の序数を使う。
+- `GetState` でネットワーク、COM、列挙の処理を行う。
+- 操作後に `BrowseSessionModel.Items` を変更する。
+- 複数選択コマンドを項目機能として表現する。
+- ネイティブ Shell メニュー項目を XAML にコピーし、すべての拡張が動作すると仮定する。
+- `async void` メソッドに実行やエラー処理を所有させる。

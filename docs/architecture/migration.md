@@ -1,26 +1,26 @@
-# Migration to Files.Core
+# Files.Core への移行
 
-The final physical layout and the logical architecture are separate decisions. Moving files between projects should not be mixed with replacing the model graph.
+最終的な物理配置と論理アーキテクチャは別の決定です。プロジェクト間でファイルを移動することと、モデルグラフを置き換えることを同時に行ってはいけません。
 
-## Target project layout
+## 目標のプロジェクト配置
 
 ```mermaid
 flowchart TB
-    Core["Files.Core<br/>models, storage, and interop"]
-    Shared["Files.Shared<br/>remaining legacy shared code"]
+    Core["Files.Core<br/>モデル、ストレージ、相互運用"]
+    Shared["Files.Shared<br/>残っているレガシー共有コード"]
 ```
 
-One assembly does not mean one layer. `Files.Core` should retain namespaces and folders for storage contracts, sources, AppModels, browsing, operations, and interop.
+1 つのアセンブリになっても、1 つのレイヤーになるわけではありません。`Files.Core` ではストレージ契約、ソース、AppModel、参照、操作、相互運用の名前空間とフォルダーを維持します。
 
-## Safe migration order
+## 安全な移行順序
 
 ```mermaid
 flowchart TD
-    Contracts["1. Stabilize contracts"]
-    Slice["2. Build vertical slices"]
-    Adopt["3. Adopt from Files.App"]
-    Move["4. Move remaining code"]
-    Delete["5. Remove old projects"]
+    Contracts["1. 契約を安定させる"]
+    Slice["2. 垂直スライスを作る"]
+    Adopt["3. Files.App から採用する"]
+    Move["4. 残りのコードを移動する"]
+    Delete["5. 古いプロジェクトを削除する"]
 
     Contracts --> Slice
     Slice --> Adopt
@@ -28,38 +28,30 @@ flowchart TD
     Move --> Delete
 ```
 
-1. Stabilize `IStorageSource`, CoreModel item features, AppModels, and
-   browse-session ownership in the new project. **Complete.**
-2. Implement one source and one browser path end to end. Windows storage,
-   browsing, presentation, preview, and operations are the first slice.
-   **Complete.**
-3. Introduce `FilesCoreRuntime` in `Files.App` behind a feature boundary. Do
-   not move unrelated source files during adoption. **Next step.**
-4. CsWin32 input and wrappers now live in `Files.Core`; the obsolete
-   `Files.Core.Storage` and `Files.App.Storage` projects have been removed.
-   **Complete.**
-5. Move remaining Files.App consumers to the new contracts and decide whether
-   any `Files.Shared` code belongs in Core.
+1. 新しいプロジェクトで `IStorageSource`、CoreModel の項目機能、AppModel、参照セッションの所有権を安定させます。**完了。**
+2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。最初のスライスは Windows ストレージ、参照、表示、プレビュー、操作です。**完了。**
+3. 機能境界の背後で Files.App に `FilesCoreRuntime` を導入します。採用時に無関係なソースファイルを移動しません。**次のステップ。**
+4. CsWin32 の入力とラッパーは `Files.Core` へ移動済みで、廃止された `Files.Core.Storage` と `Files.App.Storage` プロジェクトは削除済みです。**完了。**
+5. 残りの Files.App コンシューマーを新しい契約へ移し、どの `Files.Shared` コードを Core へ置くか判断します。
 
-## Interop ownership
+## 相互運用コードの所有権
 
-Files.Core now owns CsWin32 generation:
+Files.Core が CsWin32 の生成を所有します。
 
 ```mermaid
 flowchart LR
     Input["NativeMethods.txt"] --> Core["Files.Core"]
-    Wrappers["Interop/Windows wrappers"] --> Core
+    Wrappers["Interop/Windows wrapper"] --> Core
 ```
 
-Generated output remains untracked and must not be edited directly. Existing
-`Windows.Win32` namespaces remain stable despite the assembly move.
+生成出力は追跡対象外のままにし、直接編集してはいけません。アセンブリが移動しても、既存の `Windows.Win32` 名前空間は維持します。
 
-See [New Files.App architecture](files-app.md) for the exact adoption slice.
+正確な導入スライスは[新 Files.App アーキテクチャ](files-app.md)を参照してください。
 
-## Conflict controls
+## 競合の抑制
 
-- Do not make existing storage services implement new contracts through large compatibility classes.
-- Prefer a vertical feature boundary over a repository-wide type replacement.
-- Keep WinUI out of `Files.Core`, even though `Files.Core` targets Windows.
-- Keep item feature contracts and Windows threading boundaries stable while files are still moving between assemblies.
-- Treat project merges as mechanical dependency changes, not as permission to collapse the logical layers.
+- 既存のストレージサービスに大きな互換性クラスを追加して新しい契約を実装させない。
+- リポジトリ全体の型置換より、垂直な機能境界を優先する。
+- `Files.Core` が Windows を対象にしていても、WinUI を入れない。
+- ファイルがアセンブリ間を移動している間も、項目機能契約と Windows のスレッド境界を安定させる。
+- プロジェクト統合は機械的な依存関係変更として扱い、論理レイヤーを潰す許可とはみなさない。

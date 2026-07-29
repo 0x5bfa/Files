@@ -1,20 +1,18 @@
-# Files.Core and Files.App architecture
+# Files.Core と Files.App のアーキテクチャ
 
-These documents define the UI-independent Files.Core foundation and the
-WinUI architecture that consumes it. The design follows trickle-down MVVM:
-long-lived dependencies are composed once and passed down through a model
-graph; optional item behavior is composed lazily per item feature.
+この文書群は、UI に依存しない `Files.Core` 基盤と、それを利用する WinUI アーキテクチャを定義します。
+設計は trickle-down MVVM に従います。長寿命の依存関係は 1 回だけ合成してモデルグラフへ渡し、項目のオプション機能は項目機能単位で遅延合成します。
 
-## System boundary
+## システム境界
 
 ```mermaid
 flowchart TB
-    Views["WinUI views"]
-    ViewModels["Files.App ViewModels"]
-    AppModels["Files.Core AppModels"]
-    ItemFeatures["Item features"]
-    CoreModels["OwlCore.Storage CoreModels"]
-    Sources["Storage and platform sources"]
+    Views["WinUI ビュー"]
+    ViewModels["Files.App ViewModel"]
+    AppModels["Files.Core AppModel"]
+    ItemFeatures["項目機能"]
+    CoreModels["OwlCore.Storage CoreModel"]
+    Sources["ストレージ/プラットフォームソース"]
 
     Views --> ViewModels
     ViewModels --> AppModels
@@ -24,49 +22,44 @@ flowchart TB
     CoreModels --> Sources
 ```
 
-Logical layers remain separate even when WinUI-agnostic code is eventually
-merged into one physical `Files.Core` project.
+WinUI に依存しないコードを最終的に 1 つの物理的な `Files.Core` プロジェクトへ統合する場合でも、論理的なレイヤーは分離したままにします。
 
-## Model terminology
+## モデル用語
 
-`Files.Core` is an assembly boundary, not the name of one architectural
-layer. Use these terms consistently:
+`Files.Core` はアセンブリ境界であり、単一のアーキテクチャレイヤーの名前ではありません。次の用語を一貫して使います。
 
-| Term | Concrete types | Meaning |
+| 用語 | 具体的な型 | 意味 |
 | --- | --- | --- |
-| Storage CoreModel | OwlCore.Storage `IStorable`, `IFile`, `IFolder` | Minimal source-facing storage shape |
-| Item AppModel | `Files.Core.Models.IStorableModel` | Files identity, lifetime, and composed item features |
-| Application-state AppModel | `Files.Core.AppModels.*` and browsing models | Application, window, tab, pane, and browse state |
-| ViewModel | `Files.App.ViewModels.*` | WinUI-bindable wrapper around one direct AppModel |
+| ストレージ CoreModel | OwlCore.Storage `IStorable`、`IFile`、`IFolder` | ソースが扱う最小限のストレージ形状 |
+| 項目 AppModel | `Files.Core.Models.IStorableModel` | Files の識別情報、ライフタイム、合成済み項目機能 |
+| アプリケーション状態 AppModel | `Files.Core.AppModels.*` と参照モデル | アプリケーション、ウィンドウ、タブ、ペイン、参照の状態 |
+| ViewModel | `Files.App.ViewModels.*` | 1 つの直接的な AppModel を WinUI バインディングへ適応するラッパー |
 
-Both item and application-state AppModels are UI-independent. The
-`Files.Core.Models` namespace predates the complete application-state graph;
-do not infer a different architectural layer from that namespace, and do not
-rename it during the first Files.App adoption slice.
+項目 AppModel とアプリケーション状態 AppModel はどちらも UI 非依存です。完全なアプリケーション状態グラフより先に `Files.Core.Models` 名前空間が存在していたため、
+この名前空間を別のアーキテクチャレイヤーだと判断しないでください。また Files.App の最初の移行スライスでは名前を変更しません。
 
-## Dependency rules
+## 依存関係の規則
 
-| Layer | Owns | May depend on |
+| レイヤー | 所有するもの | 依存できるもの |
 | --- | --- | --- |
-| Views | Controls, visual state, input routing | Window-scoped ViewModels |
-| ViewModels | Localized presentation, commands, UI collections | Direct AppModels and UI adapters |
-| AppModels | Windows, tabs, panes, browsing, selection, history | CoreModels and item feature contracts |
-| CoreModels | Standardized storage items | OwlCore.Storage and source abstractions |
-| Item features | Optional thumbnail, property, preview, watcher behavior | Item context and source services |
-| Sources | Windows Shell, cloud, FTP, archives | Backend/platform APIs |
+| Views | コントロール、表示状態、入力ルーティング | ウィンドウ単位の ViewModel |
+| ViewModels | ローカライズ表示、コマンド、UI コレクション | 直接の AppModel と UI アダプター |
+| AppModels | ウィンドウ、タブ、ペイン、参照、選択、履歴 | CoreModel と項目機能契約 |
+| CoreModels | 標準化されたストレージ項目 | OwlCore.Storage とソース抽象化 |
+| 項目機能 | サムネイル、プロパティ、プレビュー、ウォッチャーのオプション処理 | 項目コンテキストとソースサービス |
+| ソース | Windows Shell、クラウド、FTP、アーカイブ | バックエンド/プラットフォーム API |
 
-Prohibited dependencies:
+禁止する依存関係:
 
-- Files.Core referencing WinUI, `Window`, `Frame`, `Page`, or
-  `DispatcherQueue`;
-- ViewModels using `IServiceProvider` or `Ioc.Default` as a service locator;
-- Views calling Windows Shell or storage sources directly;
-- sources depending on ViewModels;
-- `IStorageSource` pretending to be an `IStorable`;
-- `IItemFeatures` being used as process dependency injection;
-- paths or `LastKnownAddress` being used as item identity.
+- `Files.Core` が WinUI、`Window`、`Frame`、`Page`、`DispatcherQueue` を参照すること。
+- ViewModel が `IServiceProvider` や `Ioc.Default` をサービスロケーターとして使うこと。
+- View が Windows Shell やストレージソースを直接呼び出すこと。
+- ソースが ViewModel に依存すること。
+- `IStorageSource` を `IStorable` のように扱うこと。
+- `IItemFeatures` をプロセス全体の依存性注入として使うこと。
+- パスや `LastKnownAddress` を項目識別情報として使うこと。
 
-## Trickle-down ownership
+## Trickle-down による所有関係
 
 ```mermaid
 flowchart TB
@@ -84,45 +77,40 @@ flowchart TB
     Pane --> Item
 ```
 
-Parents own and asynchronously dispose their children. Shared sources,
-caches, and schedulers are owned at the runtime/source level. Item-bound
-adapters are owned by the item's `ItemFeatures`.
+親は子を所有し、非同期に破棄します。共有ソース、キャッシュ、スケジューラーはランタイムまたはソースレベルで所有します。
+項目に結び付いたアダプターは、その項目の `ItemFeatures` が所有します。
 
-## Document map
+## 文書一覧
 
-Read these in order when starting the new Files.App:
+新しい Files.App を開始するときは、次の順に読んでください。
 
-1. [Completion boundary](implementation-status.md)
-2. [Application model graph](app-models.md)
-3. [Composition root](composition.md)
-4. [New Files.App architecture](files-app.md)
-5. [Files.App command execution](commands.md)
-6. [Clipboard, drag/drop, and Shell integration](platform-interactions.md)
-7. [Testing and performance](testing.md)
+1. [完了境界](implementation-status.md)
+2. [アプリケーションモデルグラフ](app-models.md)
+3. [合成ルート](composition.md)
+4. [新 Files.App アーキテクチャ](files-app.md)
+5. [Files.App のコマンド実行](commands.md)
+6. [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
+7. [テストと性能](testing.md)
 
-Reference documents:
+参照文書:
 
-- [Storage model boundaries and identity](storage-models.md)
-- [Archive browsing and SevenZip fallback](archives.md)
-- [FTP storage source](ftp-storage.md)
-- [Item feature composition](item-features.md)
-- [Browse view settings and projection](view-settings.md)
-- [Preview flow and Shell sessions](previews.md)
-- [Storage operations](operations.md)
-- [Durable operations with Files.App.Server](server-operations.md)
-- [Windows storage source](windows-storage.md)
-- [Windows Shell threading](threading.md)
-- [Migration and physical project merge](migration.md)
+- [ストレージモデルの境界と識別情報](storage-models.md)
+- [アーカイブ参照と SevenZip フォールバック](archives.md)
+- [FTP ストレージソース](ftp-storage.md)
+- [項目機能の合成](item-features.md)
+- [参照ビュー設定と投影](view-settings.md)
+- [プレビューの流れと Shell セッション](previews.md)
+- [ストレージ操作](operations.md)
+- [`Files.App.Server` による永続操作](server-operations.md)
+- [Windows ストレージソース](windows-storage.md)
+- [Windows Shell のスレッド処理](threading.md)
+- [移行と物理プロジェクト統合](migration.md)
 
-## Current state
+## 現在の状態
 
-Files.Core now contains the complete application/window/tab/pane model graph,
-home, folder, and archive browsing, selection and projection, view settings,
-viewport prefetch, item feature composition,
-thumbnail/property/folder-change/preview vertical slices, Windows Shell and
-FTP storage, storage mutations, composition, tests, benchmarks, and
-dedicated CI.
+現在の `Files.Core` には、アプリケーション/ウィンドウ/タブ/ペインのモデルグラフ、Home・フォルダー・アーカイブの参照、選択と投影、ビュー設定、
+ビューポート先読み、項目機能合成、サムネイル/プロパティ/フォルダー変更/プレビューの垂直スライス、Windows Shell と FTP ストレージ、ストレージ変更、
+合成、テスト、ベンチマーク、専用 CI が含まれています。
 
-Search/tag backends, cloud/MTP/SFTP sources, WinUI renderers, activation,
-context menus, drag/drop, and persistence are explicit extension or Files.App
-boundaries. They do not require changing the Core model graph.
+検索/タグのバックエンド、クラウド/MTP/SFTP ソース、WinUI レンダラー、アクティブ化、コンテキストメニュー、ドラッグ/ドロップ、永続化は、
+明示的な拡張または Files.App の境界です。これらは Core のモデルグラフを変更せずに追加できます。

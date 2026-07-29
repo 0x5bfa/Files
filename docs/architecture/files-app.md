@@ -1,18 +1,17 @@
-# New Files.App architecture
+# 新 Files.App アーキテクチャ
 
-This document is the implementation blueprint for the new WinUI application.
-Files.Core is the UI-independent model graph; Files.App is a thin,
-window-scoped adaptation and rendering layer.
+この文書は、新しい WinUI アプリケーションの実装設計図です。Files.Core は UI に依存しないモデルグラフ、
+Files.App はウィンドウ単位の薄い適応・描画レイヤーです。
 
-## Dependency direction
+## 依存方向
 
 ```mermaid
 flowchart TB
-    Views["WinUI Views"]
-    ViewModels["Window-scoped ViewModels"]
-    Adapters["UI adapters and presenters"]
-    AppModels["Files.Core AppModels"]
-    Core["Files.Core services"]
+    Views["WinUI ビュー"]
+    ViewModels["ウィンドウスコープの ViewModel"]
+    Adapters["UI アダプターとプレゼンター"]
+    AppModels["Files.Core AppModel"]
+    Core["Files.Core サービス"]
 
     Views --> ViewModels
     ViewModels --> Adapters
@@ -21,20 +20,19 @@ flowchart TB
     AppModels --> Core
 ```
 
-Allowed dependencies:
+許可される依存関係:
 
-| Layer | May depend on |
+| レイヤー | 依存してよいもの |
 | --- | --- |
-| Views | ViewModels and WinUI-only behaviors |
-| ViewModels | AppModels, UI adapter interfaces, command adapters |
-| WinUI adapters | Files.Core result contracts and WinUI/platform APIs |
-| AppModels | CoreModels and item feature contracts |
-| Storage sources | Their backend APIs and Core contracts |
+| ビュー | ViewModel と WinUI 専用のビヘイビア |
+| ViewModel | AppModel、UI アダプターインターフェース、コマンドアダプター |
+| WinUI アダプター | Files.Core の結果契約と WinUI/プラットフォーム API |
+| AppModel | CoreModel と項目機能の契約 |
+| ストレージソース | それぞれのバックエンド API と Core の契約 |
 
-Files.Core never references Files.App. ViewModels never call storage sources or
-Windows Shell APIs directly.
+Files.Core が Files.App を参照することはありません。ViewModel がストレージソースや Windows Shell API を直接呼び出すこともありません。
 
-## Proposed source layout
+## 提案するソース配置
 
 ```text
 src/Files.App/
@@ -93,15 +91,12 @@ src/Files.App/
     Previews/PreviewView.xaml
 ```
 
-Folder names are boundaries, not new projects. Keep them even after the
-existing non-UI projects are physically merged into Files.Core.
+フォルダー名は境界を表すもので、新しいプロジェクトではありません。既存の UI 以外のプロジェクトを物理的に Files.Core へ統合した後も、この配置を維持します。
 
-## UI composition and state flow
+## UI の合成と状態の流れ
 
-Replace `Frame` and `Page` navigation with a retained tree of `UserControl`
-instances and `ContentPresenter` hosts. The existing `Sidebar` may remain a
-templated control, but it follows the same dependency-property boundary as
-the composed user controls.
+`Frame` と `Page` によるナビゲーションを、保持する `UserControl` インスタンスのツリーと `ContentPresenter` ホストに置き換えます。
+既存の `Sidebar` はテンプレート化されたコントロールとして残して構いませんが、合成されたユーザーコントロールと同じ依存関係プロパティ境界に従います。
 
 ```mermaid
 classDiagram
@@ -201,27 +196,18 @@ classDiagram
     FolderLayoutView <|-- GridFolderView
 ```
 
-`RootView` is the window-scoped composition view. It renders the tab
-membership from `WindowViewModel` and updates shared shell controls from its
-active pane. A `TabContentView` renders one or two retained `PaneView`
-instances according to `TabViewModel`. Each browse pane owns one retained
-`FolderBrowserView` for the lifetime of its `PaneViewModel`.
+`RootView` はウィンドウスコープの合成ビューです。`WindowViewModel` からタブの所属を描画し、アクティブペインに応じて共有 Shell コントロールを更新します。
+`TabContentView` は `TabViewModel` に従って保持された 1 つまたは 2 つの `PaneView` インスタンスを描画します。
+各参照ペインは `PaneViewModel` のライフタイム中、保持された `FolderBrowserView` を 1 つ所有します。
 
-The toolbar, sidebar, terminal, info pane, and shelf pane are instantiated
-once per window. Their pane dependency changes when focus moves between tabs
-or split panes; changing that dependency must not recreate a Core model,
-restart enumeration, or maintain another active-pane ID.
+ツールバー、サイドバー、ターミナル、情報ペイン、シェルフペインはウィンドウごとに 1 回だけ生成します。タブまたは分割ペイン間でフォーカスが移動すると、
+それらのペイン依存関係が変わります。この依存関係の変更で Core モデルを再生成したり、列挙を再開したり、別のアクティブペイン ID を維持したりしてはいけません。
 
-### Dependency property contracts
+### 依存関係プロパティ契約
 
-Pass the direct ViewModel down explicitly. Do not rely on a process-global
-current window, implicit service lookup, or a serialized navigation
-parameter.
+直接の ViewModel を明示的に下へ渡します。プロセス全体の現在ウィンドウ、暗黙的なサービス検索、シリアライズされたナビゲーションパラメーターに依存してはいけません。
 
-ViewModels do not declare or consume dependency properties. They remain
-UI-independent objects. A parent View reads its direct ViewModel and assigns
-the corresponding child ViewModel to a dependency property on each child
-control:
+ViewModel は依存関係プロパティを宣言したり消費したりしません。UI に依存しないオブジェクトのままです。親 View は直接の ViewModel を読み取り、対応する子 ViewModel を各子コントロールの依存関係プロパティへ設定します。
 
 ```mermaid
 classDiagram
@@ -281,58 +267,45 @@ classDiagram
     FolderBrowserView ..> FolderLayoutView : ViewModel = ViewModel
 ```
 
-`SharedPaneView` represents the common dependency-property contract used by
-`NavigationToolbar`, `Toolbar`, `SidebarView`, `TerminalView`,
-`InfoPaneView`, and `ShelfPaneView`; it does not require a shared CLR base
-class. Assignment labels describe data flow; Views never construct the child
-ViewModels they receive.
+`SharedPaneView` は `NavigationToolbar`、`Toolbar`、`SidebarView`、`TerminalView`、`InfoPaneView`、`ShelfPaneView` が共通で使う依存関係プロパティ契約を表します。
+共通の CLR 基底クラスは必要ありません。代入ラベルはデータの流れを表すだけで、View が受け取った子 ViewModel を構築することはありません。
 
-`WindowViewModel.ActivePane` is a derived, observable projection of
-`ActiveTab?.ActivePane`. It does not own another pane or store a competing
-active-pane ID. Its purpose is to update every shared `Pane` dependency
-property when either the active tab or that tab's active pane changes.
+`WindowViewModel.ActivePane` は `ActiveTab?.ActivePane` を投影する、監視可能な派生プロパティです。別のペインを所有したり、競合するアクティブペイン ID を保存したりしません。
+アクティブタブまたはそのタブのアクティブペインが変わったとき、共有されるすべての `Pane` 依存関係プロパティを更新することが目的です。
 
-| View | Primary dependency property | Lifetime |
+| View | 主な依存関係プロパティ | ライフタイム |
 | --- | --- | --- |
-| `RootView` | `WindowViewModel ViewModel` | One per WinUI window |
-| `TabStripView` | `WindowViewModel ViewModel` | Shared by the window |
-| `TabContentView` | `TabViewModel ViewModel` | One per model tab |
-| `NavigationToolbar`, `Toolbar`, `SidebarView` | `PaneViewModel? Pane` | Shared; follows the focused pane |
-| `TerminalView`, `InfoPaneView`, `ShelfPaneView` | `PaneViewModel? Pane` | Shared; follows the focused pane |
-| `PaneView` | `PaneViewModel ViewModel` | One per model pane |
-| `FolderBrowserView` | `PaneViewModel ViewModel` | One per browse pane |
-| Folder layout views | `PaneViewModel ViewModel` | Owned by the folder browser view |
+| `RootView` | `WindowViewModel ViewModel` | WinUI ウィンドウごとに 1 つ |
+| `TabStripView` | `WindowViewModel ViewModel` | ウィンドウで共有 |
+| `TabContentView` | `TabViewModel ViewModel` | モデルのタブごとに 1 つ |
+| `NavigationToolbar`、`Toolbar`、`SidebarView` | `PaneViewModel? Pane` | 共有。フォーカスされたペインに追従 |
+| `TerminalView`、`InfoPaneView`、`ShelfPaneView` | `PaneViewModel? Pane` | 共有。フォーカスされたペインに追従 |
+| `PaneView` | `PaneViewModel ViewModel` | モデルのペインごとに 1 つ |
+| `FolderBrowserView` | `PaneViewModel ViewModel` | 参照ペインごとに 1 つ |
+| フォルダーレイアウトビュー | `PaneViewModel ViewModel` | フォルダーブラウザビューが所有 |
 
-Controls treat these ViewModels as borrowed references. A property-change
-callback detaches handlers from the previous value before attaching the new
-value. The ViewModel owner remains the corresponding parent ViewModel or
-`WindowFactory`; unloading a control does not dispose the model graph.
+コントロールはこれらの ViewModel を借用参照として扱います。プロパティ変更コールバックは、古い値からハンドラーを外してから新しい値へ接続します。
+ViewModel の所有者は対応する親 ViewModel または `WindowFactory` のままです。コントロールのアンロードでモデルグラフを破棄してはいけません。
 
-Use dependency properties and `x:Bind` at control boundaries. Ordinary
-template elements may use bindings to the control's dependency properties,
-but a nested control must receive its dependency explicitly. This keeps the
-visual tree aligned with the AppModel and ViewModel ownership trees.
+コントロール境界では依存関係プロパティと `x:Bind` を使用します。通常のテンプレート要素はコントロールの依存関係プロパティにバインドできますが、
+入れ子のコントロールには依存関係を明示的に渡さなければなりません。これにより、ビジュアルツリーと AppModel・ViewModel の所有ツリーが一致します。
 
-### Content presenters
+### ContentPresenter によるコンテンツ選択
 
-Content selection is a View responsibility:
+コンテンツの選択は View の責務です。
 
-- `TabContentPresenter` selects the active retained `TabContentView`;
-- `PaneContentPresenter` selects a `UserControl` for the pane content;
-- `FolderBrowserView` selects a layout view from `BrowseViewSettings`;
-- the ViewModel exposes state and commands, never a `UIElement`, `Type`, or
-  `DataTemplate`;
-- a keyed template or window-scoped view factory may create controls, but it
-  must not resolve Core services or own AppModels.
+- `TabContentPresenter` はアクティブな保持済み `TabContentView` を選択する。
+- `PaneContentPresenter` はペインのコンテンツに使う `UserControl` を選択する。
+- `FolderBrowserView` は `BrowseViewSettings` からレイアウトビューを選択する。
+- ViewModel が公開するのは状態とコマンドであり、`UIElement`、`Type`、`DataTemplate` ではない。
+- キー付きテンプレートまたはウィンドウスコープのビュー・ファクトリはコントロールを作成してよいが、Core サービスを解決したり AppModel を所有したりしてはいけない。
 
-The first adoption slice supports `FolderBrowserView`. Settings and web
-content may be added later through Files.App content ViewModels without
-changing `BrowseSessionModel`. `Frame.Navigate`, page-type routing, and
-serialization of model objects for in-process navigation are prohibited.
+最初の導入スライスでは `FolderBrowserView` をサポートします。設定と Web コンテンツは、`BrowseSessionModel` を変更せず、Files.App のコンテンツ ViewModel を通じて後から追加できます。
+`Frame.Navigate`、ページ型によるルーティング、プロセス内ナビゲーションのためのモデルオブジェクトのシリアライズは禁止です。
 
-## Process bootstrap
+## プロセスの起動
 
-Create exactly one Core runtime per Files process:
+Files プロセスごとに Core ランタイムを正確に 1 つ作成します。
 
 ```csharp
 public sealed class FilesAppHost : IAsyncDisposable
@@ -373,48 +346,41 @@ public sealed class FilesAppHost : IAsyncDisposable
 }
 ```
 
-The bootstrap may use `Microsoft.Extensions.DependencyInjection` to construct
-process services. That container ends at the composition root. Do not inject
-`IServiceProvider` into models or ViewModels.
+起動処理では `Microsoft.Extensions.DependencyInjection` を使ってプロセスサービスを構築しても構いません。そのコンテナーの有効範囲は合成ルートまでです。
+`IServiceProvider` をモデルや ViewModel に注入してはいけません。
 
-At startup, load every non-secret FTP profile and call `AddFtpStorage` before
-`Build`. `FtpCredentialResolver` resolves its password from Windows
-Credential Manager and may marshal an authentication request to the owning
-window. It must never add the password to a `StorageAddress`, navigation
-history, telemetry, or a ViewModel. Until Files.Core gains a mutable source
-registry, adding or removing a connection requires rebuilding the
-process-wide runtime or restarting the process.
+起動時に秘密情報を含まない FTP プロファイルをすべて読み込み、`Build` の前に `AddFtpStorage` を呼び出します。
+`FtpCredentialResolver` は Windows Credential Manager からパスワードを解決し、所有ウィンドウへ認証要求をマーシャリングできます。
+パスワードを `StorageAddress`、ナビゲーション履歴、テレメトリ、ViewModel に追加してはいけません。Files.Core が可変ソースレジストリを得るまで、
+接続の追加・削除にはプロセス全体のランタイム再構築またはプロセス再起動が必要です。
 
-## Window creation
+## ウィンドウの作成
 
-One WinUI window adapts one `WindowModel`:
+1 つの WinUI ウィンドウが 1 つの `WindowModel` を適応します。
 
 ```mermaid
 sequenceDiagram
-    participant Activation as App activation
+    participant Activation as アプリのアクティブ化
     participant Host as FilesAppHost
     participant Core as ApplicationModel
     participant Factory as WindowFactory
     participant UI as WinUI Window
 
-    Activation->>Host: open location
+    Activation->>Host: 場所を開く
     Host->>Core: CreateWindowAsync(location)
     Core-->>Host: WindowModel
     Host->>Factory: Create(WindowModel)
     Factory->>UI: Window + WindowViewModel
-    UI-->>Activation: activate
+    UI-->>Activation: アクティブ化
 ```
 
-`WindowFactory` owns the mapping between model IDs and WinUI windows. It
-closes the ViewModel and WinUI resources before calling
-`FilesApplicationModel.CloseWindowAsync`.
+`WindowFactory` はモデル ID と WinUI ウィンドウの対応付けを所有します。ViewModel と WinUI リソースを閉じてから `FilesApplicationModel.CloseWindowAsync` を呼び出します。
 
-The model is authoritative for tab/pane membership and active IDs. WinUI
-controls render that state; they do not maintain a competing tab graph.
+モデルがタブ/ペインの所属とアクティブ ID の権威です。WinUI コントロールはその状態を描画するだけで、競合するタブグラフを保持しません。
 
-## ViewModel hierarchy
+## ViewModel 階層
 
-Each ViewModel receives its direct model and explicit UI adapters:
+各 ViewModel は直接のモデルと明示的な UI アダプターを受け取ります。
 
 ```csharp
 public sealed class PaneViewModel : IAsyncDisposable
@@ -431,25 +397,21 @@ public sealed class PaneViewModel : IAsyncDisposable
 }
 ```
 
-Recommended mapping:
+推奨する対応付け:
 
-| ViewModel | Model | Additional responsibility |
+| ViewModel | モデル | 追加の責務 |
 | --- | --- | --- |
-| `WindowViewModel` | `WindowModel` | Window title/activation, tab VM lifetime |
-| `TabViewModel` | `TabModel` | Split layout VM lifetime |
-| `PaneViewModel` | `PaneModel` | Navigation commands, collection adapter |
-| `BrowseItemViewModel` | `StorableReference` plus current presentation | Localized labels, image object, selection facade |
+| `WindowViewModel` | `WindowModel` | ウィンドウのタイトル/アクティブ化、タブ VM のライフタイム |
+| `TabViewModel` | `TabModel` | 分割レイアウト VM のライフタイム |
+| `PaneViewModel` | `PaneModel` | ナビゲーションコマンド、コレクションアダプター |
+| `BrowseItemViewModel` | `StorableReference` と現在の表示 | ローカライズされたラベル、画像オブジェクト、選択ファサード |
 
-`BrowseItemViewModel` must not retain an old `IStorableModel` after a replace
-change. It should update from the new snapshot or be replaced by the
-collection adapter.
+`BrowseItemViewModel` は置換変更後に古い `IStorableModel` を保持してはいけません。新しいスナップショットから更新するか、コレクションアダプターが置き換えます。
 
-## Browse collection adapter
+## 参照コレクションアダプター
 
-`BrowseSessionModel.Items` is an immutable snapshot.
-`BrowseItemsChangedEventArgs` supplies a version and granular changes.
-`BrowseItemCollectionAdapter` owns the WinUI-facing
-`ObservableCollection<BrowseItemViewModel>`.
+`BrowseSessionModel.Items` は不変のスナップショットです。`BrowseItemsChangedEventArgs` はバージョンと細粒度の変更を提供します。
+`BrowseItemCollectionAdapter` が WinUI 向けの `ObservableCollection<BrowseItemViewModel>` を所有します。
 
 ```mermaid
 sequenceDiagram
@@ -459,44 +421,39 @@ sequenceDiagram
     participant Items as ObservableCollection
 
     Session-->>Adapter: ItemsChanged(version, changes)
-    Adapter->>Adapter: capture model snapshot
-    Adapter->>Dispatcher: enqueue update
-    Dispatcher->>Adapter: verify version
+    Adapter->>Adapter: モデルスナップショットを取得
+    Adapter->>Dispatcher: 更新をキューに登録
+    Dispatcher->>Adapter: バージョンを検証
     Adapter->>Items: add/remove/move/replace/reset
 ```
 
-Rules:
+ルール:
 
-- Never mutate an observable collection from a Core event thread.
-- Apply changes only when their previous version matches the adapter version.
-- On a gap, stale event, or unsupported change sequence, reset from
-  `session.Items`.
-- Key item VMs by `StorableKey`, not by path or list index.
-- Keep selection synchronization guarded so UI selection changes do not echo
-  indefinitely back into `SetSelection`.
+- Core のイベントスレッドから observable collection を変更しない。
+- 直前のバージョンがアダプターのバージョンと一致する場合だけ変更を適用する。
+- 欠落、古いイベント、サポートされない変更列があれば、`session.Items` からリセットする。
+- 項目 VM のキーにはパスやリストインデックスではなく `StorableKey` を使う。
+- UI の選択変更が `SetSelection` へ無限に反響しないよう、選択同期をガードする。
 
-## Thumbnails
+## サムネイル
 
-Core returns encoded immutable bytes:
+Core はエンコード済みの不変バイト列を返します。
 
 ```csharp
 ThumbnailResult result = presentation.Thumbnail;
 ReadOnlyMemory<byte> encoded = result.Content;
 ```
 
-`ThumbnailImageFactory` converts those bytes on the UI side. A WinUI
-implementation can copy the memory into an `InMemoryRandomAccessStream`,
-seek to zero, and call `BitmapImage.SetSourceAsync`. Cache the resulting
-`ImageSource` only at the UI layer when it is dispatcher-affine; the shared
-Core cache continues to store encoded bytes.
+`ThumbnailImageFactory` は UI 側でバイト列を変換します。WinUI 実装ではメモリを `InMemoryRandomAccessStream` へコピーし、位置 0 にシークして `BitmapImage.SetSourceAsync` を呼び出せます。
+dispatcher に依存するため `ImageSource` のキャッシュが必要な場合でも、キャッシュするのは UI レイヤーだけにします。共有 Core キャッシュはエンコード済みバイト列を保持し続けます。
 
 ```mermaid
 flowchart TD
-    Core["ThumbnailResult bytes"]
+    Core["ThumbnailResult のバイト列"]
     Factory["ThumbnailImageFactory"]
     Stream["RandomAccessStream"]
     Image["BitmapImage"]
-    View["Image control"]
+    View["Image コントロール"]
 
     Core --> Factory
     Factory --> Stream
@@ -504,38 +461,36 @@ flowchart TD
     Image --> View
 ```
 
-Cancel decoding when an item VM is replaced or unrealized. Verify its
-`StorableKey` and presentation version before assigning the image.
+項目 VM が置き換えられたとき、または非実体化されたときはデコードをキャンセルします。画像を設定する前に `StorableKey` と表示バージョンを検証します。
 
-## Preview presenters
+## プレビュープレゼンター
 
-`PreviewPresenter` switches on `BrowsePreviewSnapshot.Result`:
+`PreviewPresenter` は `BrowsePreviewSnapshot.Result` に基づいて切り替えます。
 
-| Result | Files.App presenter |
+| 結果 | Files.App プレゼンター |
 | --- | --- |
-| `StreamPreviewResult` image | Image decoder/view |
-| `StreamPreviewResult` audio/video | Media player adapter |
-| `StreamPreviewResult` text | Bounded text reader/editor adapter |
-| `StreamPreviewResult` PDF/HTML | Explicit safe renderer or web adapter |
+| `StreamPreviewResult` 画像 | 画像デコーダー/ビュー |
+| `StreamPreviewResult` 音声/動画 | メディアプレーヤーアダプター |
+| `StreamPreviewResult` テキスト | 範囲を限定したテキストリーダー/エディターアダプター |
+| `StreamPreviewResult` PDF/HTML | 明示的に安全なレンダラーまたは Web アダプター |
 | `WindowsShellPreviewResult` | `WindowsShellPreviewPresenter` |
-| `BlockedPreviewResult` | Policy explanation and optional hydrate action |
+| `BlockedPreviewResult` | ポリシーの説明と任意の hydration 操作 |
 
-The presenter owns the UI object; `BrowsePreviewModel` owns the
-`PreviewResult`. A presenter must stop using the result when the snapshot
-changes and must not dispose the model-owned result itself.
+プレゼンターが UI オブジェクトを所有し、`BrowsePreviewModel` が `PreviewResult` を所有します。スナップショットが変わったらプレゼンターは結果の使用を停止し、
+モデル所有の結果を破棄してはいけません。
 
-### Windows Shell preview host
+### Windows Shell プレビューホスト
 
-The Shell presenter is the only WinUI boundary for `IPreviewHandler`:
+Shell プレゼンターだけが `IPreviewHandler` に対する WinUI 境界です。
 
 ```mermaid
 flowchart TD
     Snapshot["WindowsShellPreviewResult"]
-    Presenter["Shell preview presenter"]
-    Host["Child HWND host"]
-    Factory["Core session factory"]
-    Session["Shell preview session"]
-    Handler["Out-of-process handler"]
+    Presenter["Shell プレビュープレゼンター"]
+    Host["子 HWND ホスト"]
+    Factory["Core セッションファクトリ"]
+    Session["Shell プレビューセッション"]
+    Handler["アウトオブプロセスハンドラー"]
 
     Snapshot --> Presenter
     Presenter --> Host
@@ -544,46 +499,38 @@ flowchart TD
     Session --> Handler
 ```
 
-Implementation order:
+実装順序:
 
-1. create a dedicated child HWND owned by the pane's preview surface;
-2. convert arranged logical pixels to physical-pixel
-   `WindowsPreviewBounds`;
-3. call `CreateAsync(result, host)`;
-4. forward size, theme, focus, and accelerator updates;
-5. dispose the session before destroying the child HWND;
-6. dispose every session before `FilesCoreRuntime`.
+1. ペインのプレビューサーフェスが所有する専用の子 HWND を作成する。
+2. 配置された論理ピクセルを物理ピクセルの `WindowsPreviewBounds` へ変換する。
+3. `CreateAsync(result, host)` を呼び出す。
+4. サイズ、テーマ、フォーカス、アクセラレーターの更新を転送する。
+5. 子 HWND を破棄する前にセッションを破棄する。
+6. `FilesCoreRuntime` の前にすべてのセッションを破棄する。
 
-Do not pass a XAML control pointer as an HWND. Do not activate a handler on
-the UI thread. The Core factory owns the dedicated preview STA and defaults
-to local-server activation.
+XAML コントロールのポインターを HWND として渡してはいけません。UI スレッドでハンドラーをアクティブ化してはいけません。
+Core ファクトリが専用プレビュー STA を所有し、既定ではローカルサーバーとしてアクティブ化します。
 
-## Navigation commands
+## ナビゲーションコマンド
 
-The window-scoped registry, binding, context, cancellation, and execution
-rules are defined in [Files.App command execution](commands.md). Command
-surfaces invoke a stable command ID; they do not call the pane directly.
-The navigation adapter then calls the pane:
+ウィンドウスコープのレジストリ、バインディング、コンテキスト、キャンセル、実行の規則は、[Files.App のコマンド実行](commands.md) で定義します。
+コマンドサーフェスは安定したコマンド ID を呼び出し、ペインを直接呼び出しません。ナビゲーションアダプターがペインを呼び出します。
 
-| Command | Model call |
+| コマンド | モデル呼び出し |
 | --- | --- |
-| Open | `NavigateAsync(location)` |
-| Refresh | `RefreshAsync()` |
-| Back | `GoBackAsync()` |
-| Forward | `GoForwardAsync()` |
-| Up | `GoUpAsync()` |
-| Change layout/sort/columns | `BrowseSession.UpdateViewSettingsAsync()` |
+| 開く | `NavigateAsync(location)` |
+| 更新 | `RefreshAsync()` |
+| 戻る | `GoBackAsync()` |
+| 進む | `GoForwardAsync()` |
+| 上へ | `GoUpAsync()` |
+| レイアウト/並べ替え/列の変更 | `BrowseSession.UpdateViewSettingsAsync()` |
 
-Can-execute state comes from `CanGoBack`, `CanGoForward`, `CanGoUp`,
-`IsLoading`, and model membership. Commands should hold a per-command
-`CancellationTokenSource` and never block the dispatcher.
+実行可否の状態は `CanGoBack`、`CanGoForward`、`CanGoUp`、`IsLoading`、モデルの所属から取得します。コマンドはコマンドごとの `CancellationTokenSource` を保持し、dispatcher をブロックしてはいけません。
 
-### Opening archives
+### アーカイブを開く
 
-The open command checks archive item features before ordinary folder shape.
-This matters because Windows Shell can expose `.zip` or `.7z` as an
-`IFolderModel`, while an encrypted archive must still be routed to the
-SevenZip fallback.
+開くコマンドは通常のフォルダー形状より先にアーカイブ項目機能を確認します。Windows Shell が `.zip` や `.7z` を `IFolderModel` として公開しても、
+暗号化アーカイブは SevenZip フォールバックへ送らなければならないためです。
 
 ```csharp
 private static BrowseLocation GetOpenLocation(
@@ -610,22 +557,17 @@ private static BrowseLocation GetOpenLocation(
 }
 ```
 
-`ArchiveCredentialResolver` is window-aware application infrastructure. It
-marshals to the owning window dispatcher, shows localized WinUI content, and
-returns `ArchiveCredential` or `null` when canceled. It does not store the
-password in navigation history or the item ViewModel.
+`ArchiveCredentialResolver` はウィンドウを認識するアプリケーション基盤です。所有ウィンドウの dispatcher へマーシャリングし、ローカライズされた WinUI コンテンツを表示し、
+キャンセル時には `ArchiveCredential` または `null` を返します。パスワードをナビゲーション履歴や項目 ViewModel に保存しません。
 
-Core's archive context resolves Up inside the archive with another
-`ArchiveLocation`. Up from the archive root resolves the outer archive's
-storage parent and returns a `FolderLocation`. Back and Forward retain the
-outer reference and normalized entry path.
+Core のアーカイブコンテキストでは、別の `ArchiveLocation` でアーカイブ内の上へ移動を解決します。アーカイブルートから上へ移動すると外側のアーカイブのストレージ親を解決し、
+`FolderLocation` を返します。戻る・進むでは外側の参照と正規化されたエントリパスを保持します。
 
-See [Archive browsing](archives.md) for backend selection and ownership.
+バックエンドの選択と所有権については、[アーカイブ参照](archives.md) を参照してください。
 
-## Storage commands
+## ストレージコマンド
 
-`StorageCommandAdapter` captures references from the pane, prompts for any UI
-input, constructs a request, then calls `runtime.StorageOperations`.
+`StorageCommandAdapter` はペインから参照を取得し、UI 入力を要求し、要求を構築してから `runtime.StorageOperations` を呼び出します。
 
 ```csharp
 var request = new RenameOperationRequest(item.Reference, newName);
@@ -640,37 +582,31 @@ var result = await operations.ExecuteAsync(
 	cancellationToken);
 ```
 
-The adapter displays `result.Error` according to application policy.
-It does not directly edit the item collection. The folder watcher updates the
-session; the returned result reference is useful for reveal/focus intent.
+アダプターはアプリケーションポリシーに従って `result.Error` を表示します。項目コレクションを直接編集しません。フォルダーウォッチャーがセッションを更新し、
+結果で返された参照は表示/フォーカスの意図に使えます。
 
-Drag/drop packages, clipboard formats, elevation, conflict prompts, and undo
-UI live in this adapter layer. The storage request remains UI-independent.
-The concrete command lifecycle is defined in
-[Files.App command execution](commands.md). Native clipboard, drag/drop,
-cross-source transfer, and Shell menu ownership are defined in
-[Clipboard, drag/drop, and Shell integration](platform-interactions.md).
+ドラッグ/ドロップパッケージ、クリップボード形式、昇格、競合プロンプト、元に戻す UI はこのアダプターレイヤーに置きます。ストレージ要求は UI に依存しません。
+具体的なコマンドのライフサイクルは [Files.App のコマンド実行](commands.md) で定義します。ネイティブクリップボード、ドラッグ/ドロップ、ソース間転送、
+Shell メニューの所有権は [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md) で定義します。
 
-## View settings
+## ビュー設定
 
-Implement `PersistedViewSettingsStore` in Files.App over the existing settings
-database. Serialize by an explicit location DTO:
+既存の設定データベース上に、Files.App の `PersistedViewSettingsStore` を実装します。明示的な場所 DTO でシリアライズします。
 
-- location kind;
-- source ID and item ID for folders;
-- outer source/item identity and normalized entry path for archives;
-- current recovery address as non-key metadata;
-- search query/scope;
-- tag ID;
-- schema version.
+- 場所の種別。
+- フォルダーのソース ID と項目 ID。
+- アーカイブの外側のソース/項目識別情報と正規化されたエントリパス。
+- キーには使わない現在の復旧アドレスのメタデータ。
+- 検索クエリ/スコープ。
+- タグ ID。
+- スキーマバージョン。
 
-Column widths are logical pixels. Validate layout enum values, property IDs,
-orders, visibility, and minimum/maximum widths when reading old data.
-`InMemoryViewSettingsStore` remains the test and fallback implementation.
+列幅は論理ピクセルです。古いデータを読むときは、レイアウト enum 値、プロパティ ID、順序、表示状態、最小/最大幅を検証します。
+`InMemoryViewSettingsStore` はテストとフォールバックの実装として残します。
 
-## UI dispatch and error policy
+## UI dispatch とエラーポリシー
 
-Define one small window-scoped abstraction:
+ウィンドウスコープの小さな抽象化を 1 つ定義します。
 
 ```csharp
 public interface IUiDispatcher
@@ -683,27 +619,25 @@ public interface IUiDispatcher
 }
 ```
 
-Each window gets its own dispatcher. A ViewModel cannot assume the process has
-one UI thread.
+各ウィンドウには専用 dispatcher を与えます。ViewModel はプロセスに UI スレッドが 1 つだけあると仮定してはいけません。
 
-Core exceptions retain backend meaning. Files.App maps them to localized,
-actionable UI:
+Core の例外はバックエンドの意味を保持します。Files.App はそれをローカライズされた、行動可能な UI に対応付けます。
 
-- cancellation: no error dialog;
-- not supported: disable or explain the command;
-- access denied: permission guidance;
-- missing identity: refresh/reveal failure;
-- preview blocked: policy-specific UI;
-- unexpected failure: log full exception and show a stable error code.
+- キャンセル: エラーダイアログなし。
+- 未サポート: コマンドを無効にするか説明する。
+- アクセス拒否: 権限の案内。
+- 識別情報が見つからない: 更新/表示の失敗。
+- プレビューのブロック: ポリシー固有の UI。
+- 想定外の失敗: 例外全体をログに記録し、安定したエラーコードを表示する。
 
-## Ownership and shutdown
+## 所有権と終了
 
 ```mermaid
 flowchart TB
     Host["FilesAppHost"]
     Windows["WindowFactory"]
-    VMs["ViewModels"]
-    Presenters["Preview and image presenters"]
+    VMs["ViewModel"]
+    Presenters["プレビューと画像のプレゼンター"]
     Runtime["FilesCoreRuntime"]
 
     Host --> Windows
@@ -712,48 +646,45 @@ flowchart TB
     Host --> Runtime
 ```
 
-Shutdown order:
+終了順序:
 
-1. stop activation and new window creation;
-2. dispose ViewModels and collection adapters;
-3. dispose Shell preview sessions and child HWNDs;
-4. close model windows or dispose the application graph;
-5. dispose `FilesCoreRuntime`;
-6. dispose application-only telemetry/settings services.
+1. アクティブ化と新しいウィンドウ作成を停止する。
+2. ViewModel とコレクションアダプターを破棄する。
+3. Shell プレビューセッションと子 HWND を破棄する。
+4. モデルのウィンドウを閉じるか、アプリケーショングラフを破棄する。
+5. `FilesCoreRuntime` を破棄する。
+6. アプリケーション専用のテレメトリ/設定サービスを破棄する。
 
-Every event subscription must have an owner and deterministic unsubscription.
-Avoid weak events as a substitute for correct lifetime.
+すべてのイベント購読には所有者と決定論的な購読解除を持たせます。正しいライフタイムの代わりに弱いイベントを使わないでください。
 
-## Adoption slices
+## 導入スライス
 
-The first slice is a walking skeleton, not the complete browser:
+最初のスライスは、完全なブラウザーではなくウォーキングスケルトンです。
 
-1. reference Files.Core behind a temporary Files.App feature boundary;
-2. build `FilesAppHost` and production policies;
-3. create one `MainWindow` and `RootView` from `HomeLocation`;
-4. adapt one window, one tab, and one pane;
-5. retain one `FolderBrowserView` through `PaneContentPresenter`;
-6. display `BrowseSessionModel.Items` through the collection adapter;
-7. implement selection and back/forward/up/refresh.
+1. 一時的な Files.App 機能境界の背後に Files.Core を参照する。
+2. `FilesAppHost` と本番ポリシーを構築する。
+3. `HomeLocation` から 1 つの `MainWindow` と `RootView` を作成する。
+4. 1 つのウィンドウ、1 つのタブ、1 つのペインを適応する。
+5. `PaneContentPresenter` を通して 1 つの `FolderBrowserView` を保持する。
+6. コレクションアダプターで `BrowseSessionModel.Items` を表示する。
+7. 選択と戻る/進む/上へ/更新を実装する。
 
-The slice is complete when Home and one filesystem folder render without a
-`Frame`, the active pane reaches shared controls only through dependency
-properties, and the Files.App x64 build succeeds.
+このスライスは、`Frame` なしで Home と 1 つのファイルシステムフォルダーが描画され、アクティブペインが依存関係プロパティだけで共有コントロールへ届き、
+Files.App の x64 ビルドが成功した時点で完了です。
 
-Continue in independently buildable slices:
+以降も、独立してビルドできるスライスで続けます。
 
-1. viewport reporting, details/grid settings, and thumbnail decoding;
-2. stream previews, then the child-HWND Shell preview presenter;
-3. rename/create/copy/move/delete command adapters;
-4. split panes and multiple tabs;
-5. persisted view and window-session state.
+1. ビューポート報告、詳細/グリッド設定、サムネイルデコード。
+2. ストリームプレビュー、続いて子 HWND の Shell プレビュープレゼンター。
+3. 名前変更/作成/コピー/移動/削除のコマンドアダプター。
+4. 分割ペインと複数タブ。
+5. 永続化されたビュー状態とウィンドウセッション状態。
 
-Do not begin by moving old ViewModels into the new folders. Build each slice
-against Files.Core contracts, then migrate one existing user flow at a time.
+古い ViewModel を最初に新しいフォルダーへ移してはいけません。各スライスを Files.Core の契約に対して構築し、既存のユーザーフローを 1 つずつ移行します。
 
-## Related implementation blueprints
+## 関連する実装設計図
 
-- [Files.App command execution](commands.md)
-- [Clipboard, drag/drop, and Shell integration](platform-interactions.md)
-- [Storage operations](operations.md)
-- [New Files.Core composition](composition.md)
+- [Files.App のコマンド実行](commands.md)
+- [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
+- [ストレージ操作](operations.md)
+- [新 Files.Core の合成](composition.md)

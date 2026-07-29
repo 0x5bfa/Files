@@ -1,34 +1,33 @@
-# FTP storage source
+# FTP ストレージソース
 
-Files.Core represents each saved FTP connection as one
-`FtpStorageSource`. FTP items are ordinary OwlCore.Storage `IFile` and
-`IFolder` CoreModels, so folder browsing, stream previews, archive browsing,
-properties, and storage commands do not need FTP-specific AppModels.
+Files.Core は、保存された各 FTP 接続を 1 つの
+`FtpStorageSource` として表します。FTP 項目は通常の OwlCore.Storage の
+`IFile` および `IFolder` CoreModel なので、フォルダーの参照、ストリームプレビュー、
+アーカイブ参照、プロパティ、ストレージコマンドに FTP 固有の AppModel は不要です。
 
-SFTP is not FTP over TLS and is outside this source. It requires a separate
-source and transport implementation.
+SFTP は FTP over TLS ではなく、このソースの対象外です。SFTP には別のソースと
+トランスポート実装が必要です。
 
-## Source and item identity
+## ソースと項目の識別
 
-One profile is one source even when two profiles use the same host. Accounts,
-ports, TLS modes, and configured roots can differ independently.
+同じホストを使う 2 つのプロファイルであっても、1 プロファイルを 1 ソースとして扱います。
+アカウント、ポート、TLS モード、構成済みルートはそれぞれ独立して異なり得ます。
 
-| Value | FTP meaning |
+| 値 | FTP での意味 |
 | --- | --- |
 | `StorageSourceId` | `ftp:<ConnectionId>` |
-| `IStorable.Id` | Normalized absolute remote path inside that source |
-| `StorageAddress` | Credential-free `ftp:`, `ftpes:`, or `ftps:` endpoint and path |
-| `LastKnownAddress` | Recovery/display hint; never a credential or identity key |
+| `IStorable.Id` | そのソース内の正規化された絶対リモートパス |
+| `StorageAddress` | 認証情報を含まない `ftp:`、`ftpes:`、`ftps:` エンドポイントとパス |
+| `LastKnownAddress` | 復旧・表示用のヒント。認証情報や識別キーにはしない |
 
-FTP has no portable stable file identifier. Rename and move therefore
-invalidate the old path-based item ID and return a new `StorableReference`.
-The old reference normally stops resolving after the path changes. If a
-different remote item later reuses exactly the same path, FTP exposes no
-portable identity with which Core could distinguish it.
+FTP には移植可能で安定したファイル識別子がありません。そのため名前変更や移動では、
+旧パスベースの項目 ID が無効になり、新しい `StorableReference` が返されます。
+パスが変わると、通常は旧参照を解決できなくなります。後から別のリモート項目がまったく
+同じパスを再利用しても、FTP には Core が両者を区別できる移植可能な識別情報がありません。
 
-`FtpPath` preserves spelling and uses `/` separators. The connection profile
-declares whether the server compares paths case-sensitively. It also prevents
-resolution outside the configured root.
+`FtpPath` は表記を保持し、区切り文字には `/` を使います。接続プロファイルは、
+サーバーがパスを大文字小文字区別で比較するかどうかを宣言します。また、構成済みルートの
+外側へ解決されないようにします。
 
 ```mermaid
 flowchart TD
@@ -37,7 +36,7 @@ flowchart TD
     Path["FtpPath"]
     Resolver["FtpItemResolver"]
     Entry["FtpEntryInfo"]
-    Model["FtpFile or FtpFolder"]
+    Model["FtpFile または FtpFolder"]
 
     Reference --> Source
     Source --> Path
@@ -46,16 +45,16 @@ flowchart TD
     Entry --> Model
 ```
 
-Addresses never include a username or password. The internal `ftpes` scheme
-denotes explicit TLS, while `ftps` denotes implicit TLS:
+アドレスにユーザー名やパスワードを含めてはいけません。内部の `ftpes` スキームは明示的 TLS、
+`ftps` は暗黙的 TLS を表します。
 
-| Profile mode | Address scheme | Default port |
+| プロファイルモード | アドレススキーム | 既定ポート |
 | --- | --- | --- |
-| Plain | `ftp` | 21 |
-| Explicit TLS | `ftpes` | 21 |
-| Implicit TLS | `ftps` | 990 |
+| 平文 | `ftp` | 21 |
+| 明示的 TLS | `ftpes` | 21 |
+| 暗黙的 TLS | `ftps` | 990 |
 
-## Component boundary
+## コンポーネント境界
 
 ```mermaid
 flowchart TD
@@ -77,39 +76,38 @@ flowchart TD
     Session --> Fluent
 ```
 
-Responsibilities are intentionally separated:
+責務は意図的に分離します。
 
-| Component | Responsibility |
+| コンポーネント | 責務 |
 | --- | --- |
-| `FtpConnectionProfile` | Non-secret endpoint, root, TLS, and comparison settings |
-| `IFtpCredentialResolver` | Supplies transient credentials from Files.App policy |
-| `FtpConnection` | Caches credentials, retries one rejected credential, and creates isolated command sessions |
-| `IFtpSession` | Testable FTP command and data-stream boundary |
-| `FluentFtpSession` | The only layer translating FluentFTP types |
-| `FtpItemResolver` | Resolves paths and filters items outside the configured root |
-| `FtpStorableFactory` | Materializes immutable CoreModel snapshots |
-| `FtpStorageOperationHandler` | Mutates references owned by one FTP source |
-| `FtpPropertyReader` | Publishes listing metadata without another network call |
+| `FtpConnectionProfile` | 秘密情報を除くエンドポイント、ルート、TLS、比較設定 |
+| `IFtpCredentialResolver` | Files.App のポリシーに従って一時的な認証情報を提供 |
+| `FtpConnection` | 認証情報をキャッシュし、拒否された認証情報を 1 回だけ再試行し、分離されたコマンドセッションを作成 |
+| `IFtpSession` | テスト可能な FTP コマンドおよびデータストリーム境界 |
+| `FluentFtpSession` | FluentFTP 型を変換する唯一のレイヤー |
+| `FtpItemResolver` | パスを解決し、構成済みルート外の項目を除外 |
+| `FtpStorableFactory` | 不変の CoreModel スナップショットを具象化 |
+| `FtpStorageOperationHandler` | 1 つの FTP ソースが所有する参照を変更 |
+| `FtpPropertyReader` | 追加のネットワーク呼び出しなしで一覧メタデータを公開 |
 
-Each command uses a short-lived session. This avoids sharing one control
-connection concurrently and makes command cancellation and failure
-containment explicit.
+各コマンドは短命のセッションを使います。これにより、1 つの制御接続を並行して共有する
+ことを避け、コマンドのキャンセルと失敗の封じ込めを明示できます。
 
-## Folder and item resolution
+## フォルダーと項目の解決
 
-The configured root is synthesized as a folder even when a server cannot
-return metadata for `/`. Other items first use `GetObjectInfo`. Servers
-without MLST support fall back to one parent listing.
+サーバーが `/` のメタデータを返せない場合でも、構成済みルートはフォルダーとして合成します。
+その他の項目ではまず `GetObjectInfo` を使います。MLST をサポートしないサーバーでは、
+親の一覧を 1 回取得する方式にフォールバックします。
 
 ```mermaid
 flowchart TD
-    Request["Resolve path"]
-    Root{"Configured root?"}
+    Request["パスを解決"]
+    Root{"構成済みルート?"}
     Info["GetObjectInfo"]
-    Found{"Entry returned?"}
-    Listing["List parent once"]
-    Match{"Matching path?"}
-    Materialize["Create immutable model"]
+    Found{"エントリが返った?"}
+    Listing["親を 1 回一覧取得"]
+    Match{"一致するパス?"}
+    Materialize["不変モデルを作成"]
     Missing["FileNotFoundException"]
 
     Request --> Root
@@ -123,17 +121,16 @@ flowchart TD
     Match -- No --> Missing
 ```
 
-`FtpFolder.GetItemsAsync` performs one listing, copies remote metadata into
-`FtpEntryInfo`, closes the session, and then yields CoreModels. CoreModels
-never retain the FluentFTP client or a live listing response.
+`FtpFolder.GetItemsAsync` は 1 回の一覧取得を行い、リモートメタデータを `FtpEntryInfo` に
+コピーし、セッションを閉じてから CoreModel を生成します。CoreModel が FluentFTP クライアントや
+生存中の一覧レスポンスを保持することはありません。
 
-## Stream ownership
+## ストリームの所有権
 
-Low-level FTP data streams require the control connection to stay alive and
-require a final reply to be consumed. Returning a stream after disposing its
-client is invalid.
+低レベル FTP データストリームでは、制御接続を存続させ、最後の応答を読み取る必要があります。
+クライアントを破棄した後でストリームを返すのは無効です。
 
-`FtpOwnedStream` owns both the data stream and `IFtpSession`:
+`FtpOwnedStream` はデータストリームと `IFtpSession` の両方を所有します。
 
 ```mermaid
 sequenceDiagram
@@ -143,69 +140,60 @@ sequenceDiagram
     participant Stream as FtpOwnedStream
 
     File->>Connection: OpenStreamAsync
-    Connection->>Session: Connect and open data stream
+    Connection->>Session: 接続してデータストリームを開く
     Connection-->>File: FtpOwnedStream
-    File->>Stream: ReadAsync or WriteAsync
+    File->>Stream: ReadAsync または WriteAsync
     File->>Stream: DisposeAsync
     Stream->>Session: CompleteTransferAsync
     Stream->>Session: DisposeAsync
 ```
 
-The caller owns the returned stream. `FileAccess.ReadWrite` is rejected
-because FTP exposes separate download and upload data channels. Stream
-disposal also validates the final FTP reply, so a server-side transfer failure
-is not reported as success merely because the data stream closed.
+返されたストリームの所有権は呼び出し側にあります。FTP はダウンロードとアップロードで別の
+データチャネルを公開するため、`FileAccess.ReadWrite` は拒否します。ストリームの破棄時には
+最後の FTP 応答も検証するので、データストリームが閉じただけでサーバー側の転送失敗を成功と
+して報告することはありません。
 
-## Operations
+## 操作
 
-`FtpStorageOperationHandler` handles operations only when every reference
-belongs to its source.
+`FtpStorageOperationHandler` は、すべての参照が自分のソースに属する場合にだけ操作を処理します。
 
-| Request | FTP behavior |
+| 要求 | FTP での動作 |
 | --- | --- |
-| Create file | Upload an empty file without overwrite |
-| Create folder | Create one remote directory |
-| Rename | Server move in the current parent; case-only rename uses a temporary path when configured case-insensitive |
-| Move | Server move inside the same FTP source |
-| Copy file | Two owned sessions stream to a temporary sibling, then a no-overwrite server move publishes it |
-| Copy folder | Recursively populate a temporary sibling, then publish it with a no-overwrite server move |
-| Delete | Recursive permanent delete only |
+| ファイル作成 | 上書きせず空ファイルをアップロード |
+| フォルダー作成 | リモートディレクトリを 1 つ作成 |
+| 名前変更 | 現在の親でサーバー移動。大文字小文字を区別しない設定で大文字小文字だけを変更する場合は一時パスを使用 |
+| 移動 | 同じ FTP ソース内でサーバー移動 |
+| ファイルコピー | 所有する 2 セッションで一時兄弟項目へストリーム転送し、上書きなしのサーバー移動で公開 |
+| フォルダーコピー | 一時兄弟項目を再帰的に作成し、上書きなしのサーバー移動で公開 |
+| 削除 | 再帰的な完全削除のみ |
 
-Copy and move reject a folder destination inside the source folder. File and
-folder copies populate a random temporary sibling, then publish it with a
-no-overwrite server move. Failure cleanup therefore removes only that
-source-owned temporary item; a concurrently created target is never
-treated as source-owned cleanup. `GenerateUniqueName` produces
-`name (2).ext`, `name (3).ext`, and so on.
+コピーと移動では、ソースフォルダー内にあるフォルダーを宛先にすることを拒否します。ファイルと
+フォルダーのコピーはランダムな一時兄弟項目へ作成してから、上書きなしのサーバー移動で公開します。
+そのため失敗時のクリーンアップで削除されるのは、そのソースが所有する一時項目だけです。並行して
+作成されたターゲットをソース所有のクリーンアップ対象として扱うことはありません。
+`GenerateUniqueName` は `name (2).ext`、`name (3).ext` のような名前を生成します。
 
-FTP has no Recycle Bin. A `DeleteOperationRequest` with
-`Permanently == false` returns a failed result so Files.App can request
-explicit confirmation.
+FTP にはごみ箱がありません。`Permanently == false` の `DeleteOperationRequest` は失敗結果を返し、
+Files.App が明示的な確認を求められるようにします。
 
-Transfers between FTP and another source are not hidden inside this source.
-They belong to a future storage-independent cross-source transfer
-coordinator that resolves both sources and streams between their CoreModels.
+FTP と別のソース間の転送は、このソースの内部に隠しません。両方のソースを解決し、CoreModel 間で
+ストリームを転送する、将来のストレージ非依存クロスソース転送コーディネーターの責務です。
 
-## Existing item features reused by FTP
+## FTP が再利用する既存の項目機能
 
-No FTP-specific browse location, preview loader, archive source, or
-thumbnail source is registered.
+FTP 固有の参照場所、プレビューローダー、アーカイブソース、サムネイルソースは登録しません。
 
-- `FolderBrowseLocationHandler` browses `FtpFolder`.
-- `StreamPreviewLoader` previews supported `FtpFile` formats.
-- Archive probing and SevenZip fallback consume the FTP read stream. A
-  non-seekable stream is already spooled by the archive flow.
-- `FtpPropertyReader` publishes size and timestamps captured by listings.
-- Thumbnail retrieval remains policy-controlled future work; browsing must
-  not download arbitrary remote files merely to decorate a list.
-- FTP has no general push notification API. An optional polling folder-change
-  source can be added later without changing CoreModels.
-- Symbolic-link metadata is retained, but a link is currently file-shaped
-  unless a future resolver safely determines that its target is a folder.
+- `FolderBrowseLocationHandler` が `FtpFolder` を参照します。
+- `StreamPreviewLoader` が対応する `FtpFile` 形式をプレビューします。
+- アーカイブの判定と SevenZip フォールバックは FTP の読み取りストリームを消費します。シークできないストリームは、アーカイブ処理ですでに spool されます。
+- `FtpPropertyReader` が一覧から取得したサイズとタイムスタンプを公開します。
+- サムネイル取得は、将来もポリシーで制御します。参照一覧を装飾するだけのために任意のリモートファイルをダウンロードしてはいけません。
+- FTP には一般的な push 通知 API がありません。CoreModel を変更せず、必要になれば任意のフォルダー変更ポーリングソースを後から追加できます。
+- シンボリックリンクのメタデータは保持しますが、リンク先がフォルダーであることを将来のリゾルバーが安全に判定するまでは、現在はファイル形状として扱います。
 
-## Composition
+## 合成
 
-Load saved profiles before building the one process-wide runtime:
+1 プロセスで共有するランタイムを構築する前に、保存済みプロファイルを読み込みます。
 
 ```csharp
 var builder = new FilesCoreBuilder(
@@ -227,28 +215,24 @@ foreach (var profile in ftpProfiles)
 await using var runtime = builder.Build();
 ```
 
-`AddDefaultStreamPreviews` and archive browsing use module guards, so adding
-multiple FTP sources does not register duplicate shared loaders or handlers. The FTP
-property factory remains source-scoped.
+`AddDefaultStreamPreviews` とアーカイブ参照はモジュールガードを使うため、複数の FTP ソースを追加しても
+共有ローダーやハンドラーが重複登録されません。FTP プロパティファクトリはソース単位のままです。
 
-The current `FilesDataRoot` source set is immutable after `Build`. Adding or
-removing saved connections at runtime requires a future source-registry
-contract with explicit source lifetime rules. The initial Files.App can load
-profiles at process startup.
+現在の `FilesDataRoot` のソース集合は `Build` 後には不変です。保存済み接続を実行時に追加・削除するには、
+ソースの有効期間を明示した将来のソースレジストリ契約が必要です。初期の Files.App はプロセス起動時に
+プロファイルを読み込めます。
 
-## Files.App responsibilities
+## Files.App の責務
 
-Files.App owns:
+Files.App が所有するもの:
 
-- durable non-secret profile serialization;
-- Windows Credential Manager or another protected secret store;
-- a window-aware `IFtpCredentialResolver` and authentication prompt;
-- warnings before plain unencrypted FTP;
-- invalid-certificate trust UI and persisted certificate policy if added;
-- connection creation/removal UI and runtime restart until sources become
-  dynamically registered;
-- localized presentation of authentication, connection, and permanent-delete
-  errors.
+- 秘密情報を含まないプロファイルの永続化。
+- Windows Credential Manager または別の保護された秘密ストア。
+- ウィンドウを認識する `IFtpCredentialResolver` と認証プロンプト。
+- 平文で暗号化されない FTP の前に表示する警告。
+- 追加する場合の無効な証明書の信頼 UI と保存された証明書ポリシー。
+- 接続の作成・削除 UI、およびソースが動的登録されるまでのランタイム再起動。
+- 認証、接続、完全削除エラーのローカライズされた表示。
 
-Files.Core never invokes WinUI, stores a password in a URI/reference, or
-accepts an invalid FTPS certificate globally.
+Files.Core が WinUI を呼び出したり、URI/参照にパスワードを保存したり、無効な FTPS 証明書を
+グローバルに受け入れたりすることはありません。

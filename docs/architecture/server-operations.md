@@ -1,56 +1,38 @@
-# Durable operations with `Files.App.Server`
+# `Files.App.Server` による永続操作
 
-## Status and scope
+## 状態と対象範囲
 
-This document defines the proposed design for running long-lived storage
-operations in `Files.App.Server`. It is the design target for the new
-Files.Core model graph; it is not a description of the current implementation.
+この文書は、長時間実行するストレージ操作を `Files.App.Server` で動かす提案設計を定義します。
+新しい Files.Core のモデルグラフを前提にした目標設計であり、現在の実装を説明する文書ではありません。
 
-The goal is deliberately narrow:
+目標は意図的に限定します。
 
-- a copy, move, delete, create, or rename operation can continue when the
-  foreground `Files.App` process exits unexpectedly;
-- a newly started `Files.App` can discover and display operations that were
-  started by an earlier process;
-- the UI remains responsible for presentation, prompts, and navigation state;
-- Files.Core remains UI-independent and continues to execute one storage
-  request at a time through `IStorageOperationService`.
+- フォアグラウンドの `Files.App` プロセスが予期せず終了しても、コピー、移動、削除、作成、名前変更を継続できる。
+- 新しく起動した `Files.App` が、以前のプロセスが開始した操作を発見して表示できる。
+- UI は表示、プロンプト、ナビゲーション状態を担当する。
+- Files.Core は UI 非依存のまま、`IStorageOperationService` を通して 1 つのストレージ要求を実行する。
 
-This design does not promise that an operation can resume after
-`Files.App.Server` itself is terminated. A later phase may add recovery for
-specific backends, but automatically replaying a partially completed file
-operation is unsafe unless the backend provides an idempotent transaction.
+この設計は、`Files.App.Server` 自体が終了した後に操作を再開できることを保証しません。後続フェーズでバックエンドごとの復旧を追加することはできますが、
+バックエンドが冪等なトランザクションを提供しない限り、途中まで完了したファイル操作を自動再実行するのは安全ではありません。
 
-## Current state
+## 現在の状態
 
-`Files.App.Server` is already packaged as a single-instance out-of-process
-WinRT server. `Files.App` consumes its generated WinRT metadata, and the
-server references `Files.Core`. The package manifest currently exposes only
-`Files.App.Server.AppInstanceMonitor`.
+`Files.App.Server` はすでに単一インスタンスのアウトオブプロセス WinRT サーバーとしてパッケージ化されています。`Files.App` は生成された WinRT メタデータを利用し、
+サーバーは `Files.Core` を参照します。現在パッケージマニフェストが公開しているのは `Files.App.Server.AppInstanceMonitor` だけです。
 
-The server currently has no operation API. Its process waits on
-`Program.ExitSignal`, while `AppInstanceMonitor` signals that event when the
-last monitored Files process exits. In addition, the foreground startup path
-kills an existing server when it believes that no other Files process exists.
-Those two lifetime rules are incompatible with crash-resistant operations:
+サーバーには現在、操作 API がありません。プロセスは `Program.ExitSignal` で待機し、`AppInstanceMonitor` は最後に監視していた Files プロセスが終了するとイベントを通知します。
+さらにフォアグラウンドの起動経路は、他の Files プロセスがないと判断すると既存サーバーを kill します。この 2 つのライフタイム規則は、クラッシュ耐性のある操作と両立しません。
 
-1. a foreground crash could cause the server to exit while an operation is
-   still running;
-2. reopening Files could kill a server that is still completing an operation;
-3. an in-flight operation is not represented by a stable ID that a new UI
-   process can query;
-4. the current WinRT surface cannot submit a Core operation request.
+1. フォアグラウンドのクラッシュによって、操作実行中でもサーバーが終了する可能性がある。
+2. Files を再度開くと、まだ操作を完了していないサーバーを kill する可能性がある。
+3. 実行中の操作が安定した ID で表されず、新しい UI プロセスが問い合わせできない。
+4. 現在の WinRT サーフェスから Core の操作要求を送信できない。
 
-The existing Core boundary is the correct execution boundary. A
-`FilesCoreRuntime` owns `StorageOperations`, and `WindowsStorageOperationHandler`
-already resolves stable references and performs Shell mutations without
-depending on WinUI.
+既存の Core 境界が正しい実行境界です。`FilesCoreRuntime` は `StorageOperations` を所有し、`WindowsStorageOperationHandler` は WinUI に依存せず安定した参照を解決して Shell 変更を実行します。
 
-## Target process topology
+## 目標とするプロセス構成
 
-The foreground process and the server process each own their own Core graph.
-No Core model, Shell object, stream, PIDL, or cancellation token crosses the
-process boundary.
+フォアグラウンドプロセスとサーバープロセスは、それぞれ自分の Core グラフを所有します。Core モデル、Shell オブジェクト、ストリーム、PIDL、キャンセルトークンをプロセス間で共有しません。
 
 ```mermaid
 flowchart LR
@@ -61,14 +43,14 @@ flowchart LR
         Center["OperationCenterModel"]
         VM["StatusCenterViewModel"]
         Browse["BrowseSessionModel"]
-        RuntimeUI["FilesCoreRuntime for browsing"]
+        RuntimeUI["Browse 用 FilesCoreRuntime"]
     end
 
     subgraph Server[Files.App.Server process]
         WinRT["FileOperationServer WinRT class"]
         Jobs["OperationJob registry"]
         Store["OperationStore"]
-        RuntimeServer["FilesCoreRuntime for operations"]
+        RuntimeServer["操作用 FilesCoreRuntime"]
         Operations["StorageOperationService"]
         Handler["WindowsStorageOperationHandler"]
         Shell["Windows Shell IFileOperation"]
@@ -87,11 +69,10 @@ flowchart LR
     Sync --> Center
     Center --> VM
     RuntimeUI --> Browse
-    Browse -. "folder notifications" .-> Center
+    Browse -. "folder notification" .-> Center
 ```
 
-The server runtime is not a second UI. It is a process-local execution host.
-The first implementation may construct it through the existing builder:
+サーバーランタイムは 2 つ目の UI ではなく、プロセス内の実行ホストです。最初の実装では既存 builder を使って次のように構築できます。
 
 ```csharp
 await using var runtime = new FilesCoreBuilder()
@@ -103,72 +84,61 @@ await using var runtime = new FilesCoreBuilder()
 var operations = runtime.StorageOperations;
 ```
 
-`AddWindowsStorage` still registers the Windows source and its operation
-handler when previews and archives are disabled. The extra item-feature
-factories are construction-time registrations and do not make the server a
-UI host. If server startup cost later proves significant, add a small
-`AddWindowsOperations` composition method that registers only
-`WindowsStorageSource` and `WindowsStorageOperationHandler`. That optimization
-must not move Windows Shell code into `Files.App.Server`.
+プレビューとアーカイブを無効にしても `AddWindowsStorage` は Windows ソースと操作ハンドラーを登録します。追加の項目機能ファクトリは構築時の登録であり、サーバーを UI ホストにはしません。
+サーバーの起動コストが後で問題になった場合は、`WindowsStorageSource` と `WindowsStorageOperationHandler` だけを登録する小さな `AddWindowsOperations` 合成メソッドを追加します。
+この最適化のために Windows Shell コードを `Files.App.Server` へ移してはいけません。
 
-## Responsibilities
+## 責務
 
 ### Files.Core
 
-Files.Core owns storage semantics:
+Files.Core はストレージの意味を所有します。
 
-- `StorageOperationRequest` types;
-- `IStorageOperationService` and handler selection;
-- `StorageOperationProgress` and `StorageOperationResult`;
-- stable `StorableReference` resolution;
-- Windows Shell threading and `IFileOperation` execution;
-- backend-specific validation and result materialization.
+- `StorageOperationRequest` 型。
+- `IStorageOperationService` とハンドラー選択。
+- `StorageOperationProgress` と `StorageOperationResult`。
+- 安定した `StorableReference` の解決。
+- Windows Shell のスレッド処理と `IFileOperation` の実行。
+- バックエンド固有の検証と結果の具象化。
 
-The Core service remains a single-request executor. It must not know whether
-the caller is a ViewModel, a local command adapter, or the out-of-process
-server.
+Core サービスは単一要求の実行器のままにします。呼び出し元が ViewModel、ローカルコマンドアダプター、アウトオブプロセスサーバーのどれであるかを知ってはいけません。
 
 ### Files.App.Server
 
-The server owns process lifetime and durable job coordination:
+サーバーはプロセスライフタイムと永続ジョブの調整を所有します。
 
-- expose a WinRT-compatible API;
-- validate and normalize untrusted DTOs;
-- create or recover an `OperationJob`;
-- persist job state before starting side effects;
-- map DTOs to Core requests;
-- execute a batch as a bounded sequence of Core requests;
-- aggregate progress and per-item failures;
-- keep jobs alive when the client proxy disappears;
-- publish snapshots that a later Files process can query.
+- WinRT 互換 API を公開する。
+- 信頼できない DTO を検証して正規化する。
+- `OperationJob` を作成または復旧する。
+- 副作用を開始する前にジョブ状態を永続化する。
+- DTO を Core 要求へ対応付ける。
+- バッチを Core 要求の上限付き順序処理として実行する。
+- 進行状況と項目単位の失敗を集約する。
+- クライアントプロキシが消えてもジョブを存続させる。
+- 後から起動した Files プロセスが問い合わせできるスナップショットを公開する。
 
-The server must not show dialogs, update WinUI collections, own tabs, or
-return `IStorableModel` instances.
+サーバーはダイアログを表示したり、WinUI コレクションを更新したり、タブを所有したり、`IStorableModel` を返したりしてはいけません。
 
 ### Files.App
 
-Files.App owns presentation and user policy:
+Files.App は表示とユーザーポリシーを所有します。
 
-- gather references from the current selection;
-- show conflict, delete, credential, or elevation prompts before submission;
-- submit a job and retain its operation ID;
-- synchronize snapshots into the local operation model;
-- display progress and errors;
-- reconcile visible folders through the normal watcher/session flow;
-- use a returned reference only for final focus or reveal.
+- 現在の選択から参照を集める。
+- 送信前に競合、削除、認証情報、昇格のプロンプトを表示する。
+- ジョブを送信して操作 ID を保持する。
+- スナップショットをローカルの操作モデルへ同期する。
+- 進行状況とエラーを表示する。
+- 通常のウォッチャー/セッションフローで表示フォルダーを調整する。
+- 返された参照を最後のフォーカスまたは表示にだけ使う。
 
-The foreground command must not update the visible item collection directly
-after a server operation completes.
+フォアグラウンドコマンドは、サーバー操作の完了後に表示項目コレクションを直接更新してはいけません。
 
-## WinRT contract
+## WinRT 契約
 
-The public server surface should be small and composed of WinRT-compatible
-sealed classes, enums, strings, arrays, and asynchronous operations. Do not
-publish Core records, `Exception`, `Task`, `CancellationToken`, pointers, or
-COM interfaces.
+公開するサーバーサーフェスは小さくし、WinRT 互換の sealed class、enum、string、array、async operation で構成します。
+Core の record、`Exception`、`Task`、`CancellationToken`、ポインター、COM インターフェースを公開してはいけません。
 
-The following is a conceptual contract; the exact C# signatures must follow
-the CsWinRT authoring rules used by the server project.
+次は概念的な契約です。正確な C# シグネチャは、サーバープロジェクトで使う CsWinRT authoring ルールに従って決めます。
 
 ```text
 FileOperationServer
@@ -180,27 +150,25 @@ FileOperationServer
   event Changed(OperationSnapshotData snapshot)
 ```
 
-Events are an optimization, not the source of truth. A client that was
-disconnected during an event must call `ListAsync` or `GetAsync` after it
-starts again.
+イベントは最適化であり、source of truth ではありません。イベント中に切断したクライアントは、再起動後に `ListAsync` または `GetAsync` を呼び出さなければなりません。
 
-### Request data
+### 要求データ
 
-`OperationRequestData` should contain:
+`OperationRequestData` には次を含めます。
 
-| Field | Purpose |
+| フィールド | 目的 |
 | --- | --- |
-| `SchemaVersion` | Reject unknown wire formats safely |
-| `OperationId` | Client-generated idempotency key |
-| `Kind` | Create, rename, copy, move, or delete |
-| `Items` | One or more stable item references |
-| `DestinationFolder` | Destination reference for copy/move |
-| `Name` | New item or new name, when applicable |
-| `ItemKind` | File or folder for create |
-| `ConflictBehavior` | Fail or generate a unique name |
-| `Permanently` | Explicit permanent-delete choice |
+| `SchemaVersion` | 未知の wire format を安全に拒否する |
+| `OperationId` | クライアントが生成する冪等性キー |
+| `Kind` | create、rename、copy、move、delete |
+| `Items` | 1 つ以上の安定した項目参照 |
+| `DestinationFolder` | copy/move の宛先参照 |
+| `Name` | 必要に応じた新しい項目名 |
+| `ItemKind` | 作成する file または folder |
+| `ConflictBehavior` | 失敗または一意な名前の生成 |
+| `Permanently` | 完全削除の明示的な選択 |
 
-Each reference contains:
+各参照は次を含みます。
 
 ```text
 SourceId
@@ -209,53 +177,46 @@ LastKnownAddressScheme (optional)
 LastKnownAddressValue (optional)
 ```
 
-`SourceId` and `ItemId` are identity. `LastKnownAddress` is only a recovery
-hint. The server must never treat a path alone as proof that the requested
-item is still the same item.
+`SourceId` と `ItemId` が識別情報です。`LastKnownAddress` は復旧ヒントにすぎません。サーバーはパスだけを根拠に、要求された項目が同じものだと扱ってはいけません。
 
-### Snapshot data
+### スナップショットデータ
 
-`OperationSnapshotData` should contain:
+`OperationSnapshotData` には次を含めます。
 
-| Field | Purpose |
+| フィールド | 目的 |
 | --- | --- |
-| `OperationId` | Correlates all updates |
-| `State` | Pending, Running, Cancelling, Succeeded, Failed, or Cancelled |
-| `CompletedItems` | Aggregate completed count |
-| `TotalItems` | Aggregate item count |
-| `CurrentItem` | Optional current stable reference |
-| `ResultItems` | Successful result references |
-| `ErrorCode` | Stable machine-readable error category |
-| `ErrorMessage` | Localized by Files.App when possible |
-| `CreatedAt` / `UpdatedAt` | Recovery and retention |
+| `OperationId` | すべての更新を相関させる |
+| `State` | pending、running、cancelling、succeeded、failed、cancelled |
+| `CompletedItems` | 集約した完了数 |
+| `TotalItems` | 集約した項目数 |
+| `CurrentItem` | 任意の現在の安定参照 |
+| `ResultItems` | 成功した結果参照 |
+| `ErrorCode` | 安定した機械可読エラーカテゴリ |
+| `ErrorMessage` | 可能なら Files.App でローカライズする |
+| `CreatedAt` / `UpdatedAt` | 復旧と保持期間 |
 
-Do not serialize the Core `Exception`. Map it to a stable error category and
-keep the original exception in the server log. Error text returned to the UI
-is diagnostic data and must not be used as a programmatic condition.
+Core の `Exception` はシリアライズしません。安定したエラーカテゴリへ対応付け、元の例外はサーバーログへ残します。
+UI に返すエラーテキストは診断データであり、プログラム上の条件判定に使ってはいけません。
 
-## Job lifecycle
+## ジョブのライフサイクル
 
-### Start
+### 開始
 
-1. The command adapter collects stable references and resolves all required
-   UI decisions.
-2. It creates a new operation ID. A retry uses the same ID.
-3. `FileOperationClient` sends `OperationRequestData`.
-4. The server validates the schema, limits, enum values, references, and
-   operation ID.
-5. The server checks whether the operation ID already exists:
-   - same request hash: return the existing job snapshot;
-   - different request hash: reject the request;
-   - no job: persist `Pending` before queueing work.
-6. The server returns the operation ID without waiting for the file mutation
-   to finish.
+1. コマンドアダプターが安定した参照を集め、必要な UI の判断を解決する。
+2. 新しい操作 ID を作る。再試行では同じ ID を使う。
+3. `FileOperationClient` が `OperationRequestData` を送る。
+4. サーバーがスキーマ、制限、enum 値、参照、操作 ID を検証する。
+5. サーバーが操作 ID の存在を確認する。
+   - 同じ request hash なら既存ジョブのスナップショットを返す。
+   - 異なる request hash なら要求を拒否する。
+   - ジョブがなければ、処理をキューに入れる前に `Pending` を永続化する。
+6. サーバーはファイル変更の完了を待たずに操作 ID を返す。
 
-Persisting before queueing closes the window where the UI could crash after
-the server accepted a request but before the server had recorded it.
+キューに入れる前に永続化することで、サーバーが要求を受け入れた後、記録する前に UI がクラッシュする窓を閉じます。
 
-### Execute
+### 実行
 
-The server turns each item in a batch into one existing Core request:
+サーバーはバッチの各項目を既存の Core 要求 1 つへ変換します。
 
 ```mermaid
 sequenceDiagram
@@ -267,88 +228,70 @@ sequenceDiagram
     participant Shell as Windows Shell
 
     Client->>Server: StartAsync(request DTO)
-    Server->>Job: Validate and persist Pending
+    Server->>Job: Pending を検証して永続化
     Server-->>Client: operationId
     Job->>Core: CanHandle(request)
     Core->>Handler: ExecuteAsync(request, progress, token)
     Handler->>Shell: PerformOperations
     Shell-->>Handler: completion
     Handler-->>Core: StorageOperationResult
-    Core-->>Job: result or failure
-    Job->>Job: persist snapshot
+    Core-->>Job: result または failure
+    Job->>Job: snapshot を永続化
     Server-->>Client: Changed(snapshot)
 ```
 
-The first Windows implementation should use one active request per Windows
-source. This avoids conflicting Shell mutations and makes ordering
-predictable. A later backend may declare a different safe concurrency limit.
-The batch coordinator must retain per-item results so a partial failure is
-visible instead of being collapsed into one Boolean.
+最初の Windows 実装では、Windows ソースごとにアクティブな要求を 1 つにします。これにより Shell 変更の競合を避け、順序を予測しやすくします。
+後続のバックエンドは安全な同時実行数の上限を別に宣言できます。バッチコーディネーターは項目ごとの結果を保持し、部分的な失敗が 1 つの Boolean に潰れないようにします。
 
-The current Core progress contract is item-oriented. Windows operations can
-therefore report `0/1` and `1/1` for each request. The server aggregates those
-values. Byte-level progress should not be invented; add a real Shell progress
-source before exposing it as a percentage.
+現在の Core 進行状況契約は項目単位です。そのため Windows 操作は要求ごとに `0/1` と `1/1` を報告できます。サーバーはそれらを集約します。
+バイト単位の進行状況を推測してはいけません。パーセンテージとして公開する前に、本物の Shell 進行状況ソースを追加してください。
 
-### Cancellation
+### キャンセル
 
-`CancelAsync` changes the job to `Cancelling` and signals the server-owned
-`CancellationTokenSource`. It must not be tied to the lifetime of the WinRT
-client call.
+`CancelAsync` はジョブを `Cancelling` へ変更し、サーバーが所有する `CancellationTokenSource` へ signal します。クライアント呼び出しのライフタイムに結び付けてはいけません。
 
-Cancellation can prevent work that has not started. It cannot interrupt a
-synchronous Shell extension already executing. After a mutation commits, the
-server must finish materializing the result and report success rather than
-reporting cancellation and encouraging an unsafe retry.
+キャンセルでは、まだ開始していない処理を止められますが、実行中の同期 Shell 拡張を中断することはできません。変更が確定した後は、サーバーは結果の具象化を完了し、
+キャンセルを報告して安全でない再試行を促すのではなく成功を報告しなければなりません。
 
-### Reattach after a foreground crash
+### フォアグラウンドクラッシュ後の再接続
 
-When the client process disappears:
+クライアントプロセスが消えたとき:
 
-- the server keeps the job and its Core runtime alive;
-- no client-disconnect callback cancels the job;
-- progress continues to be persisted and optionally broadcast;
-- a new Files process calls `ListAsync` during startup;
-- `OperationSync` rehydrates the local `OperationCenterModel`;
-- completed jobs remain visible until the normal retention policy removes
-  them.
+- サーバーはジョブと Core ランタイムを存続させる。
+- クライアント切断コールバックでジョブをキャンセルしない。
+- 進行状況は永続化し続け、必要ならブロードキャストする。
+- 新しい Files プロセスは起動時に `ListAsync` を呼ぶ。
+- `OperationSync` がローカル `OperationCenterModel` を再水和する。
+- 完了したジョブは通常の保持ポリシーで削除されるまで表示可能にする。
 
-The server should use an idle shutdown timer only when there are no active
-jobs and no recent client lease. It must not use the foreground process count
-as its operation lifetime.
+サーバーは、アクティブなジョブがなく、最近のクライアントリースもない場合にだけアイドル終了タイマーを使います。フォアグラウンドプロセス数を操作のライフタイムに使ってはいけません。
 
-## Persistence and recovery
+## 永続化と復旧
 
-The minimum useful store is one record per operation under the package's
-local application data directory, for example:
+最小限有用なストアは、パッケージのローカルアプリケーションデータディレクトリに操作ごとのレコードを 1 つ置くことです。例えば次の場所です。
 
 ```text
 operations/v1/{operationId}.json
 ```
 
-The store must:
+ストアは次を満たさなければなりません。
 
-- write a temporary file and atomically replace the previous snapshot;
-- validate the schema on read;
-- cap item count, string lengths, and total file size;
-- retain completed records for a bounded period;
-- exclude passwords, access tokens, thumbnail bytes, PIDLs, and streams;
-- record a request hash for idempotent retries.
+- 一時ファイルへ書き、前のスナップショットをアトミックに置き換える。
+- 読み取り時にスキーマを検証する。
+- 項目数、文字列長、ファイル全体のサイズを制限する。
+- 完了したレコードを上限付きの期間保持する。
+- パスワード、アクセストークン、サムネイルバイト列、PIDL、ストリームを除外する。
+- 冪等な再試行のため request hash を記録する。
 
-On server startup, a `Running` record from a previous server process must be
-marked `Unknown` unless the backend provides a safe checkpoint. It must not be
-silently replayed. The foreground app can show that state and let the user
-inspect the filesystem before choosing a new action.
+サーバー起動時、以前のサーバープロセスから残った `Running` レコードは、安全なチェックポイントをバックエンドが提供しない限り `Unknown` に変更します。黙って再実行してはいけません。
+フォアグラウンドアプリはその状態を表示し、ユーザーがファイルシステムを確認してから新しい操作を選べるようにします。
 
-This recovery rule is separate from the primary requirement: a foreground
-crash does not stop a still-running server process.
+この復旧規則は主要求とは別です。フォアグラウンドのクラッシュでは、実行中のサーバープロセスは停止しません。
 
-## Files.App model and ViewModel flow
+## Files.App のモデルと ViewModel の流れ
 
-The operation list is application-wide, not window-specific. Add an
-UI-independent `OperationCenterModel` to the Files application model graph.
-It stores immutable operation snapshots and raises model state changes. It
-does not contain WinUI collections, localized strings, or WinRT types.
+操作一覧はウィンドウ単位ではなくアプリケーション全体のものです。Files のアプリケーションモデルグラフに UI 非依存の `OperationCenterModel` を追加します。
+これは不変の操作スナップショットを保存してモデル状態変更を発生させますが、WinUI コレクション、ローカライズ文字列、WinRT 型は持ちません。
 
 ```mermaid
 flowchart TB
@@ -366,163 +309,137 @@ flowchart TB
     VM --> Status
 ```
 
-`OperationSync` is a Files.App adapter around `FileOperationClient`:
+`OperationSync` は `FileOperationClient` をラップする Files.App アダプターです。
 
-1. subscribe to server changes when possible;
-2. call `ListAsync` on startup and after reconnect;
-3. map WinRT snapshots to Core-neutral operation snapshots;
-4. update `OperationCenterModel` on the model's synchronization context;
-5. dispose the subscription without cancelling server jobs.
+1. 可能ならサーバーの変更を購読する。
+2. 起動時と再接続後に `ListAsync` を呼ぶ。
+3. WinRT スナップショットを Core 非依存の操作スナップショットへ対応付ける。
+4. モデルの同期コンテキスト上で `OperationCenterModel` を更新する。
+5. サーバージョブをキャンセルせず、購読を破棄する。
 
-The ViewModel owns localized headers, commands, and observable collections.
-The control receives the ViewModel through the normal trickle-down DP path.
-Lower ViewModels must not call `Ioc.Default`, search for the server, or use a
-WinRT object as a hidden service locator.
+ViewModel はローカライズされたヘッダー、コマンド、observable collection を所有します。コントロールは通常の trickle-down DP 経路から ViewModel を受け取ります。
+下位 ViewModel は `Ioc.Default` を呼んだり、サーバーを検索したり、WinRT オブジェクトを隠れたサービスロケーターとして使ったりしてはいけません。
 
-Command adapters use this policy:
+コマンドアダプターは次のポリシーを使います。
 
 ```text
-selection -> stable references -> prompt for UI policy
+selection -> stable references -> UI policy の prompt
           -> FileOperationClient.StartAsync
           -> operation ID -> OperationCenterModel
           -> watcher/session reconciliation
 ```
 
-The returned result reference is useful for focus or reveal. It is not a
-replacement for the browse session's authoritative item projection.
+返却された結果参照はフォーカスまたは表示に便利ですが、参照セッションが持つ権威ある項目投影の代わりにはなりません。
 
-## UI-only decisions and unsupported cases
+## UI だけが決めることと未対応ケース
 
-The server cannot display a WinUI dialog. Before submitting a job, Files.App
-must resolve decisions that need a person:
+サーバーは WinUI ダイアログを表示できません。ジョブを送信する前に、Files.App が人の判断を必要とする事項を解決します。
 
-- delete confirmation and permanent-delete choice;
-- conflict policy or a user-selected new name;
-- archive or FTP credentials;
-- elevation consent;
-- external drag/drop or clipboard behavior.
+- 削除確認と完全削除の選択。
+- 競合ポリシーまたはユーザーが選んだ新しい名前。
+- アーカイブまたは FTP の認証情報。
+- 昇格の同意。
+- 外部ドラッグ/ドロップまたはクリップボードの動作。
 
-If a future operation genuinely needs interaction after it starts, add an
-explicit `NeedsInput` snapshot state and a response method. Do not block a
-server worker waiting for a UI callback that may never arrive.
+開始後にも入力が必要な操作が将来生じた場合は、明示的な `NeedsInput` スナップショット状態と応答メソッドを追加します。
+決して UI コールバックを待ってサーバーワーカーをブロックしません。UI は到着しない可能性があるためです。
 
-The first server-backed slice should support Windows filesystem operations
-with the existing `WindowsStorageOperationHandler`. FTP requires the server
-to load the same saved connection profiles and a protected credential
-resolver; credentials must never be placed in the request DTO. Archive
-browsing is not automatically archive mutation support.
+最初のサーバー対応スライスは、既存の `WindowsStorageOperationHandler` による Windows ファイルシステム操作を対象にします。
+FTP ではサーバーが同じ保存済み接続プロファイルと保護された認証情報リゾルバーを読み込む必要があり、認証情報を要求 DTO に入れてはいけません。
+アーカイブ参照がそのままアーカイブ変更を意味するわけではありません。
 
-## Lifetime changes required in the existing server
+## 既存サーバーに必要なライフタイム変更
 
-The implementation must replace these rules:
+実装では次の規則を置き換えます。
 
-1. `AppInstanceMonitor` must no longer be the condition that ends the server
-   while jobs are active.
-2. The startup code that kills an existing `Files.App.Server` must be removed
-   or changed to a health check that never kills an active job.
-3. `Program` must own a server host lifetime signal driven by active job count,
-   client leases, and an idle timeout.
-4. The manifest must expose the new operation server WinRT class in addition
-   to any class still needed for compatibility.
-5. The generated `.winmd` flow already used by `Files.App.csproj` should remain
-   the only compile-time dependency from Files.App to the server surface.
+1. アクティブなジョブがある間、`AppInstanceMonitor` をサーバー終了の条件にしない。
+2. 既存 `Files.App.Server` を kill する起動コードを削除するか、アクティブなジョブを決して kill しないヘルスチェックへ変更する。
+3. `Program` がアクティブなジョブ数、クライアントリース、アイドルタイムアウトでサーバーホストのライフタイム信号を所有する。
+4. 互換性のために必要なクラスに加え、新しい操作サーバー WinRT クラスをマニフェストへ公開する。
+5. Files.App からサーバーサーフェスへのコンパイル時依存関係は、既存 `Files.App.csproj` の生成 `.winmd` フローだけにする。
 
-The server's dynamic activation-factory registration should be reviewed when
-the new public types are added. Only intended WinRT classes should be
-activatable; DTO helper types should not accidentally become public activation
-entry points.
+新しい public 型を追加するときは、サーバーの動的 activation-factory 登録を見直します。意図した WinRT クラスだけをアクティブ化可能にし、DTO ヘルパー型を誤って public activation entry point にしないでください。
 
-## Security and validation
+## セキュリティと検証
 
-The package boundary is not a reason to trust input. Validate every request
-before constructing a Core request:
+パッケージ境界があるからといって入力を信頼してはいけません。Core 要求を構築する前に、すべての要求を検証します。
 
-- supported schema version;
-- maximum number of items and maximum serialized size;
-- non-empty, bounded operation ID;
-- known operation and conflict enum values;
-- source IDs registered in the server runtime;
-- required destination and name fields;
-- no duplicate item entries where duplicates are nonsensical;
-- no credentials or opaque handles in address fields.
+- サポートしているスキーマバージョン。
+- 項目数の最大値とシリアライズサイズの最大値。
+- 空でなく上限のある操作 ID。
+- 既知の操作と競合 enum 値。
+- サーバーランタイムに登録されたソース ID。
+- 必須の宛先と名前フィールド。
+- 意味のない重複がある場合の重複項目エントリ。
+- アドレスフィールドに認証情報や不透明なハンドルがないこと。
 
-Core remains the authority for item identity, path validation, collision
-checks, and permissions. In particular, the server must not turn an
-untrusted address into a new identity or bypass `WindowsStorageSource`'s
-reference resolution.
+項目識別情報、パス検証、競合チェック、権限の権威は Core に残します。特にサーバーは、信頼できないアドレスを新しい識別情報に変換したり、`WindowsStorageSource` の参照解決を回避したりしてはいけません。
 
-Log operation IDs, state transitions, backend error categories, and timing.
-Do not log credentials or complete request payloads containing sensitive
-addresses.
+操作 ID、状態遷移、バックエンドのエラーカテゴリ、タイミングをログに記録します。認証情報や機密アドレスを含む完全な要求ペイロードはログに記録しません。
 
-## Implementation phases
+## 実装フェーズ
 
-### Phase 1: contracts and server host
+### フェーズ 1: 契約とサーバーホスト
 
-- Add WinRT-compatible request, reference, snapshot, and enum types.
-- Add `FileOperationServer` and an internal `OperationJob`.
-- Build a server-owned Core runtime with Windows storage and no previews.
-- Implement single-item start, status, list, and cancellation.
-- Keep the job in memory first, but persist snapshots before execution.
+- WinRT 互換の要求、参照、スナップショット、enum 型を追加する。
+- `FileOperationServer` と内部 `OperationJob` を追加する。
+- プレビューなしの Windows ストレージと、サーバー所有 Core ランタイムを構築する。
+- 単一項目の start、status、list、キャンセルを実装する。
+- 最初はメモリ内にジョブを保持してよいが、実行前にスナップショットを永続化する。
 
-### Phase 2: foreground client and reattachment
+### フェーズ 2: フォアグラウンドクライアントと再接続
 
-- Add `FileOperationClient` in Files.App.
-- Add `OperationCenterModel` and `OperationSync`.
-- Rehydrate jobs during application startup.
-- Adapt the Status Center to display server snapshots.
-- Migrate one command, preferably copy or move, end to end.
+- Files.App に `FileOperationClient` を追加する。
+- `OperationCenterModel` と `OperationSync` を追加する。
+- アプリケーション起動時にジョブを再水和する。
+- Status Center をサーバースナップショットの表示へ適応する。
+- まずコピーまたは移動を 1 つ選び、エンドツーエンドで移行する。
 
-### Phase 3: batches and remaining Windows commands
+### フェーズ 3: バッチと残りの Windows コマンド
 
-- Move multi-selection scheduling into the server job.
-- Add create, rename, delete, and recycle-bin behavior.
-- Preserve per-item failures and aggregate progress.
-- Verify folder watchers reconcile each affected browse session.
-- Add retention and explicit `ForgetAsync` behavior.
+- 複数選択のスケジュールをサーバージョブへ移す。
+- 作成、名前変更、削除、ごみ箱動作を追加する。
+- 項目ごとの失敗を保持し、進行状況を集約する。
+- 影響する各参照セッションをフォルダーウォッチャーが調整することを検証する。
+- 保持期間と明示的な `ForgetAsync` 動作を追加する。
 
-### Phase 4: lifetime hardening
+### フェーズ 4: ライフタイムの堅牢化
 
-- Replace process-count shutdown with active-job and idle-lifetime rules.
-- Remove startup server killing.
-- Test UI termination during every job state.
-- Test reconnect from a new Files process while a job is pending, running,
-  cancelling, succeeded, or failed.
-- Add server startup handling for stale `Running` records.
+- プロセス数による終了を、アクティブなジョブとアイドルライフタイムの規則に置き換える。
+- 起動時にサーバーを kill する処理を削除する。
+- すべてのジョブ状態で UI 終了をテストする。
+- pending、running、cancelling、succeeded、failed の各状態で、新しい Files プロセスからの再接続をテストする。
+- 古い `Running` レコードのサーバー起動処理を追加する。
 
-### Phase 5: additional sources
+### フェーズ 5: 追加ソース
 
-- Register saved FTP sources in the server runtime.
-- Resolve credentials inside the server from protected storage.
-- Define explicit behavior for unsupported cross-source transfers.
-- Add archive mutation only when a backend supplies safe operation handlers.
+- 保存済み FTP ソースをサーバーランタイムへ登録する。
+- 保護されたストレージからサーバー内部で認証情報を解決する。
+- 未サポートのソース間転送の動作を明示する。
+- バックエンドが安全な操作ハンドラーを提供した場合だけアーカイブ変更を追加する。
 
-## Tests and acceptance criteria
+## テストと受け入れ条件
 
-Core operation tests remain process-local and should continue to cover
-identity, conflicts, cancellation, and result materialization. Add server
-tests for:
+Core の操作テストはプロセス内のまま、識別情報、競合、キャンセル、結果の具象化を引き続き検証します。サーバーテストには次を追加します。
 
-- DTO validation and schema rejection;
-- idempotent retries with the same operation ID;
-- rejection of the same ID with a different request hash;
-- persistence before execution;
-- snapshot transitions and per-item partial failure;
-- bounded concurrency;
-- cancellation before a request starts and during a running request;
-- client disconnect without job cancellation;
-- reattachment from a new client process;
-- retention and `ForgetAsync`.
+- DTO 検証とスキーマ拒否。
+- 同じ操作 ID を使う冪等な再試行。
+- 異なる request hash で同じ ID を使った場合の拒否。
+- 実行前の永続化。
+- スナップショット遷移と項目ごとの部分失敗。
+- 上限付き同時実行。
+- 要求開始前と実行中のキャンセル。
+- クライアント切断でジョブをキャンセルしないこと。
+- 新しいクライアントプロセスからの再接続。
+- 保持期間と `ForgetAsync`。
 
-The Windows integration test should prove this scenario:
+Windows 統合テストでは次のシナリオを証明します。
 
-1. start a job through the WinRT surface;
-2. terminate the foreground Files process;
-3. verify the server continues and the filesystem mutation completes;
-4. start a new Files process;
-5. verify the completed snapshot is listed and the browse session reconciles;
-6. verify no stale server is killed during startup.
+1. WinRT サーフェスからジョブを開始する。
+2. フォアグラウンド Files プロセスを終了させる。
+3. サーバーが継続し、ファイルシステムの変更が完了することを確認する。
+4. 新しい Files プロセスを起動する。
+5. 完了したスナップショットが一覧表示され、参照セッションが調整されることを確認する。
+6. 起動時に古いサーバーが kill されないことを確認する。
 
-The implementation is complete when the above scenario works without passing
-an `IStorableModel`, path-only identity, UI dispatcher, or client-owned
-cancellation token into `Files.App.Server`.
+次のシナリオが、`IStorableModel`、パスだけの識別情報、UI dispatcher、クライアント所有のキャンセルトークンを `Files.App.Server` へ渡さずに動作したとき、実装完了とします。
