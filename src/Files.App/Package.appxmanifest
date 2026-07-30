@@ -138,8 +138,6 @@
                       DisplayName="Files" />
                 </uap5:Extension>
 
-                <Extension Category="windows.updateTask" EntryPoint="Files.App.BackgroundTasks.UpdateTask" />
-
                 <uap:Extension Category="windows.fileTypeAssociation">
                     <uap:FileTypeAssociation Name="archives">
                         <uap:SupportedFileTypes>
@@ -160,14 +158,7 @@
         </Application>
     </Applications>
 
-    <!-- To host The background task component, this activatable class entry must be added. -->
     <Extensions>
-        <Extension Category="windows.activatableClass.inProcessServer">
-            <InProcessServer>
-                <Path>WinRT.Host.dll</Path>
-                <ActivatableClass ActivatableClassId="Files.App.BackgroundTasks.UpdateTask" ThreadingModel="both" />
-            </InProcessServer>
-        </Extension>
         <Extension Category="windows.activatableClass.outOfProcessServer">
             <OutOfProcessServer ServerName="Files.App.Server" uap5:IdentityType="activateAsPackage" uap5:RunFullTrust="true">
                 <Path>Files.App.Server\Files.App.Server.exe</Path>
