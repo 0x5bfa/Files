@@ -12,7 +12,7 @@ class 内で本体を省略して `;` で終えている member は、追加す�
 | --- | --- |
 | サーバーにも完全な `FilesCoreRuntime` | 操作だけを持つ `StorageRuntime` |
 | 永続 `OperationJob` とチェックポイント | メモリ内 `FileOperation` と再接続用 journal |
-| 多数の public WinRT DTO | 1 つの `FileOperationServer` と JSON message |
+| 項目ごとの WinRT runtime class | WinRT value struct と一括配列 |
 | 切断で失われる WinRT event | 単調増加する `Revision` と long polling |
 | `OperationSync` + `OperationCenterModel` | アプリケーションスコープの `FileOperationsModel` |
 | Files プロセス数でサーバー終了 | active operation + active call + idle timeout |
@@ -29,25 +29,22 @@ Files.App.Server
                                           -> StorageRuntime.Operations
 
 Files.Core
-  FileOperation message values
+  File operation values
   StorageRuntime
   IStorageOperationService
   WindowsStorageOperationHandler
 ```
 
-## Files.Core の message 値
+## Files.Core の操作値
 
-WinRT runtime class は out-of-proc proxy です。数千個の DTO を public runtime class にすると、構築と property access が IPC になります。
-ABI は JSON `string` にし、通常の C# record を両プロセスで共有します。
+Core は WinRT を知らない通常の C# 型を持ちます。`Files.App` と `Files.App.Server` の内部処理はこの型だけを使います。
 
 ```csharp
 namespace Files.Core.Storage.FileOperations;
 
-public static class FileOperationSchema
+public static class FileOperationLimits
 {
-	public const int Current = 1;
 	public const int MaxItems = 4096;
-	public const int MaxMessageBytes = 4 * 1024 * 1024;
 	public const int MaxNameLength = 255;
 	public const int MaxErrorDetailLength = 2048;
 }
@@ -128,7 +125,6 @@ public sealed record FileOperationReference(
 }
 
 public sealed record FileOperationRequest(
-	int SchemaVersion,
 	string OperationId,
 	FileOperationKind Kind,
 	ImmutableArray<FileOperationReference> Items,
@@ -169,43 +165,6 @@ public sealed record FileOperationSnapshot(
 public sealed record FileOperationList(
 	long Revision,
 	ImmutableArray<FileOperationSummary> Operations);
-```
-
-```csharp
-[JsonSourceGenerationOptions(
-	PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
-	WriteIndented = false)]
-[JsonSerializable(typeof(FileOperationRequest))]
-[JsonSerializable(typeof(FileOperationSummary))]
-[JsonSerializable(typeof(FileOperationSnapshot))]
-[JsonSerializable(typeof(FileOperationList))]
-public sealed partial class FileOperationJsonContext
-	: JsonSerializerContext;
-
-public static class FileOperationMessages
-{
-	public static string Write<T>(
-		T value,
-		JsonTypeInfo<T> typeInfo) =>
-		JsonSerializer.Serialize(value, typeInfo);
-
-	public static T Read<T>(
-		string json,
-		JsonTypeInfo<T> typeInfo)
-	{
-		ArgumentException.ThrowIfNullOrWhiteSpace(json);
-		if (Encoding.UTF8.GetByteCount(json)
-			> FileOperationSchema.MaxMessageBytes)
-		{
-			throw new InvalidDataException(
-				"The operation message is too large.");
-		}
-
-		return JsonSerializer.Deserialize(json, typeInfo)
-			?? throw new InvalidDataException(
-				"The operation message is empty.");
-	}
-}
 ```
 
 ## 操作専用 `StorageRuntime`
@@ -282,20 +241,173 @@ var operations = storage.Operations;
 
 ## WinRT ABI
 
-public WinRT class は 1 つです。event と public DTO class は作りません。
+ライブ IPC に JSON は使いません。入力と出力は値として marshal できる WinRT struct にし、項目は配列で一括転送します。
+struct に配列や nullable を入れず、nullable は `HasDestination` などの flag で表します。
 
 ```csharp
 namespace Files.App.Server;
 
+public enum OperationKindData
+{
+	Create,
+	Rename,
+	Copy,
+	Move,
+	Delete,
+}
+
+public enum OperationStateData
+{
+	Queued,
+	Running,
+	Cancelling,
+	Succeeded,
+	CompletedWithErrors,
+	Failed,
+	Cancelled,
+	Unknown,
+}
+
+public enum OperationItemStateData
+{
+	Queued,
+	Running,
+	Succeeded,
+	Failed,
+	Cancelled,
+	Unknown,
+}
+
+public enum OperationErrorCodeData
+{
+	None,
+	InvalidRequest,
+	NotFound,
+	AccessDenied,
+	NameConflict,
+	SourceUnavailable,
+	NotSupported,
+	Cancelled,
+	ServerInterrupted,
+	Unknown,
+}
+
+public enum OperationItemKindData
+{
+	None,
+	File,
+	Folder,
+}
+
+public enum OperationConflictBehaviorData
+{
+	Fail,
+	GenerateUniqueName,
+}
+```
+
+```csharp
+public struct OperationReferenceData
+{
+	public string SourceId;
+	public string ItemId;
+	public string AddressScheme;
+	public string AddressValue;
+}
+
+public struct OperationRequestData
+{
+	public string OperationId;
+	public OperationKindData Kind;
+	public bool HasDestination;
+	public OperationReferenceData Destination;
+	public string Name;
+	public OperationItemKindData CreatedItemKind;
+	public OperationConflictBehaviorData ConflictBehavior;
+	public bool Permanently;
+}
+
+public struct OperationSummaryData
+{
+	public string OperationId;
+	public OperationKindData Kind;
+	public OperationStateData State;
+	public int CompletedItems;
+	public int FailedItems;
+	public int TotalItems;
+	public bool HasCurrentItem;
+	public OperationReferenceData CurrentItem;
+	public OperationErrorCodeData ErrorCode;
+	public long CreatedAtUnixMilliseconds;
+	public long UpdatedAtUnixMilliseconds;
+}
+
+public struct OperationItemData
+{
+	public int Index;
+	public OperationReferenceData Input;
+	public OperationItemStateData State;
+	public bool HasResult;
+	public OperationReferenceData Result;
+	public OperationErrorCodeData ErrorCode;
+	public string ErrorDetail;
+}
+```
+
+一覧の `Revision` と内容、snapshot の summary と項目を同じ時点で固定するため、結果だけ immutable runtime class にします。
+項目ごとの runtime class は作りません。結果 class は server 内部でだけ生成し、返す配列は copy します。
+
+```csharp
+public sealed class OperationListResult
+{
+	private readonly OperationSummaryData[] operations;
+
+	internal OperationListResult(
+		long revision,
+		OperationSummaryData[] operations)
+	{
+		Revision = revision;
+		this.operations = operations.ToArray();
+	}
+
+	public long Revision { get; }
+
+	public OperationSummaryData[] GetOperations() =>
+		operations.ToArray();
+}
+
+public sealed class OperationSnapshotResult
+{
+	private readonly OperationItemData[] items;
+
+	internal OperationSnapshotResult(
+		OperationSummaryData summary,
+		OperationItemData[] items)
+	{
+		Summary = summary;
+		this.items = items.ToArray();
+	}
+
+	public OperationSummaryData Summary { get; }
+
+	public OperationItemData[] GetItems() =>
+		items.ToArray();
+}
+```
+
+```csharp
 public sealed class FileOperationServer
 {
-	public IAsyncOperation<string> StartAsync(string requestJson);
+	public IAsyncOperation<OperationSnapshotResult> StartAsync(
+		OperationRequestData request,
+		[ReadOnlyArray] OperationReferenceData[] items);
 
-	public IAsyncOperation<string> GetAsync(string operationId);
+	public IAsyncOperation<OperationSnapshotResult> GetAsync(
+		string operationId);
 
-	public IAsyncOperation<string> ListAsync();
+	public IAsyncOperation<OperationListResult> ListAsync();
 
-	public IAsyncOperation<string> WaitForChangeAsync(
+	public IAsyncOperation<OperationListResult> WaitForChangeAsync(
 		long knownRevision);
 
 	public IAsyncAction CancelAsync(string operationId);
@@ -304,27 +416,43 @@ public sealed class FileOperationServer
 }
 ```
 
+`ReadOnlyArray` は `System.Runtime.InteropServices.WindowsRuntime` の属性です。WinRT struct は public field だけを持ち、配列は method parameter または戻り値にだけ置きます。
+これは `.winmd` がコンパイル時に検査する ABI です。App と Server は同じ package で更新するため、ライブ IPC 用の独立した JSON schema/version は不要です。
+
 実装は薄い ABI adapter です。
 
 ```csharp
-public IAsyncOperation<string> StartAsync(string requestJson)
+internal static class OperationDataMapper
+{
+	public static FileOperationRequest FromData(
+		OperationRequestData request,
+		IReadOnlyList<OperationReferenceData> items);
+
+	public static OperationSnapshotResult ToResult(
+		FileOperationSnapshot snapshot);
+
+	public static OperationListResult ToResult(
+		FileOperationList list);
+}
+
+public IAsyncOperation<OperationSnapshotResult> StartAsync(
+	OperationRequestData request,
+	[ReadOnlyArray] OperationReferenceData[] items)
 {
 	return AsyncInfo.Run(async _ =>
 	{
 		using var call = ServerProcess.Current.Lifetime.EnterCall();
-		var request = FileOperationMessages.Read(
-			requestJson,
-			FileOperationJsonContext.Default.FileOperationRequest);
-		var snapshot = await ServerProcess.Current.Operations.StartAsync(
+		var coreRequest = OperationDataMapper.FromData(
 			request,
+			items);
+		var snapshot = await ServerProcess.Current.Operations.StartAsync(
+			coreRequest,
 			ServerProcess.Current.ShutdownToken);
-		return FileOperationMessages.Write(
-			snapshot,
-			FileOperationJsonContext.Default.FileOperationSnapshot);
+		return OperationDataMapper.ToResult(snapshot);
 	});
 }
 
-public IAsyncOperation<string> WaitForChangeAsync(
+public IAsyncOperation<OperationListResult> WaitForChangeAsync(
 	long knownRevision)
 {
 	return AsyncInfo.Run(async cancellationToken =>
@@ -334,9 +462,7 @@ public IAsyncOperation<string> WaitForChangeAsync(
 			.WaitForChangeAsync(
 				knownRevision,
 				cancellationToken);
-		return FileOperationMessages.Write(
-			list,
-			FileOperationJsonContext.Default.FileOperationList);
+		return OperationDataMapper.ToResult(list);
 	});
 }
 ```
@@ -404,6 +530,7 @@ static async Task Main()
 ```
 
 現在の public sealed class 全走査を explicit allowlist に置き換えます。
+activation factory を登録するのは public constructor を持つ `FileOperationServer` だけです。server が返す `OperationListResult` と `OperationSnapshotResult` は activatable class ではありません。
 `AppInstanceMonitor` と `Files.App/Program.cs` の server kill は削除します。
 
 ```xml
@@ -502,10 +629,9 @@ var steps = request.Kind switch
 `FileOperationRequestReader.Read` は Core request を作る前に次を検証します。
 
 ```csharp
-request.SchemaVersion == FileOperationSchema.Current
 Guid.TryParseExact(request.OperationId, "N", out _)
-request.Items.Length <= FileOperationSchema.MaxItems
-request.Name?.Length <= FileOperationSchema.MaxNameLength
+request.Items.Length <= FileOperationLimits.MaxItems
+request.Name?.Length <= FileOperationLimits.MaxNameLength
 
 Create: Items.Length == 0 && DestinationFolder != null
 Rename: Items.Length == 1 && DestinationFolder == null
@@ -611,7 +737,7 @@ try
 		serverToken);
 
 	await journal.WriteAsync(
-		new OperationJournalEntry(
+		OperationJournalEntry.Create(
 			plan.RequestHash,
 			operation.Snapshot),
 		serverToken);
@@ -657,7 +783,7 @@ private async ValueTask OnOperationChangedAsync(
 		{
 			entry.ActiveOperation = null;
 			await journal.WriteAsync(
-				new OperationJournalEntry(
+				OperationJournalEntry.Create(
 					entry.RequestHash,
 					snapshot),
 				CancellationToken.None);
@@ -860,9 +986,24 @@ internal sealed class RevisionSignal
 `WaitForChangeAsync` は変更または 20 秒の timeout 後に完全な summary list を返します。
 
 ```csharp
+internal static class OperationJournalSchema
+{
+	public const int Current = 2;
+}
+
 internal sealed record OperationJournalEntry(
+	int SchemaVersion,
 	string RequestHash,
-	FileOperationSnapshot Snapshot);
+	FileOperationSnapshot Snapshot)
+{
+	public static OperationJournalEntry Create(
+		string requestHash,
+		FileOperationSnapshot snapshot) =>
+		new(
+			OperationJournalSchema.Current,
+			requestHash,
+			snapshot);
+}
 
 internal interface IOperationJournal
 {
@@ -894,9 +1035,17 @@ internal sealed class JsonOperationJournal
 		string operationId,
 		CancellationToken cancellationToken);
 }
+
+[JsonSourceGenerationOptions(
+	PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+	WriteIndented = false)]
+[JsonSerializable(typeof(OperationJournalEntry))]
+internal sealed partial class OperationJournalJsonContext
+	: JsonSerializerContext;
 ```
 
-保存先は `operations/v2/{operationId}.json` です。一時ファイルへ書き、同じ volume 上で atomic replace します。
+JSON を使うのはこの disk journal だけです。保存先は `operations/v2/{operationId}.json` とし、一時ファイルへ書いて同じ volume 上で atomic replace します。
+schema version は古い journal を明示的に移行または拒否するために必要であり、ライブ IPC の互換性には使いません。
 書くのは受理時と terminal 状態だけです。実行 plan、資格情報、PIDL、stream、token は保存しません。
 
 ```csharp
@@ -980,15 +1129,14 @@ internal sealed class WinRtFileOperationClient
 		FileOperationRequest request,
 		CancellationToken cancellationToken)
 	{
-		var requestJson = FileOperationMessages.Write(
-			request,
-			FileOperationJsonContext.Default.FileOperationRequest);
-		var resultJson = await server
-			.StartAsync(requestJson)
+		var result = await server
+			.StartAsync(
+				OperationDataMapper.ToData(request),
+				request.Items
+					.Select(OperationDataMapper.ToData)
+					.ToArray())
 			.AsTask(cancellationToken);
-		return FileOperationMessages.Read(
-			resultJson,
-			FileOperationJsonContext.Default.FileOperationSnapshot);
+		return OperationDataMapper.FromResult(result);
 	}
 
 	public async IAsyncEnumerable<FileOperationList> WatchAsync(
@@ -999,12 +1147,10 @@ internal sealed class WinRtFileOperationClient
 		var revision = knownRevision;
 		while (!cancellationToken.IsCancellationRequested)
 		{
-			var json = await server
+			var result = await server
 				.WaitForChangeAsync(revision)
 				.AsTask(cancellationToken);
-			var list = FileOperationMessages.Read(
-				json,
-				FileOperationJsonContext.Default.FileOperationList);
+			var list = OperationDataMapper.FromResult(result);
 			revision = list.Revision;
 			yield return list;
 		}
@@ -1012,6 +1158,24 @@ internal sealed class WinRtFileOperationClient
 }
 ```
 
+```csharp
+internal static class OperationDataMapper
+{
+	public static OperationRequestData ToData(
+		FileOperationRequest request);
+
+	public static OperationReferenceData ToData(
+		FileOperationReference reference);
+
+	public static FileOperationSnapshot FromResult(
+		OperationSnapshotResult result);
+
+	public static FileOperationList FromResult(
+		OperationListResult result);
+}
+```
+
+mapper は ABI の empty string/flag と Core の nullable、Unix milliseconds と `DateTimeOffset` の変換を一か所で行います。
 実装では server disconnect を分類し、`new FileOperationServer()`、`ListAsync()`、上限付き backoff の順で再接続します。
 
 ```csharp
@@ -1104,7 +1268,6 @@ public async ValueTask ExecuteAsync(
 	}
 
 	var request = new FileOperationRequest(
-		SchemaVersion: FileOperationSchema.Current,
 		OperationId: Guid.NewGuid().ToString("N"),
 		Kind: FileOperationKind.Copy,
 		Items: context.Selection
@@ -1142,16 +1305,17 @@ FTP はサーバーが保護された資格情報を自分で解決できるよ�
 
 ## 実装順序
 
-1. message record、JSON context、round-trip tests。
-2. `StorageRuntimeBuilder.AddWindowsOperations()`。
-3. request reader、hash、validation tests。
-4. `FileOperationSnapshots`、`FileOperation`、`FileOperationHost`。
-5. journal、revision、lifetime。
-6. `FileOperationServer` と explicit activation allowlist。
-7. WinRT client、`FileOperationsModel`、Status Center。
-8. copy 1 本を end-to-end で移行。
-9. move/delete/create/rename、複数選択。
-10. `AppInstanceMonitor`、server kill、古い直接実行経路を削除。
+1. Core の操作値、WinRT struct、両側の mapper。
+2. `.winmd` 生成と配列の ABI round-trip test。
+3. `StorageRuntimeBuilder.AddWindowsOperations()`。
+4. request reader、hash、validation tests。
+5. `FileOperationSnapshots`、`FileOperation`、`FileOperationHost`。
+6. versioned JSON journal、revision、lifetime。
+7. `FileOperationServer` と explicit activation allowlist。
+8. WinRT client、`FileOperationsModel`、Status Center。
+9. copy 1 本を end-to-end で移行。
+10. move/delete/create/rename、複数選択。
+11. `AppInstanceMonitor`、server kill、古い直接実行経路を削除。
 
 ## 受け入れ条件
 
