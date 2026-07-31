@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.App2.Views;
+using Files.App2.Commands;
 using Files.Core.AppModels;
 using Files.Core.Data;
 using Microsoft.UI.Xaml;
@@ -10,19 +11,26 @@ namespace Files.App2;
 
 public sealed partial class MainWindow : Window
 {
-	private readonly MainPage mainPage;
+	private readonly RootView rootView;
 
 	public MainWindow(
-		PaneModel pane,
-		IFilesDataRoot dataRoot)
+		WindowModel coreWindow,
+		IFilesDataRoot dataRoot,
+		CommandRegistry commandRegistry)
 	{
-		ArgumentNullException.ThrowIfNull(pane);
+		ArgumentNullException.ThrowIfNull(coreWindow);
 		ArgumentNullException.ThrowIfNull(dataRoot);
+		ArgumentNullException.ThrowIfNull(commandRegistry);
 
 		InitializeComponent();
-		mainPage = new MainPage(pane, dataRoot, DispatcherQueue);
-		RootFrame.Content = mainPage;
+		rootView = new RootView(
+			coreWindow,
+			dataRoot,
+			DispatcherQueue,
+			commandRegistry);
+		RootFrame.Content = rootView;
+		rootView.AttachWindow(this);
 	}
 
-	public void Dispose() => mainPage.Dispose();
+	public void Dispose() => rootView.Dispose();
 }

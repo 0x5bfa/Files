@@ -75,10 +75,11 @@ Shell、ディスク、ネットワーク、ソースの遅延をマイクロベ
 最初のApp2垂直スライスは、Core契約を通した手動デバッグスモークで確認します。x64のDeveloper PowerShellで
 `src/Files.App2/Files.App2.csproj`をDebugビルドし、次の操作を1回ずつ実行します。
 
-1. 起動してHomeの一覧が表示されることを確認する。
-2. rooted Windows folderへ移動し、folder/fileの表示、back/forward/up、refreshを確認する。
-3. 複数選択を行い、folderをdouble-clickしてselectionとnavigationがCoreへ反映されることを確認する。
-4. ウィンドウを閉じ、Core runtimeの非同期破棄が完了することを確認する。
+1. 起動して`RootView`、custom tab strip、window単位の`NavigationToolbar`、native `NavigationView`、Homeの一覧が表示されることを確認する。
+2. rooted Windows folderへ移動し、`ToolbarView`/`PaneHost`、folder/fileの表示、back/forward/up、refreshを確認する。
+3. 複数選択を行い、folderをdouble-clickして`DetailsFolderView`のselectionとregistered `files.item.open` commandによるnavigationがCoreへ反映されることを確認する。
+4. new tabを作成して各tabのfolder contentが独立していることを確認し、paneを追加/切り替え/閉じる。
+5. ウィンドウを閉じ、Core runtimeの非同期破棄が完了することを確認する。
 
 Visual StudioのDebug Diagnostic Toolsまたは同等の計測で、起動から最初の一覧表示、folder移動の開始から
 一覧表示、refresh完了までを記録します。Debugの値は開発中の退行検出に使い、マシン間比較やリリース基準には使いません。

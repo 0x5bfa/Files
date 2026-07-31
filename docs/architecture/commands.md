@@ -419,6 +419,22 @@ flowchart TB
 
 移行中は、一時的なレガシーハンドラーが古いアクションを呼び出しても構いません。ただし新しいハンドラーは `Ioc.Default` に依存してはいけません。
 
+### Files.App2 の最初の実装
+
+最初のApp2 browsing sliceは、`src/Files.App2/Commands/`に文書化した境界を実装しています。
+
+- `App2CommandRegistration.Build()`が`App`のcomposition rootで一度だけ呼び出され、
+  `CommandRegistryBuilder`へstable ID、descriptor、handler factoryを明示登録します。
+- `CommandRegistry`はprocess-levelのimmutable catalogです。`MainWindow`から作られた各`RootViewModel`は、
+  そのcatalogから独立した`WindowCommandManager`を作成します。
+- `CommandBindingViewModel`はWinUIの`ICommand` binding adapterです。`NavigationToolbar`、
+  `ToolbarView`、custom `TabView`、native `NavigationView`のHome、folder double-clickは
+  `WindowCommandManager`を経由します。
+- 実装済みIDは`files.navigation.back`、`forward`、`up`、`home`、`path`、`refresh`、
+  `files.item.open`、`files.tab.new`/`close`、`files.pane.new`/`close`です。
+- handlerはCore modelをXAMLへ公開せず、`RootViewModel`のactive tab/browserと既存の
+  `CoreBrowseAdapter`を使います。storage operation、shortcut、localization、extension commandは後続です。
+
 ## 実装順序
 
 1. 値の契約とレジストリビルダーを追加する。

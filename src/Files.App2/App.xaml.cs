@@ -1,9 +1,9 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
-using Files.Core.AppModels;
-using Files.Core.Composition;
 using Files.App2.Views;
+using Files.App2.Commands;
+using Files.Core.Composition;
 using Microsoft.UI.Xaml;
 
 namespace Files.App2;
@@ -12,6 +12,8 @@ public partial class App : Application
 {
 	private FilesCoreRuntime? runtime;
 	private MainWindow? mainWindow;
+	private readonly CommandRegistry commandRegistry =
+		App2CommandRegistration.Build();
 	private int isClosing;
 
 	public App()
@@ -28,11 +30,16 @@ public partial class App : Application
 		var coreWindow = await runtime.Application
 			.CreateWindowAsync()
 			.ConfigureAwait(true);
-		var pane = coreWindow.ActiveTab?.ActivePane
-			?? throw new InvalidOperationException(
+		if (coreWindow.ActiveTab?.ActivePane is null)
+		{
+			throw new InvalidOperationException(
 				"Files.Core did not create an active pane.");
+		}
 
-		mainWindow = new MainWindow(pane, runtime.DataRoot);
+		mainWindow = new MainWindow(
+			coreWindow,
+			runtime.DataRoot,
+			commandRegistry);
 		mainWindow.Closed += MainWindow_Closed;
 		mainWindow.Activate();
 	}

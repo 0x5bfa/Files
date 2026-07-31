@@ -114,7 +114,12 @@ flowchart TB
 ビューポート先読み、項目機能合成、サムネイル/プロパティ/フォルダー変更/プレビューの垂直スライス、Windows Shell と FTP ストレージ、ストレージ変更、
 合成、テスト、ベンチマーク、専用 CI が含まれています。
 
-`Files.App2` は `Files.Core` だけを参照する新しい WinUI ホストとして、Windows の Home/フォルダー一覧、ナビゲーション履歴、
-選択、更新を最初の垂直スライスとして実装しています。旧 `Files.App` は移行中の互換経路として残し、新しい Core 機能の正本にはしません。
+`Files.App2` は `Files.Core` だけを参照する新しい WinUI ホストとして、Rootが所有するTabView/
+NavigationToolbar、native NavigationViewのToolbar/PaneHost/TerminalView/InfoPane、pane contentの
+FolderBrowser/SettingsView/WebViewを独立したsurfaceとして構成しています。WindowsのHome/フォルダー一覧、
+ナビゲーション履歴、選択、更新を最初の垂直スライスとして実装しています。現在のfolder contentは
+`DetailsFolderView`のListViewを既定とし、Grid/List/Card/Columns viewへ差し替えられます。navigation、tab、pane、
+Home、folder double-clickはApp2のstable command registryとwindow command managerを通ります。
+旧 `Files.App` は移行中の互換経路として残し、新しい Core 機能の正本にはしません。
 検索/タグのバックエンド、クラウド/MTP/SFTP ソース、コンテキストメニュー、ドラッグ/ドロップ、永続化は、明示的な拡張または
 `Files.App2` の後続スライスです。これらは Core のモデルグラフを変更せずに追加できます。

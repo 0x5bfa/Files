@@ -32,10 +32,37 @@ flowchart TD
 2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。最初のスライスは Windows ストレージ、参照、表示、プレビュー、操作です。**完了。**
 3. 既存のFiles.Appサービスグラフをコピーせず、`Files.App2` に `FilesCoreRuntime` とWindows folder browseの最初のUI adapterを実装します。**完了。**
 4. CsWin32 の入力とラッパーは `Files.Core` へ移動済みで、廃止された `Files.Core.Storage` と `Files.App.Storage` プロジェクトは削除済みです。**完了。**
-5. 残りの presentation、operation、preview、provider を `Files.App2` の後続vertical sliceとして移し、旧 Files.App を削除可能にします。**進行中。**
+5. `Files.App2`のRoot/Tab/Pane/FolderBrowser shellを構成し、残りの presentation、operation、preview、providerを
+   後続vertical sliceとして移します。shellの最初の実装は**完了**、機能移行全体は**進行中**です。
 
 旧Files.Appの導入では既存XAMLとFrameを保持した互換adapterを使いますが、新規のApp2機能はこの経路へ戻しません。
 App2の実装済み境界と所有権は[新 Files.App2 アーキテクチャ](files-app2.md)を参照してください。
+
+### Files.App2 shellの移行境界
+
+`Files.App2`のUIは次の順でCoreの所有階層へ接続します。
+
+```mermaid
+flowchart LR
+    Root["RootView"] --> Window["RootViewModel"]
+    Window --> Tab["TabViewModel"]
+    Tab --> Pane["PaneViewModel"]
+    Pane --> Browser["FolderBrowserViewModel"]
+    Browser --> Adapter["CoreBrowseAdapter"]
+    Adapter --> Core["Window/Tab/Pane/BrowseSession"]
+```
+
+`RootView`はwindow単位の`TabView`と`NavigationToolbar`を所有し、native `NavigationView`を直接宣言します。
+そのContentへ`ToolbarView`、`PaneHost`、`TerminalView`、`InfoPane`を配置します。`PaneHost`の各paneは
+`PaneContentView`を通して`FolderBrowser`、`SettingsView`、`WebView`を差し替えます。
+`FolderBrowser`は`DetailsFolderView`、`GridFolderView`、`ListFolderView`を同じhostへ投影します。
+これらは独立したview surfaceであり、新しいTerminal/Preview/Info/Shelf paneや表示モードは対応するhostへ追加し、
+`MainPage`へ戻しません。`DetailsFolderView`は初期実装としてListViewだけを提供し、列定義や高度な表示設定は
+後続のview sliceで追加します。
+
+App2のnavigation、tab、pane、folder double-clickは`src/Files.App2/Commands/`のstable command IDへ集約します。
+process-level `CommandRegistry`は`App2CommandRegistration`で構築し、windowごとの
+`WindowCommandManager`が各ViewModelとcontrolへbindingを提供します。Coreはこの境界からWinUI型を参照しません。
 
 ## 相互運用コードの所有権
 
