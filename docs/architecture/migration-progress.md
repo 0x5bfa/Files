@@ -1,10 +1,11 @@
-# Files.Core / Files.App2 / Files.App 実装状況
+# Files.Core / Files.App2 移行進捗
+
+この文書だけが、Files.Core への移行と Files.App2 の実装進捗を記録します。
+その他の architecture 文書は、完了状況ではなく設計上の概念、契約、所有権、境界を定義します。
+
+## 完了した境界
 
 `Files.Core` はUI非依存のstorage、capability、operation、browse session、application modelを提供します。
-`Files.App2` は既存のサービスグラフを持ち込まない新しいWinUIホストとして、primary Windows folder browseをCoreへ接続しています。
-`Files.App` は移行期間の互換経路として残します。
-
-## Files.Core
 
 | 領域 | 状況 |
 | --- | --- |
@@ -17,7 +18,7 @@
 | threading | ordered/concurrent/operation用message-pumped Shell STAを実装済み |
 | validation | Files.Core unit/integration testとbenchmark projectが存在 |
 
-## Files.App2で接続済み
+`Files.App2` の最初の browsing slice は、次の境界まで接続済みです。
 
 - `MainWindow`から`RootView`を起点に、custom `TabView`、window単位の`NavigationToolbar`、native `NavigationView`、
   `ToolbarView`、`PaneHost`、`PaneView`、`PaneContentView`、`FolderBrowser`、`DetailsFolderView`を独立したcontrolとして構成する。
@@ -32,6 +33,29 @@
 - `App2CommandRegistration`でstable command IDをprocess-level registryへ登録し、window単位の
   `WindowCommandManager`からnavigation、tab、pane、Home、folder double-clickを実行する。
 
+## 基本 browsing の完了条件
+
+次の操作は `Files.Core` の `WindowModel`、`TabModel`、`PaneModel`、`BrowseSessionModel` を正本として
+実行されます。
+
+- tab の作成、選択、終了。
+- pane の作成、active pane の切り替え、終了。
+- back、forward、up、Home、path navigation、refresh。
+- folder の double-click、stable-key selection、selection の再同期。
+- Core event の dispatcher 越しの snapshot 適用と、tab selection の安定性。
+
+Core の `TabModel` は現在 1..2 pane を所有します。App2 の `PaneHost` は collection 境界を維持しますが、
+3 pane 以上のレイアウトは別の Core 拡張です。
+
+## 次の移行単位
+
+1. Details viewをList/Grid/Card/Columnsへ拡張し、view settingsとviewport reportingを接続する。
+2. App2へ preview UIをCore `PaneModel.Preview` とWindows Shell preview sessionへ接続する。
+3. delete/copy/move/createをCore operation requestへ移し、既存dialog、進行状況、elevation、server継続をadapter化する。
+4. Search/Library/Tag/FTPを型付き `BrowseLocation` とCore sourceへ移す。
+5. App2のWinUI presentation model、localization、activation、永続化を追加する。
+6. 対応する App2 slice が移行された後、旧 Files.App の互換経路を機能単位で削除する。
+
 ## 旧 Files.App の互換経路
 
 次は機能を失わないために既存Files.App経路を維持しています。
@@ -45,14 +69,3 @@
 
 互換adapterの一覧と破棄順序は[Files.AppのCore統合アーキテクチャ](files-app.md)に記載しています。これは新しいApp2の依存方向を
 規定する文書ではありません。
-
-## 次の優先順位
-
-1. Details viewをList/Grid/Card/Columnsへ拡張し、view settingsとviewport reportingを接続する。
-2. App2へ preview UIをCore `PaneModel.Preview` とWindows Shell preview sessionへ接続する。
-3. delete/copy/move/createをCore operation requestへ移し、既存dialog、進行状況、elevation、server継続をadapter化する。
-4. Search/Library/Tag/FTPを型付き `BrowseLocation` とCore sourceへ移す。
-5. App2のWinUI presentation model、localization、activation、永続化を追加し、旧 Files.App の互換経路を機能単位で削除する。
-
-Files.Coreの完了はFiles.AppまたはFiles.App2の全機能移行完了を意味しません。現在の完了境界は、ローカルWindows folderの
-主要表示フローがCoreを正として動き、App2が狭いadapterでそれを描画できる段階です。

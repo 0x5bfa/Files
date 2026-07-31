@@ -95,10 +95,10 @@ flowchart TB
 - `RootView`は`NavigationView`を直接宣言します。NavigationViewのContentに`ToolbarView`、`PaneHost`、
   `TerminalView`、`InfoPane`、status surfaceを配置します。
 - `PaneHost`は`LeftPane`/`RightPane`の固定プロパティを持たず、`TabViewModel.Panes`を`ItemsRepeater`で描画します。
-  現在のCore `TabModel`は最大2 paneですが、UI側はterminalなどの複数paneレイアウトへ置き換えられる境界を維持します。
+  Core `TabModel`は1..2 paneを所有し、UI側はterminalなどの複数paneレイアウトへ置き換えられる境界を維持します。
 - `PaneContentView`はpaneのcontent kindに応じて`FolderBrowser`、`SettingsView`、`WebView`を選択します。
 - `FolderBrowser`は表示モードのhostです。現在は`DetailsFolderView`を既定にし、`GridFolderView`と`ListFolderView`を
-  同じ`ContentPresenter`へ差し替えます。後続でCard/Columns viewを追加します。
+  同じ`ContentPresenter`へ差し替え、Card/Columns viewを同じ境界へ追加できます。
 - controlはCore modelを直接XAMLへ公開せず、`RootViewModel`/`TabViewModel`/`PaneViewModel`/
   `FolderBrowserViewModel`だけをバインド対象にします。
 
@@ -112,11 +112,11 @@ flowchart TB
   `WindowCommandManager`を作成します。
 - `RootViewModel`はwindow managerとcommand bindingを所有し、`NavigationToolbar`、`ToolbarView`、`TabView`、
   sidebarのHome、folder double-clickへ同じcommand surfaceを渡します。
-- 現在の登録対象はback/forward/up/home/path/refresh/open item、新規・終了tab、新規・終了paneです。
+- 基本登録対象はback/forward/up/home/path/refresh/open item、新規・終了tab、新規・終了paneです。
   storage operation、shortcut、localization、plugin commandは後続sliceで追加します。
 - handlerは`Files.Core`へ直接WinUI型を持ち込まず、既存のApp2 ViewModelとCore adapterを通して実行します。
 
-## 最初の垂直スライス
+## 基本 browsing 垂直スライス
 
 - `FilesCoreBuilder.AddWindowsStorage()`でWindows sourceを合成する。
 - Homeと`file:` rooted folderを`PaneModel`へnavigateする。

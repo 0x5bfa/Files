@@ -84,7 +84,7 @@ flowchart TB
 
 新しい Files.App を開始するときは、次の順に読んでください。
 
-1. [完了境界](implementation-status.md)
+1. [移行進捗](migration-progress.md)
 2. [アプリケーションモデルグラフ](app-models.md)
 3. [合成ルート](composition.md)
 4. [新 Files.App2 アーキテクチャ](files-app2.md)
@@ -106,20 +106,17 @@ flowchart TB
 - [`Files.App.Server` によるクラッシュ耐性のある操作](server-operations.md)
 - [Windows ストレージソース](windows-storage.md)
 - [Windows Shell のスレッド処理](threading.md)
-- [移行と物理プロジェクト統合](migration.md)
+- [移行原則と物理プロジェクト統合](migration.md)
 
-## 現在の状態
+## 文書の役割
 
-現在の `Files.Core` には、アプリケーション/ウィンドウ/タブ/ペインのモデルグラフ、Home・フォルダー・アーカイブの参照、選択と投影、ビュー設定、
-ビューポート先読み、項目機能合成、サムネイル/プロパティ/フォルダー変更/プレビューの垂直スライス、Windows Shell と FTP ストレージ、ストレージ変更、
-合成、テスト、ベンチマーク、専用 CI が含まれています。
+`migration-progress.md` だけが、完了した移行境界、現在の作業、次の移行単位を記録します。
+その他の文書は、次のような概念を定義します。
 
-`Files.App2` は `Files.Core` だけを参照する新しい WinUI ホストとして、Rootが所有するTabView/
-NavigationToolbar、native NavigationViewのToolbar/PaneHost/TerminalView/InfoPane、pane contentの
-FolderBrowser/SettingsView/WebViewを独立したsurfaceとして構成しています。WindowsのHome/フォルダー一覧、
-ナビゲーション履歴、選択、更新を最初の垂直スライスとして実装しています。現在のfolder contentは
-`DetailsFolderView`のListViewを既定とし、Grid/List/Card/Columns viewへ差し替えられます。navigation、tab、pane、
-Home、folder double-clickはApp2のstable command registryとwindow command managerを通ります。
-旧 `Files.App` は移行中の互換経路として残し、新しい Core 機能の正本にはしません。
-検索/タグのバックエンド、クラウド/MTP/SFTP ソース、コンテキストメニュー、ドラッグ/ドロップ、永続化は、明示的な拡張または
-`Files.App2` の後続スライスです。これらは Core のモデルグラフを変更せずに追加できます。
+- `app-models.md`、`composition.md`、`files-app2.md`: model graph、composition、UI ownership。
+- `commands.md`、`platform-interactions.md`、`operations.md`: command、platform、operation contracts。
+- `storage-models.md`、`windows-storage.md`、`ftp-storage.md`、`archives.md`: storage boundaries。
+- `item-features.md`、`files-app-features.md`、`view-settings.md`、`previews.md`: item and presentation concepts。
+- `threading.md`、`testing.md`、`server-operations.md`: threading、validation、failure-isolation concepts。
+
+概念文書は進捗の一覧を複製せず、実装状況を参照するときは `migration-progress.md` を使用します。

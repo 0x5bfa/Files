@@ -12,7 +12,7 @@ flowchart TB
 
 1 つのアセンブリになっても、1 つのレイヤーになるわけではありません。`Files.Core` ではストレージ契約、ソース、AppModel、参照、操作、相互運用の名前空間とフォルダーを維持します。
 
-## 安全な移行順序
+## 移行順序の原則
 
 ```mermaid
 flowchart TD
@@ -28,12 +28,14 @@ flowchart TD
     Move --> Delete
 ```
 
-1. 新しいプロジェクトで `IStorageSource`、CoreModel の項目機能、AppModel、参照セッションの所有権を安定させます。**完了。**
-2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。最初のスライスは Windows ストレージ、参照、表示、プレビュー、操作です。**完了。**
-3. 既存のFiles.Appサービスグラフをコピーせず、`Files.App2` に `FilesCoreRuntime` とWindows folder browseの最初のUI adapterを実装します。**完了。**
-4. CsWin32 の入力とラッパーは `Files.Core` へ移動済みで、廃止された `Files.Core.Storage` と `Files.App.Storage` プロジェクトは削除済みです。**完了。**
-5. `Files.App2`のRoot/Tab/Pane/FolderBrowser shellを構成し、残りの presentation、operation、preview、providerを
-   後続vertical sliceとして移します。shellの最初の実装は**完了**、機能移行全体は**進行中**です。
+1. 新しいプロジェクトで `IStorageSource`、CoreModel の項目機能、AppModel、参照セッションの所有権を安定させます。
+2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。
+3. 既存のFiles.Appサービスグラフをコピーせず、`Files.App2` に `FilesCoreRuntime` とUI adapterを合成します。
+4. CsWin32 の入力とラッパーを `Files.Core` に所有させ、生成出力をアプリ層から隠します。
+5. `Files.App2`のRoot/Tab/Pane/FolderBrowser shellを構成し、presentation、operation、preview、providerを
+   独立した vertical slice として移します。
+
+各段階の完了状況は [移行進捗](migration-progress.md) にのみ記録します。
 
 旧Files.Appの導入では既存XAMLとFrameを保持した互換adapterを使いますが、新規のApp2機能はこの経路へ戻しません。
 App2の実装済み境界と所有権は[新 Files.App2 アーキテクチャ](files-app2.md)を参照してください。
@@ -57,8 +59,8 @@ flowchart LR
 `PaneContentView`を通して`FolderBrowser`、`SettingsView`、`WebView`を差し替えます。
 `FolderBrowser`は`DetailsFolderView`、`GridFolderView`、`ListFolderView`を同じhostへ投影します。
 これらは独立したview surfaceであり、新しいTerminal/Preview/Info/Shelf paneや表示モードは対応するhostへ追加し、
-`MainPage`へ戻しません。`DetailsFolderView`は初期実装としてListViewだけを提供し、列定義や高度な表示設定は
-後続のview sliceで追加します。
+`MainPage`へ戻しません。`DetailsFolderView`はListViewを使う基本的な詳細表示の契約を提供し、列定義や高度な表示設定は
+独立したview sliceとして追加します。
 
 App2のnavigation、tab、pane、folder double-clickは`src/Files.App2/Commands/`のstable command IDへ集約します。
 process-level `CommandRegistry`は`App2CommandRegistration`で構築し、windowごとの
