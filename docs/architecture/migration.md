@@ -30,9 +30,14 @@ flowchart TD
 
 1. 新しいプロジェクトで `IStorageSource`、CoreModel の項目機能、AppModel、参照セッションの所有権を安定させます。**完了。**
 2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。最初のスライスは Windows ストレージ、参照、表示、プレビュー、操作です。**完了。**
-3. 機能境界の背後で Files.App に `FilesCoreRuntime` を導入します。採用時に無関係なソースファイルを移動しません。**次のステップ。**
+3. 機能境界の背後で Files.App に `FilesCoreRuntime` を導入します。process、window、tab、paneの所有権と、ローカルWindows folderのbrowse sliceを接続しました。**完了。**
 4. CsWin32 の入力とラッパーは `Files.Core` へ移動済みで、廃止された `Files.Core.Storage` と `Files.App.Storage` プロジェクトは削除済みです。**完了。**
-5. 残りの Files.App コンシューマーを新しい契約へ移し、どの `Files.Shared` コードを Core へ置くか判断します。
+5. 残りの Files.App コンシューマーを新しい契約へ移し、どの `Files.Shared` コードを Core へ置くか判断します。**進行中。**
+
+現在のFiles.App導入では、既存XAMLとFrameを保持し、`CoreBrowseSessionAdapter`でCoreのversion付きsnapshotを
+`ListedItem`へ投影します。rename、selection、viewport、property/thumbnail、folder changeはCore経路です。
+Home/Search/Library/Tag/FTP、Frame履歴、rename以外の操作は互換経路に残ります。実装済み境界とadapter一覧は
+[Files.AppのCore統合アーキテクチャ](files-app.md)を参照してください。
 
 ## 相互運用コードの所有権
 

@@ -1,54 +1,53 @@
-# Files.Core の完了境界
+# Files.Core / Files.App 実装状況
 
-`Files.Core` は、新しい Files.App を開始するために必要な UI 非依存基盤です。ここでいう「完了」とは、
-アーキテクチャ契約と Windows/FTP の垂直スライスをエンドツーエンドで利用できることを意味します。
-将来のすべてのストレージソースや Files の機能が実装済みという意味ではありません。
+`Files.Core` はUI非依存のstorage、capability、operation、browse session、application modelを提供します。
+`Files.App` は既存WinUIを維持したまま、primary Windows folder browseをCoreへ接続済みです。
 
-## Files.App が利用できるもの
+## Files.Core
 
-| 領域 | 利用できる動作 |
+| 領域 | 状況 |
 | --- | --- |
-| モデルグラフ | application、window、tab、split pane、browse session |
-| ナビゲーション | home、folder、back、forward、up、refresh、上限付き履歴 |
-| アーカイブ | Shell 優先の参照、SevenZip フォールバック、暗号化認証情報、読み取り専用エントリストリーム |
-| 項目 | 安定した識別情報、不変モデルの置換、選択 |
-| 表示 | ビュー設定、並べ替え、項目変更、ビューポート先読み |
-| 項目機能 | ファクトリ、契約ごとの combiner、ラッパー、所有権 |
-| サムネイル | Windows Shell の PNG バイト列、共有キャッシュ、無効化 |
-| プロパティ | 項目単位とバッチソースの契約、型付き Windows 値 |
-| フォルダー変更 | 共有 `SHChangeNotifyRegister` ソースと差分更新 |
-| プレビュー | ストリーム結果と Windows Shell プレビューセッション |
-| 操作 | 作成、大文字小文字を保持する名前変更、コピー、移動、ごみ箱/完全削除、競合ポリシー |
-| FTP | FTP/FTPS 解決、ストリーム、プロパティ、同一ソースの変更、プレビューとアーカイブの再利用 |
-| 合成 | 所有関係が決定的な 1 つの builder/runtime |
-| 品質 | ユニットテスト、Windows 統合テスト、ベンチマーク、Core CI |
+| application model | application、window、tab、1..2 pane、pane history、preview、browse sessionを実装済み |
+| Windows storage | resolve、enumeration、stable reference、property、thumbnail、change sourceを実装済み |
+| FTP storage | FTP/FTPS source、stream、property、operationを実装済み |
+| browse | context ownership、atomic navigation/refresh、incremental reconciliation、selection、projectionを実装済み |
+| operation | create、rename、copy、move、deleteとcollision policyを実装済み |
+| preview | stream previewとWindows Shell Preview Handler sessionを実装済み |
+| threading | ordered/concurrent/operation用message-pumped Shell STAを実装済み |
+| validation | Files.Core unit/integration testとbenchmark projectが存在 |
 
-## 意図的に残す拡張境界
+## Files.Appで接続済み
 
-次の項目は新しい Files.App の開始を妨げません。
+- 起動時に `FilesCoreRuntime` を1つ作成し、最終終了時に非同期破棄する。
+- 既存tabごとに `TabModel` lease、split paneごとに `PaneModel` を割り当てる。
+- rooted local Windows folderをCoreでresolve、enumerate、watch、refreshする。
+- Coreのversion付き一覧を既存 `ListedItem` collectionへUI thread上で投影する。
+- selectionとviewportをCoreへ送り、stable keyでselectionをreconcileする。
+- property/thumbnail prefetchを既存詳細/grid表示へ反映する。
+- renameをCoreのstorage operation pipelineへ送り、通知欠落時だけrefreshする。
+- HomeのQuick Access、drive、network、recent enumerationをCore Windows sourceへ委譲する。
+- file tags/Start pinning用の旧 `IStorageService` shapeをCore Windows sourceへ委譲する。
 
-- 検索とタグには型付き `BrowseLocation` 値がありますが、インデックス/バックエンドと対応する場所ハンドラーを選択する必要があります。
-- Cloud、MTP、SFTP などのソースは、後続の垂直スライスとして同じソース、項目機能、場所、操作契約を実装します。
-- FTP プロファイルは `Build` 前に合成します。ランタイム中の追加・削除には、明示的な所有権の意味を持つ可変ソースレジストリが必要です。
-- Windows から FTP へのソース間コピーには汎用ストリーム転送コーディネーターが必要です。FTP ソースは意図的に同一ソースの要求だけを所有します。
-- アーカイブの参照と読み取りストリームは実装済みです。圧縮、全件抽出、エントリの変更、分割ボリューム、アーカイブ操作の進行状況は別の作業として残ります。
-- 古い同一ボリュームアドレスだけから移動済み Windows ファイルを冷たく復旧するには、ファイル ID インデックスまたは `OpenFileById` 戦略が必要です。ライブ操作は更新済み参照を返し、ウォッチャーが開いているセッションを更新します。
-- Windows のプロパティ抽出は、最初の詳細ビューで使う型付き値を現在扱います。追加の正規プロパティは AppModel を変更せず `WindowsPropertyReader` へ追加できます。
-- コンテキストメニュー、Shell 動詞、ドラッグ/ドロップデータパッケージ、共有、アプリケーションのアクティブ化は Files.App/プラットフォームアダプターです。項目ストレージ機能ではありません。コマンド、OLE、転送、スレッド、所有権の設計は[Files.App のコマンド実行](commands.md)と[クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)に記載しています。
-- 永続的なビュー設定、ウィンドウセッションのシリアライズ、テレメトリ、ポリシーの実装はアプリケーション合成ルートに属します。
-- `Files.Core.Storage` と `Files.App.Storage` は廃止され、CsWin32 の生成は直接 `Files.Core` へ移動済みです。残りの Files.App コンシューマーの移行と `Files.Shared` の今後の判断は別の移行作業です。
+## 互換経路
 
-## 次のセッションの完了条件
+次は機能を失わないために既存Files.App経路を維持しています。
 
-次のセッションは、以下を満たせば Files.App を開始できます。
+- Home、Search、Library、Tag、FTPの画面navigationとitem presentation
+- Frame back/forward、tab session persistence、toolbar command state
+- delete、copy、move、create、clipboard、drag/drop、context menu、sharing
+- preview paneのWinUI hostと既存preview routing
+- Recycle Bin watcher、drive monitoring、taskbar progress、object picker
+- 旧WinRT FTP itemと一時的な資格情報cache
 
-1. プロセス起動時に `FilesCoreRuntime` を 1 回だけ作成する。
-2. 永続化された `IViewSettingsStore` と本番プレビュー・ポリシーを選択する。
-3. `WindowViewModel`、`TabViewModel`、`PaneViewModel` が既存 AppModel を適応する。
-4. 1 つの項目コレクションアダプターが、バージョン付き参照変更を UI dispatcher へ適用する。
-5. サムネイルとプレビュープレゼンターが Core の結果を WinUI オブジェクトへ変換する。
-6. ウィンドウ単位のコマンドマネージャーがナビゲーションとストレージ要求を適応する。
-7. クリップボード、ドラッグ/ドロップ、Shell セッションをウィンドウ/プラットフォームアダプターに残す。
-8. ランタイムより先に ViewModel、コマンド、プレビュー/プラットフォームセッションを破棄する。
+互換adapterの一覧と破棄順序は[Files.AppのCore統合アーキテクチャ](files-app.md)に記載しています。
 
-具体的な Files.App の設計図は[新 Files.App アーキテクチャ](files-app.md)にあります。
+## 次の優先順位
+
+1. toolbarのback/forward/up/refreshを `PaneModel` へroutingし、Frame履歴との二重管理を解消する。
+2. delete/copy/move/createをCore operation requestへ移し、既存dialog、進行状況、elevation、server継続をadapter化する。
+3. preview UIをCore `PaneModel.Preview` とWindows Shell preview sessionへ接続する。
+4. Search/Library/Tag/FTPを型付き `BrowseLocation` とCore sourceへ移す。
+5. `ShellViewModel` のCore投影を独立したtestable presentation modelへ抽出する。
+
+Files.Coreの完了はFiles.Appの全機能移行完了を意味しません。現在の完了境界は、ローカルWindows folderの
+主要表示フローがCoreを正として動き、既存UIが狭いadapterでそれを描画できる段階です。
