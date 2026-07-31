@@ -48,7 +48,7 @@ namespace Files.App.Data.AppModels
 
 				_ = _databaseFile ?? throw new InvalidOperationException("The database file was not properly initialized.");
 
-				await using var stream = await _databaseFile!.OpenStreamAsync(FileAccess.Read, FileShare.Read, cancellationToken);
+				await using var stream = await _databaseFile!.OpenStreamAsync(FileAccess.Read, cancellationToken);
 				var settings = await serializer.DeserializeAsync<Stream, IDictionary>(stream, cancellationToken);
 
 				// Reset the cache
@@ -84,7 +84,7 @@ namespace Files.App.Data.AppModels
 
 				_ = _databaseFile ?? throw new InvalidOperationException("The database file was not properly initialized.");
 
-				await using var dataStream = await _databaseFile.OpenStreamAsync(FileAccess.ReadWrite, FileShare.Read, cancellationToken);
+				await using var dataStream = await _databaseFile.OpenStreamAsync(FileAccess.ReadWrite, cancellationToken);
 				await using var settingsStream = await serializer.SerializeAsync<Stream, IDictionary>(settingsCache, cancellationToken);
 
 				// Overwrite existing content
@@ -106,7 +106,7 @@ namespace Files.App.Data.AppModels
 		private async Task<bool> EnsureSettingsFileAsync(CancellationToken cancellationToken)
 		{
 			if (_databaseFile is null)
-				_databaseFile = await _settingsFolder.TryCreateFileAsync(_fileName, false, cancellationToken);
+				_databaseFile = await _settingsFolder.CreateFileAsync(_fileName, overwrite: false, cancellationToken);
 
 			return _databaseFile is not null;
 		}

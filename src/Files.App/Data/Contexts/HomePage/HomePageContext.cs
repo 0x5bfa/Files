@@ -12,7 +12,7 @@ namespace Files.App.Data.Contexts
 
 		public bool IsAnyItemRightClicked => rightClickedItem is not null;
 
-		public IHomeFolder HomeFolder { get; } = new HomeFolder();
+		public IHomeFolder HomeFolder { get; }
 
 		private WidgetCardItem? rightClickedItem = null;
 		public WidgetCardItem? RightClickedItem => rightClickedItem;
@@ -27,8 +27,10 @@ namespace Files.App.Data.Contexts
 			set => selectedTaggedItems = value ?? emptyTaggedItems;
 		}
 
-		public HomePageContext()
+		public HomePageContext(IHomeFolder homeFolder)
 		{
+			ArgumentNullException.ThrowIfNull(homeFolder);
+			HomeFolder = homeFolder;
 			BaseWidgetViewModel.RightClickedItemChanged += HomePageWidget_RightClickedItemChanged;
 			FileTagsWidgetViewModel.SelectedTaggedItemsChanged += FileTagsWidget_SelectedTaggedItemsChanged;
 		}

@@ -2,8 +2,6 @@
 // Licensed under the MIT License.
 
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.Win32;
-using Windows.Win32.UI.Shell;
 
 namespace Files.App.Data.Items
 {
@@ -32,7 +30,7 @@ namespace Files.App.Data.Items
 			Item = item;
 			Text = text;
 			IsPinned = isPinned;
-			Path = item.GetDisplayName(SIGDN.SIGDN_DESKTOPABSOLUTEPARSING);
+			Path = item.FileSystemPath ?? item.ParsingName;
 			Tooltip = tooltip;
 		}
 
@@ -43,19 +41,12 @@ namespace Files.App.Data.Items
 			if (string.IsNullOrEmpty(Path))
 				return;
 
-			var thumbnailSize = (int)(Constants.ShellIconSizes.Large * App.AppModel.AppWindowDPI);
-			// Ensure thumbnail size is at least 1 to prevent layout errors
-			thumbnailSize = Math.Max(1, thumbnailSize);
-			Item.TryGetThumbnail(thumbnailSize, SIIGBF.SIIGBF_ICONONLY, out var rawThumbnailData);
-			if (rawThumbnailData is null)
-				return;
-
-			Thumbnail = await rawThumbnailData.ToBitmapAsync();
+			Thumbnail = await NavigationHelpers.GetIconForPathAsync(Path) as BitmapImage;
 		}
 
 		public void Dispose()
 		{
-			Item.Dispose();
+			// The Core runtime owns the Windows source and its Shell scheduler.
 		}
 	}
 }

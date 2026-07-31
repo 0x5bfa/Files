@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using Microsoft.UI.Xaml;
+using Files.Core.AppModels;
+using Files.Core.Composition;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Animation;
@@ -13,6 +15,8 @@ namespace Files.App.Views.Shells
 {
 	public sealed partial class ModernShellPage : BaseShellPage
 	{
+		public Guid? CorePaneId { get; private set; }
+
 		protected override Frame ItemDisplay
 			=> ItemDisplayFrame;
 
@@ -54,6 +58,20 @@ namespace Files.App.Views.Shells
 			_navigationInteractionTracker.NavigationRequested += OverscrollNavigationRequested;
 		}
 
+		internal void AttachCorePane(
+			PaneModel pane,
+			FilesCoreRuntime runtime)
+		{
+			ArgumentNullException.ThrowIfNull(pane);
+			ArgumentNullException.ThrowIfNull(runtime);
+
+			if (CorePaneId == pane.Id)
+				return;
+
+			CorePaneId = pane.Id;
+			ShellViewModel.AttachCorePane(pane, runtime);
+		}
+
 		private async void ShellViewModel_FocusFilterHeader(object sender, EventArgs e)
 		{
 			// Delay to ensure the UI is ready for focus
@@ -92,14 +110,17 @@ namespace Files.App.Views.Shells
 		{
 			if (string.IsNullOrEmpty(NavParams?.NavPath) || NavParams.NavPath == "Home")
 			{
+				ShellViewModel.DeactivateCoreBrowse();
 				NavigateHome();
 			}
 			else if (NavParams.NavPath == "ReleaseNotes")
 			{
+				ShellViewModel.DeactivateCoreBrowse();
 				NavigateToReleaseNotes();
 			}
 			else if (NavParams.NavPath == "Settings")
 			{
+				ShellViewModel.DeactivateCoreBrowse();
 				NavigateToSettings(NavParams?.SelectItem);
 			}
 			else

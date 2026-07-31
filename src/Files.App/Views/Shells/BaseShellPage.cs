@@ -216,7 +216,7 @@ namespace Files.App.Views.Shells
 			// Raised by the directory watcher, which can fire while the user is typing in the
 			// omnibar - don't yank focus in that case (the omnibar's TryCancel doesn't help here
 			// because FocusFileList -> ListViewItem.Focus uses FocusState.Keyboard).
-			if (!UIHelpers.IsTextInputFocused(XamlRoot))
+			if (e.Count > 0 && !UIHelpers.IsTextInputFocused(XamlRoot))
 				ContentPage.ItemManipulationModel.FocusFileList();
 			ContentPage.ItemManipulationModel.SetSelectedItems(e);
 		}

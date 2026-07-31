@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using Files.App.Controls;
+using Files.App.Bootstrap;
+using Files.Core.AppModels;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Input;
@@ -42,6 +44,9 @@ namespace Files.App.Views
 		private bool _wasRightPaneVisible;
 		private NavigationParams? _savedNavParamsRight;
 		private readonly PointerEventHandler _panePointerPressedHandler;
+		private readonly CancellationTokenSource coreLifetime = new();
+		private CoreTabLease? coreTabLease;
+		private Task? coreInitializationTask;
 
 		// Properties
 
@@ -208,6 +213,9 @@ namespace Files.App.Views
 
 					if (ActivePane is not null)
 						ActivePane.IsCurrentInstance = IsCurrentInstance;
+
+					if (ActivePane is ModernShellPage { CorePaneId: { } corePaneId })
+						coreTabLease?.Model.SetActivePane(corePaneId);
 
 					NotifyPropertyChanged(nameof(ActivePane));
 					NotifyPropertyChanged(nameof(IsLeftPaneActive));
@@ -534,12 +542,15 @@ namespace Files.App.Views
 			ActivePane = GetPane(GetPaneCount() - 1);
 
 			NotifyPropertyChanged(nameof(IsMultiPaneActive));
+			QueueCorePaneSynchronization();
 		}
 
 		private void RemovePane(int index = -1)
 		{
 			if (index is -1)
 				return;
+
+			var removedPane = GetPane(index);
 
 			// Get proper position of sizer that resides with the pane that is wanted to be removed
 			var childIndex = index * 2 - 1;
@@ -598,6 +609,21 @@ namespace Files.App.Views
 
 			Pane_ContentChanged(null, null!);
 			NotifyPropertyChanged(nameof(IsMultiPaneActive));
+
+			if (removedPane is not null)
+			{
+				removedPane.Loaded -= Pane_Loaded;
+				removedPane.ContentChanged -= Pane_ContentChanged;
+				removedPane.GotFocus -= Pane_GotFocus;
+				removedPane.RightTapped -= Pane_RightTapped;
+				removedPane.RemoveHandler(
+					UIElement.PointerPressedEvent,
+					_panePointerPressedHandler);
+				var corePaneId = removedPane.CorePaneId;
+				removedPane.Dispose();
+				if (corePaneId is { } paneId)
+					QueueCorePaneClose(paneId);
+			}
 		}
 
 		private void SetShadow()
@@ -628,9 +654,24 @@ namespace Files.App.Views
 
 		// Override methods
 
-		protected override void OnNavigatedTo(NavigationEventArgs eventArgs)
+		protected override async void OnNavigatedTo(NavigationEventArgs eventArgs)
 		{
 			base.OnNavigatedTo(eventArgs);
+
+			try
+			{
+				await EnsureCoreTabAsync();
+			}
+			catch (OperationCanceledException) when (coreLifetime.IsCancellationRequested)
+			{
+				return;
+			}
+			catch (Exception exception)
+			{
+				App.CoreHost.ReportBackgroundFailure(
+					exception,
+					"initialize tab adapter");
+			}
 
 			if (eventArgs.Parameter is string navPath)
 			{
@@ -675,6 +716,97 @@ namespace Files.App.Views
 					ShellPaneArrangement = ShellPaneArrangement,
 				}
 			};
+		}
+
+		private Task EnsureCoreTabAsync()
+		{
+			coreInitializationTask ??= InitializeCoreTabAsync();
+			return coreInitializationTask;
+		}
+
+		private async Task InitializeCoreTabAsync()
+		{
+			coreTabLease = await App.CoreHost
+				.AcquireTabAsync(coreLifetime.Token);
+			await SynchronizeCorePanesAsync(coreLifetime.Token);
+		}
+
+		private async Task SynchronizeCorePanesAsync(
+			CancellationToken cancellationToken)
+		{
+			if (coreTabLease is not { } lease || GetPane(0) is not { } primaryPage)
+				return;
+
+			var tab = lease.Model;
+			var primaryPane = tab.Panes[0];
+			primaryPage.AttachCorePane(primaryPane, App.CoreHost.Runtime);
+
+			if (GetPaneCount() < 2 || GetPane(1) is not { } secondaryPage)
+				return;
+
+			var secondaryPane = tab.Panes.Count > 1
+				? tab.Panes[1]
+				: await tab.OpenSplitAsync(
+					ShellPaneArrangement is ShellPaneArrangement.Horizontal
+						? PaneSplitOrientation.Horizontal
+						: PaneSplitOrientation.Vertical,
+					cancellationToken: cancellationToken);
+			secondaryPage.AttachCorePane(secondaryPane, App.CoreHost.Runtime);
+		}
+
+		private void QueueCorePaneSynchronization()
+		{
+			if (coreTabLease is null || coreLifetime.IsCancellationRequested)
+				return;
+
+			_ = RunCorePaneSynchronizationAsync();
+		}
+
+		private async Task RunCorePaneSynchronizationAsync()
+		{
+			try
+			{
+				await SynchronizeCorePanesAsync(coreLifetime.Token);
+			}
+			catch (OperationCanceledException) when (coreLifetime.IsCancellationRequested)
+			{
+			}
+			catch (Exception exception)
+			{
+				App.CoreHost.ReportBackgroundFailure(
+					exception,
+					"synchronize pane adapter");
+			}
+		}
+
+		private void QueueCorePaneClose(Guid paneId)
+		{
+			if (coreTabLease is null || coreLifetime.IsCancellationRequested)
+				return;
+
+			_ = CloseCorePaneAsync(paneId);
+		}
+
+		private async Task CloseCorePaneAsync(Guid paneId)
+		{
+			try
+			{
+				if (coreTabLease is { Model.Panes.Count: > 1 } lease)
+				{
+					await lease.Model.ClosePaneAsync(
+						paneId,
+						coreLifetime.Token);
+				}
+			}
+			catch (OperationCanceledException) when (coreLifetime.IsCancellationRequested)
+			{
+			}
+			catch (Exception exception)
+			{
+				App.CoreHost.ReportBackgroundFailure(
+					exception,
+					"close pane adapter");
+			}
 		}
 
 		// Event methods
@@ -1054,6 +1186,7 @@ namespace Files.App.Views
 			TabBar.TabDragCompleted -= TabBar_TabDragCompleted;
 
 			MainWindow.Instance.SizeChanged -= MainWindow_SizeChanged;
+			coreLifetime.Cancel();
 
 			// Dispose panes
 			foreach (var pane in GetPanes())
@@ -1073,6 +1206,24 @@ namespace Files.App.Views
 				sizer.Loaded -= Sizer_Loaded;
 				sizer.ManipulationCompleted -= Sizer_ManipulationCompleted;
 				sizer.ManipulationStarted -= Sizer_ManipulationStarted;
+			}
+
+			if (Interlocked.Exchange(ref coreTabLease, null) is { } lease)
+				_ = ReleaseCoreTabAsync(lease);
+			coreLifetime.Dispose();
+		}
+
+		private static async Task ReleaseCoreTabAsync(CoreTabLease lease)
+		{
+			try
+			{
+				await lease.DisposeAsync();
+			}
+			catch (Exception exception)
+			{
+				App.CoreHost.ReportBackgroundFailure(
+					exception,
+					"release tab adapter");
 			}
 		}
 	}

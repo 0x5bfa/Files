@@ -295,7 +295,7 @@ namespace Files.App.UserControls
 		{
 			if (e.IsRootItem)
 			{
-				IHomeFolder homeFolder = new HomeFolder();
+				IHomeFolder homeFolder = Ioc.Default.GetRequiredService<IHomeFolder>();
 				IContentPageContext contentPageContext = Ioc.Default.GetRequiredService<IContentPageContext>();
 
 				e.Flyout.Items.Add(new MenuFlyoutHeaderItem() { Text = Strings.QuickAccess.GetLocalizedResource() });
@@ -307,17 +307,14 @@ namespace Files.App.UserControls
 
 					var flyoutItem = new MenuFlyoutItem()
 					{
-						Text = windowsStorable.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_PARENTRELATIVEFORUI),
-						DataContext = windowsStorable.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_DESKTOPABSOLUTEPARSING),
+						Text = windowsStorable.Name,
+						DataContext = windowsStorable.FileSystemPath ?? windowsStorable.ParsingName,
 						Icon = new FontIcon() { Glyph = "\uE8B7" }, // As a placeholder
 					};
 
 					e.Flyout.Items.Add(flyoutItem);
 
-					windowsStorable.TryGetThumbnail((int)(16f * App.AppModel.AppWindowDPI), Windows.Win32.UI.Shell.SIIGBF.SIIGBF_ICONONLY, out var thumbnailData);
-					flyoutItem.Icon = new ImageIcon() { Source = await MainWindow.Instance.DispatcherQueue.EnqueueOrInvokeAsync(() => thumbnailData.ToBitmapAsync(), Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal) };
-
-					windowsStorable.Dispose();
+					flyoutItem.Icon = new ImageIcon() { Source = await NavigationHelpers.GetIconForPathAsync((string)flyoutItem.DataContext) };
 
 					flyoutItem.Click += (sender, args) =>
 					{
@@ -335,17 +332,14 @@ namespace Files.App.UserControls
 
 					var flyoutItem = new MenuFlyoutItem()
 					{
-						Text = windowsStorable.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_PARENTRELATIVEFORUI),
-						DataContext = windowsStorable.GetDisplayName(Windows.Win32.UI.Shell.SIGDN.SIGDN_DESKTOPABSOLUTEPARSING),
+						Text = windowsStorable.Name,
+						DataContext = windowsStorable.FileSystemPath ?? windowsStorable.ParsingName,
 						Icon = new FontIcon() { Glyph = "\uE8B7" }, // As a placeholder
 					};
 
 					e.Flyout.Items.Add(flyoutItem);
 
-					windowsStorable.TryGetThumbnail((int)(16f * App.AppModel.AppWindowDPI), Windows.Win32.UI.Shell.SIIGBF.SIIGBF_ICONONLY, out var thumbnailData);
-					flyoutItem.Icon = new ImageIcon() { Source = await MainWindow.Instance.DispatcherQueue.EnqueueOrInvokeAsync(() => thumbnailData.ToBitmapAsync(), Microsoft.UI.Dispatching.DispatcherQueuePriority.Normal) };
-
-					windowsStorable.Dispose();
+					flyoutItem.Icon = new ImageIcon() { Source = await NavigationHelpers.GetIconForPathAsync((string)flyoutItem.DataContext) };
 
 					flyoutItem.Click += (sender, args) =>
 					{

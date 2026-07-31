@@ -2,6 +2,8 @@
 // Licensed under the MIT License.
 
 using Files.App.ViewModels.Properties;
+using Files.Core.Browsing;
+using Files.Core.Storage;
 using Files.Shared.Helpers;
 using FluentFTP;
 using Microsoft.UI.Xaml;
@@ -18,6 +20,10 @@ namespace Files.App.Utils
 {
 	public partial class ListedItem : ObservableObject, IGroupableItem, IListedItem
 	{
+		internal StorableReference? CoreReference { get; set; }
+
+		internal StorableKey? CoreKey { get; set; }
+
 		protected static IUserSettingsService UserSettingsService { get; } = Ioc.Default.GetRequiredService<IUserSettingsService>();
 
 		protected static IStartMenuService StartMenuService { get; } = Ioc.Default.GetRequiredService<IStartMenuService>();

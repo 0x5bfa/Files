@@ -357,7 +357,7 @@ namespace Files.App.Utils.Storage
 				new NetworkCredential(Credentials.UserName, Credentials.SecurePassword) :
 				FtpManager.Credentials.Get(host, FtpManager.Anonymous);
 
-			return new(host, credentials, port);
+			return new(host, credentials, port, new FluentFTP.FtpConfig());
 		}
 
 		private sealed partial class FtpFolderBasicProperties : BaseBasicProperties

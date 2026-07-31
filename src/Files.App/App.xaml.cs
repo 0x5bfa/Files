@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 
 using Files.App.Helpers.Application;
+using Files.App.Bootstrap;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.UI.Xaml;
@@ -19,6 +22,8 @@ namespace Files.App
 	/// </summary>
 	public partial class App : Application
 	{
+		private IHost? applicationHost;
+
 		public static SystemTrayIcon? SystemTrayIcon { get; private set; }
 
 		public static TaskCompletionSource? SplashScreenLoadingTCS { get; private set; }
@@ -43,6 +48,7 @@ namespace Files.App
 		public static LibraryManager LibraryManager { get; private set; } = null!;
 		public static AppModel AppModel { get; private set; } = null!;
 		public static ILogger Logger { get; private set; } = NullLogger.Instance;
+		internal static FilesAppCoreHost CoreHost { get; private set; } = null!;
 
 		/// <summary>
 		/// Initializes an instance of <see cref="App"/>.
@@ -83,8 +89,10 @@ namespace Files.App
 				}
 
 				// Configure the DI (dependency injection) container
-				var host = AppLifecycleHelper.ConfigureHost();
-				Ioc.Default.ConfigureServices(host.Services);
+				applicationHost = AppLifecycleHelper.ConfigureHost();
+				Ioc.Default.ConfigureServices(applicationHost.Services);
+				CoreHost = applicationHost.Services.GetRequiredService<FilesAppCoreHost>();
+				await CoreHost.InitializeAsync();
 
 				// Configure Sentry
 				if (AppLifecycleHelper.AppEnvironment is not AppEnvironment.Dev)
@@ -312,6 +320,18 @@ namespace Files.App
 
 			// Wait for ongoing file operations
 			FileOperationsHelpers.WaitForCompletion();
+
+			if (Interlocked.Exchange(ref applicationHost, null) is { } host)
+			{
+				if (host is IAsyncDisposable asyncDisposable)
+				{
+					await asyncDisposable.DisposeAsync();
+				}
+				else
+				{
+					host.Dispose();
+				}
+			}
 		}
 
 		/// <summary>

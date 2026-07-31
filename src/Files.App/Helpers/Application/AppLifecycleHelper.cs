@@ -1,6 +1,7 @@
 ﻿// Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.Bootstrap;
 using Files.App.Helpers.Application;
 using Files.App.Services.Git;
 using Files.App.Services.SizeProvider;
@@ -210,6 +211,8 @@ namespace Files.App.Helpers
 					.AddProvider(new SentryLoggerProvider())
 					.SetMinimumLevel(LogLevel.Information))
 				.ConfigureServices(services => services
+					// Files.Core composition
+					.AddSingleton<FilesAppCoreHost>()
 					// Settings services
 					.AddSingleton<IUserSettingsService, UserSettingsService>()
 					.AddSingleton<IAppearanceSettingsService, AppearanceSettingsService>(sp => new AppearanceSettingsService(((UserSettingsService)sp.GetRequiredService<IUserSettingsService>()).GetSharingContext()))
@@ -226,6 +229,7 @@ namespace Files.App.Helpers
 					.AddSingleton<IMultiPanesContext, MultiPanesContext>()
 					.AddSingleton<IContentPageContext, ContentPageContext>()
 					.AddSingleton<IDisplayPageContext, DisplayPageContext>()
+					.AddSingleton<IHomeFolder, CoreHomeFolder>()
 					.AddSingleton<IHomePageContext, HomePageContext>()
 					.AddSingleton<IWindowContext, WindowContext>()
 					.AddSingleton<IMultitaskingContext, MultitaskingContext>()
@@ -247,8 +251,7 @@ namespace Files.App.Helpers
 					.AddSingleton<IFileTagsService, FileTagsService>()
 					.AddSingleton<ICommandManager, CommandManager>()
 					.AddSingleton<IModifiableCommandManager, ModifiableCommandManager>()
-					.AddSingleton<IStorageService, NativeStorageLegacyService>()
-					.AddSingleton<IFtpStorageService, FtpStorageService>()
+					.AddSingleton<IStorageService, CoreStorageServiceAdapter>()
 					.AddSingleton<IAddItemService, AddItemService>()
 					.AddSingleton<IPreviewPopupService, PreviewPopupService>()
 					.AddSingleton<IDateTimeFormatterFactory, DateTimeFormatterFactory>()

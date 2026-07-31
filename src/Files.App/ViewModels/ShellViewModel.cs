@@ -1,7 +1,12 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Files.App.Adapters.Core;
 using Files.App.Services.SizeProvider;
+using Files.Core.AppModels;
+using Files.Core.Browsing;
+using Files.Core.Composition;
+using Files.Core.ItemFeatures.Thumbnails;
 using Files.Shared.Helpers;
 using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
@@ -63,6 +68,11 @@ namespace Files.App.ViewModels
 		private readonly IWindowsSecurityService WindowsSecurityService = Ioc.Default.GetRequiredService<IWindowsSecurityService>();
 		private readonly IStorageTrashBinService StorageTrashBinService = Ioc.Default.GetRequiredService<IStorageTrashBinService>();
 		private readonly IContentPageContext ContentPageContext = Ioc.Default.GetRequiredService<IContentPageContext>();
+		private readonly Dictionary<StorableKey, ListedItem> coreItems = [];
+		private CoreBrowseSessionAdapter? coreBrowseSession;
+		private volatile bool isCoreBrowseActive;
+		private long coreGeneration = -1;
+		private long coreItemsVersion = -1;
 
 		// Only used for Binding and ApplyFilesAndFoldersChangesAsync, don't manipulate on this!
 		public BulkConcurrentObservableCollection<ListedItem> FilesAndFolders { get; }
@@ -736,6 +746,30 @@ namespace Files.App.ViewModels
 			StorageTrashBinService.Watcher.ItemAdded += RecycleBinItemCreatedAsync;
 			StorageTrashBinService.Watcher.ItemDeleted += RecycleBinItemDeletedAsync;
 			StorageTrashBinService.Watcher.RefreshRequested += RecycleBinRefreshRequestedAsync;
+		}
+
+		internal void AttachCorePane(PaneModel pane, FilesCoreRuntime runtime)
+		{
+			ArgumentNullException.ThrowIfNull(pane);
+			ArgumentNullException.ThrowIfNull(runtime);
+
+			if (coreBrowseSession is not null)
+			{
+				coreBrowseSession.SnapshotChanged -= CoreBrowseSession_SnapshotChanged;
+				coreBrowseSession.PresentationChanged -= CoreBrowseSession_PresentationChanged;
+				coreBrowseSession.Dispose();
+			}
+
+			isCoreBrowseActive = false;
+			coreBrowseSession = new CoreBrowseSessionAdapter(pane, runtime);
+			coreBrowseSession.SnapshotChanged += CoreBrowseSession_SnapshotChanged;
+			coreBrowseSession.PresentationChanged += CoreBrowseSession_PresentationChanged;
+		}
+
+		internal void DeactivateCoreBrowse()
+		{
+			isCoreBrowseActive = false;
+			_ = DeactivateCoreBrowseSafelyAsync(CancellationToken.None);
 		}
 
 		private async void LayoutModeChangeRequested(object? sender, LayoutModeEventArgs e)
@@ -1817,7 +1851,7 @@ namespace Files.App.ViewModels
 
 					if (matchingStorageItem is not null)
 					{
-						using StorageItemThumbnail headerThumbnail = await FilesystemTasks.Wrap(() => matchingStorageItem.GetThumbnailAsync(ThumbnailMode.DocumentsView, 36, ThumbnailOptions.UseCurrentScale).AsTask());
+						using StorageItemThumbnail headerThumbnail = await FilesystemTasks.Wrap(() => matchingStorageItem.GetThumbnailAsync(Windows.Storage.FileProperties.ThumbnailMode.DocumentsView, 36, ThumbnailOptions.UseCurrentScale).AsTask());
 						if (headerThumbnail is not null)
 						{
 							await dispatcherQueue.EnqueueOrInvokeAsync(async () =>
@@ -1925,6 +1959,30 @@ namespace Files.App.ViewModels
 			if (string.IsNullOrEmpty(path))
 				return;
 
+			isCoreBrowseActive = false;
+			if (library is null
+				&& coreBrowseSession?.CanBrowse(path) is true)
+			{
+				try
+				{
+					if (await TryLoadFolderWithCoreAsync(path, addFilesCTS.Token))
+						return;
+				}
+				catch (OperationCanceledException) when (addFilesCTS.IsCancellationRequested)
+				{
+					isCoreBrowseActive = false;
+					throw;
+				}
+				catch
+				{
+					isCoreBrowseActive = false;
+					await DeactivateCoreBrowseSafelyAsync(CancellationToken.None);
+					throw;
+				}
+			}
+
+			await DeactivateCoreBrowseSafelyAsync(addFilesCTS.Token);
+
 			var stopwatch = new Stopwatch();
 			stopwatch.Start();
 
@@ -1984,6 +2042,334 @@ namespace Files.App.ViewModels
 
 			stopwatch.Stop();
 			Debug.WriteLine($"Loading of items in {path} completed in {stopwatch.ElapsedMilliseconds} milliseconds.\n");
+		}
+
+		private async Task<bool> TryLoadFolderWithCoreAsync(
+			string path,
+			CancellationToken cancellationToken)
+		{
+			var adapter = coreBrowseSession;
+			if (adapter is null || !adapter.CanBrowse(path))
+				return false;
+
+			await adapter.NavigateAsync(path, cancellationToken);
+			isCoreBrowseActive = true;
+			var snapshot = adapter.CaptureSnapshot(path);
+			await ApplyCoreSnapshotAsync(
+				adapter,
+				snapshot,
+				forceReset: true,
+				synchronizeSelection: true);
+
+			var folderName = Path.GetFileName(path.TrimEnd('\u005c', '/'));
+			CurrentFolder = new ListedItem(null)
+			{
+				PrimaryItemAttribute = StorageItemTypes.Folder,
+				ItemPropertiesInitialized = true,
+				ItemNameRaw = string.IsNullOrEmpty(folderName) ? path : folderName,
+				ItemType = folderTypeTextLocalized,
+				ItemPath = path,
+				FileImage = null,
+				LoadFileIcon = false,
+				FileSize = null,
+				FileSizeBytes = 0,
+				Opacity = 1d,
+			};
+			HasNoWatcher = false;
+			PageTypeUpdated?.Invoke(
+				this,
+				new PageTypeUpdatedEventArgs
+				{
+					IsTypeCloudDrive = false,
+					IsTypeGitRepository = IsValidGitDirectory,
+				});
+			return true;
+		}
+
+		private async Task DeactivateCoreBrowseSafelyAsync(
+			CancellationToken cancellationToken)
+		{
+			var adapter = coreBrowseSession;
+			if (adapter is null)
+				return;
+
+			try
+			{
+				await adapter.DeactivateAsync(cancellationToken);
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+			}
+			catch (ObjectDisposedException)
+			{
+			}
+			catch (Exception exception)
+			{
+				App.Logger.LogDebug(exception, "Failed to deactivate the Core browse context.");
+			}
+		}
+
+		internal void SetCoreSelection(
+			IEnumerable<ListedItem> selectedItems,
+			ListedItem? focusedItem)
+		{
+			var adapter = coreBrowseSession;
+			if (!isCoreBrowseActive || adapter is null)
+				return;
+
+			var keys = selectedItems
+				.Select(item => item.CoreKey)
+				.Where(key => key.HasValue)
+				.Select(key => key!.Value)
+				.ToArray();
+			adapter.SetSelection(keys, focusedItem?.CoreKey);
+		}
+
+		internal async ValueTask<bool?> TryRenameWithCoreAsync(
+			ListedItem item,
+			string newName,
+			CancellationToken cancellationToken = default)
+		{
+			ArgumentNullException.ThrowIfNull(item);
+			var adapter = coreBrowseSession;
+			if (!isCoreBrowseActive
+				|| adapter is null
+				|| item.CoreReference is not { } reference)
+				return null;
+
+			return await adapter.RenameAsync(reference, newName, cancellationToken);
+		}
+
+		internal void UpdateCoreViewport(
+			int firstVisibleIndex,
+			int visibleCount,
+			int lookAheadCount = 20)
+		{
+			if (isCoreBrowseActive)
+			{
+				coreBrowseSession?.UpdateViewport(
+					firstVisibleIndex,
+					visibleCount,
+					lookAheadCount);
+			}
+		}
+
+		private void CoreBrowseSession_SnapshotChanged(
+			object? sender,
+			CoreBrowseSnapshotEventArgs args)
+		{
+			if (isCoreBrowseActive
+				&& sender is CoreBrowseSessionAdapter adapter)
+				_ = ApplyCoreSnapshotSafelyAsync(
+					adapter,
+					args.Snapshot,
+					args.SynchronizeSelection);
+		}
+
+		private void CoreBrowseSession_PresentationChanged(
+			object? sender,
+			CoreBrowsePresentationEventArgs args)
+		{
+			if (isCoreBrowseActive
+				&& sender is CoreBrowseSessionAdapter adapter)
+				_ = ApplyCorePresentationSafelyAsync(adapter, args);
+		}
+
+		private async Task ApplyCoreSnapshotSafelyAsync(
+			CoreBrowseSessionAdapter adapter,
+			CoreBrowseSnapshot snapshot,
+			bool synchronizeSelection)
+		{
+			try
+			{
+				await ApplyCoreSnapshotAsync(
+					adapter,
+					snapshot,
+					forceReset: false,
+					synchronizeSelection);
+			}
+			catch (OperationCanceledException)
+			{
+			}
+			catch (Exception exception)
+			{
+				App.Logger.LogWarning(exception, "Failed to apply a Core browse snapshot.");
+			}
+		}
+
+		private async Task ApplyCoreSnapshotAsync(
+			CoreBrowseSessionAdapter adapter,
+			CoreBrowseSnapshot snapshot,
+			bool forceReset,
+			bool synchronizeSelection)
+		{
+			await dispatcherQueue.EnqueueOrInvokeAsync(async () =>
+			{
+				if (!isCoreBrowseActive
+					|| !ReferenceEquals(coreBrowseSession, adapter))
+					return;
+
+				var currentGeneration = Volatile.Read(ref coreGeneration);
+				var currentItemsVersion = Volatile.Read(ref coreItemsVersion);
+				if (snapshot.Generation < currentGeneration
+					|| (snapshot.Generation == currentGeneration
+						&& snapshot.ItemsVersion < currentItemsVersion))
+				{
+					return;
+				}
+
+				var shouldReset = forceReset
+					|| snapshot.Generation != currentGeneration
+					|| snapshot.ItemsVersion != currentItemsVersion;
+				if (shouldReset)
+				{
+					var nextItems = new List<ListedItem>(snapshot.Items.Count);
+					foreach (var coreItem in snapshot.Items)
+					{
+						if (!coreItems.TryGetValue(coreItem.Key, out var listedItem))
+							listedItem = CreateListedItem(coreItem);
+
+						ApplyCoreProperties(listedItem, coreItem.Properties);
+						nextItems.Add(listedItem);
+					}
+
+					coreItems.Clear();
+					foreach (var item in nextItems)
+					{
+						if (item.CoreKey is { } key)
+							coreItems.Add(key, item);
+					}
+
+					filesAndFolders.Clear();
+					filesAndFolders.AddRange(nextItems);
+					Volatile.Write(ref coreGeneration, snapshot.Generation);
+					Volatile.Write(ref coreItemsVersion, snapshot.ItemsVersion);
+					await ApplyFilesAndFoldersChangesAsync();
+
+					foreach (var coreItem in snapshot.Items.Where(item => item.Thumbnail is not null))
+					{
+						await ApplyCorePresentationOnUiAsync(
+							adapter,
+							new CoreBrowsePresentationEventArgs(
+								snapshot.Generation,
+								coreItem.Key,
+								coreItem.Properties,
+								coreItem.Thumbnail));
+					}
+				}
+
+				IsLoadingItems = snapshot.IsLoading;
+				if (snapshot.Error is { } error)
+					App.Logger.LogWarning(error, "Core folder refresh failed; the previous snapshot remains visible.");
+
+				if (synchronizeSelection)
+				{
+					var selected = snapshot.Selection.SelectedKeys
+						.Select(key => coreItems.GetValueOrDefault(key))
+						.Where(item => item is not null)
+						.Cast<ListedItem>()
+						.ToList();
+					OnSelectionRequestedEvent?.Invoke(this, selected);
+				}
+			});
+		}
+
+		private async Task ApplyCorePresentationSafelyAsync(
+			CoreBrowseSessionAdapter adapter,
+			CoreBrowsePresentationEventArgs args)
+		{
+			try
+			{
+				await ApplyCorePresentationAsync(adapter, args);
+			}
+			catch (OperationCanceledException)
+			{
+			}
+			catch (Exception exception)
+			{
+				App.Logger.LogDebug(exception, "Failed to apply prefetched Core item presentation.");
+			}
+		}
+
+		private async Task ApplyCorePresentationAsync(
+			CoreBrowseSessionAdapter adapter,
+			CoreBrowsePresentationEventArgs args)
+		{
+			await dispatcherQueue.EnqueueOrInvokeAsync(
+				() => ApplyCorePresentationOnUiAsync(adapter, args));
+		}
+
+		private async Task ApplyCorePresentationOnUiAsync(
+			CoreBrowseSessionAdapter adapter,
+			CoreBrowsePresentationEventArgs args)
+		{
+			if (!isCoreBrowseActive
+				|| !ReferenceEquals(coreBrowseSession, adapter)
+				|| args.Generation != Volatile.Read(ref coreGeneration)
+				|| !coreItems.TryGetValue(args.Key, out var currentItem))
+			{
+				return;
+			}
+
+			ApplyCoreProperties(currentItem, args.Properties);
+			if (args.Thumbnail is { } thumbnail)
+				currentItem.FileImage = await ThumbnailImageFactory.CreateAsync(thumbnail.Content);
+		}
+
+		private ListedItem CreateListedItem(CoreBrowseItemSnapshot item)
+		{
+			var listedItem = new ListedItem(item.Reference.ItemId)
+			{
+				CoreReference = item.Reference,
+				CoreKey = item.Key,
+				PrimaryItemAttribute = item.IsFolder
+					? StorageItemTypes.Folder
+					: StorageItemTypes.File,
+				ItemPropertiesInitialized = true,
+				ItemNameRaw = item.Name,
+				ItemPath = item.Address,
+				FileExtension = item.IsFolder ? string.Empty : Path.GetExtension(item.Name),
+				ItemType = item.IsFolder
+					? folderTypeTextLocalized
+					: Path.GetExtension(item.Name),
+				FileImage = null,
+				LoadFileIcon = false,
+				FileSize = null,
+				FileSizeBytes = 0,
+				Opacity = 1d,
+				FileTags = [],
+			};
+			return listedItem;
+		}
+
+		private static void ApplyCoreProperties(
+			ListedItem item,
+			IReadOnlyDictionary<string, object?> properties)
+		{
+			if (properties.TryGetValue("System.ItemTypeText", out var itemType)
+				&& itemType is string typeText)
+			{
+				item.ItemType = typeText;
+			}
+
+			if (properties.TryGetValue("System.Size", out var sizeValue)
+				&& sizeValue is ulong size)
+			{
+				item.FileSizeBytes = size > long.MaxValue ? long.MaxValue : (long)size;
+				item.FileSize = item.FileSizeBytes.ToSizeString();
+			}
+
+			if (properties.TryGetValue("System.DateModified", out var modifiedValue)
+				&& modifiedValue is DateTimeOffset modified)
+			{
+				item.ItemDateModifiedReal = modified;
+			}
+
+			if (properties.TryGetValue("System.DateCreated", out var createdValue)
+				&& createdValue is DateTimeOffset created)
+			{
+				item.ItemDateCreatedReal = created;
+			}
 		}
 
 		public void CloseWatcher()
@@ -2413,7 +2799,7 @@ namespace Files.App.ViewModels
 				};
 
 				options.SetPropertyPrefetch(PropertyPrefetchOptions.None, null);
-				options.SetThumbnailPrefetch(ThumbnailMode.ListView, 0, ThumbnailOptions.ReturnOnlyIfCached);
+				options.SetThumbnailPrefetch(Windows.Storage.FileProperties.ThumbnailMode.ListView, 0, ThumbnailOptions.ReturnOnlyIfCached);
 
 				if (rootFolder.AreQueryOptionsSupported(options))
 				{
@@ -2477,7 +2863,7 @@ namespace Files.App.ViewModels
 			};
 
 			options.SetPropertyPrefetch(PropertyPrefetchOptions.None, null);
-			options.SetThumbnailPrefetch(ThumbnailMode.ListView, 0, ThumbnailOptions.ReturnOnlyIfCached);
+			options.SetThumbnailPrefetch(Windows.Storage.FileProperties.ThumbnailMode.ListView, 0, ThumbnailOptions.ReturnOnlyIfCached);
 
 			sender.ApplyNewQueryOptions(options);
 
@@ -3088,6 +3474,8 @@ namespace Files.App.ViewModels
 
 		public async Task AddSearchResultsToCollectionAsync(ObservableCollection<ListedItem> searchItems, string currentSearchPath)
 		{
+			isCoreBrowseActive = false;
+			await DeactivateCoreBrowseSafelyAsync(CancellationToken.None);
 			filesAndFolders.Clear();
 			filesAndFolders.AddRange(searchItems);
 
@@ -3097,6 +3485,8 @@ namespace Files.App.ViewModels
 
 		public async Task SearchAsync(FolderSearch search)
 		{
+			isCoreBrowseActive = false;
+			await DeactivateCoreBrowseSafelyAsync(CancellationToken.None);
 			ItemLoadStatusChanged?.Invoke(this, new ItemLoadStatusChangedEventArgs() { Status = ItemLoadStatusChangedEventArgs.ItemLoadStatus.Starting });
 
 			CancelSearch();
@@ -3154,6 +3544,15 @@ namespace Files.App.ViewModels
 
 		public void Dispose()
 		{
+			isCoreBrowseActive = false;
+			if (coreBrowseSession is not null)
+			{
+				coreBrowseSession.SnapshotChanged -= CoreBrowseSession_SnapshotChanged;
+				coreBrowseSession.PresentationChanged -= CoreBrowseSession_PresentationChanged;
+				coreBrowseSession.Dispose();
+				coreBrowseSession = null;
+			}
+
 			CancelLoadAndClearFiles();
 			StopWatchingForLocationRestoration();
 			filterDebounceCS?.Cancel();

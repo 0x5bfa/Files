@@ -18,6 +18,10 @@ namespace Files.App.Utils
 		public event EventHandler<string> DeviceModified;
 
 		private DeviceWatcher watcher;
+		private readonly object driveMonitorLock = new();
+		private HashSet<string> knownDriveIds = new(StringComparer.OrdinalIgnoreCase);
+		private CancellationTokenSource? driveMonitorCancellation;
+		private Task? driveMonitorTask;
 
 		public bool CanBeStarted => watcher.Status is DeviceWatcherStatus.Created or DeviceWatcherStatus.Stopped or DeviceWatcherStatus.Aborted;
 
@@ -28,44 +32,26 @@ namespace Files.App.Utils
 			watcher.Removed += Watcher_Removed;
 			watcher.EnumerationCompleted += Watcher_EnumerationCompleted;
 
-			SetupWin32Watcher();
 		}
 
-		private void SetupWin32Watcher()
+		private async Task AddDriveAsync(string driveId)
 		{
-			WindowsDriveManager.Default.DeviceAdded += Win32_OnDeviceAdded;
-			WindowsDriveManager.Default.DeviceRemoved += Win32_OnDeviceRemoved;
-			WindowsDriveManager.Default.DeviceInserted += Win32_OnDeviceEjectedOrInserted;
-			WindowsDriveManager.Default.DeviceEjected += Win32_OnDeviceEjectedOrInserted;
-		}
-
-		private void Win32_OnDeviceEjectedOrInserted(object? sender, DeviceEventArgs e)
-		{
-			DeviceModified?.Invoke(this, e.DeviceId);
-		}
-
-		private void Win32_OnDeviceRemoved(object? sender, DeviceEventArgs e)
-		{
-			DeviceRemoved?.Invoke(this, e.DeviceId);
-		}
-
-		private async void Win32_OnDeviceAdded(object? sender, DeviceEventArgs e)
-		{
-			var driveAdded = new DriveInfo(e.DeviceId);
+			var driveAdded = new DriveInfo(driveId);
 			if (!driveAdded.IsReady && !IsUnauthorizedDrive(driveAdded))
 				return;
 
-			var rootAdded = await FilesystemTasks.Wrap(() => StorageFolder.GetFolderFromPathAsync(e.DeviceId).AsTask());
+			var rootAdded = await FilesystemTasks.Wrap(
+				() => StorageFolder.GetFolderFromPathAsync(driveAdded.RootDirectory.FullName).AsTask());
 			if (!rootAdded)
 			{
-				App.Logger.LogWarning($"{rootAdded.ErrorCode}: Attempting to add the device, {e.DeviceId},"
+				App.Logger.LogWarning($"{rootAdded.ErrorCode}: Attempting to add the device, {driveId},"
 					+ " failed at the StorageFolder initialization step. This device will be ignored.");
 				return;
 			}
 
 			var type = DriveHelpers.GetDriveType(driveAdded);
 			var label = DriveHelpers.GetExtendedDriveLabel(driveAdded);
-			DriveItem driveItem = await DriveItem.CreateFromPropertiesAsync(rootAdded, e.DeviceId, label, type);
+			DriveItem driveItem = await DriveItem.CreateFromPropertiesAsync(rootAdded, driveId, label, type);
 
 			DeviceAdded?.Invoke(this, driveItem);
 		}
@@ -120,7 +106,16 @@ namespace Files.App.Utils
 
 		public void Start()
 		{
-			WindowsDriveManager.Default.Start();
+			lock (driveMonitorLock)
+			{
+				if (driveMonitorTask is null)
+				{
+					knownDriveIds = GetDriveIds();
+					driveMonitorCancellation = new CancellationTokenSource();
+					driveMonitorTask = MonitorDrivesAsync(driveMonitorCancellation.Token);
+				}
+			}
+
 			watcher.Start();
 		}
 
@@ -135,11 +130,56 @@ namespace Files.App.Utils
 			watcher.Removed -= Watcher_Removed;
 			watcher.EnumerationCompleted -= Watcher_EnumerationCompleted;
 
-			WindowsDriveManager.Default.DeviceAdded -= Win32_OnDeviceAdded;
-			WindowsDriveManager.Default.DeviceRemoved -= Win32_OnDeviceRemoved;
-			WindowsDriveManager.Default.DeviceInserted -= Win32_OnDeviceEjectedOrInserted;
-			WindowsDriveManager.Default.DeviceEjected -= Win32_OnDeviceEjectedOrInserted;
-			WindowsDriveManager.Default.Stop();
+			lock (driveMonitorLock)
+			{
+				driveMonitorCancellation?.Cancel();
+				driveMonitorCancellation?.Dispose();
+				driveMonitorCancellation = null;
+				driveMonitorTask = null;
+			}
+		}
+
+		private async Task MonitorDrivesAsync(CancellationToken cancellationToken)
+		{
+			try
+			{
+				using var timer = new PeriodicTimer(TimeSpan.FromSeconds(2));
+				while (await timer.WaitForNextTickAsync(cancellationToken))
+				{
+					var currentDriveIds = GetDriveIds();
+					string[] added;
+					string[] removed;
+					lock (driveMonitorLock)
+					{
+						added = currentDriveIds.Except(knownDriveIds).ToArray();
+						removed = knownDriveIds.Except(currentDriveIds).ToArray();
+						knownDriveIds = currentDriveIds;
+					}
+
+					foreach (var driveId in removed)
+						DeviceRemoved?.Invoke(this, driveId);
+
+					foreach (var driveId in added)
+					{
+						await AddDriveAsync(driveId);
+						DeviceModified?.Invoke(this, driveId);
+					}
+				}
+			}
+			catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+			{
+			}
+			catch (Exception exception)
+			{
+				App.Logger.LogWarning(exception, "Drive monitoring stopped unexpectedly.");
+			}
+		}
+
+		private static HashSet<string> GetDriveIds()
+		{
+			return DriveInfo.GetDrives()
+				.Select(drive => drive.Name.TrimEnd(Path.DirectorySeparatorChar))
+				.ToHashSet(StringComparer.OrdinalIgnoreCase);
 		}
 
 		private bool IsUnauthorizedDrive(DriveInfo driveInfo)

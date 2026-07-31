@@ -67,6 +67,16 @@ namespace Files.App.Helpers
 			if (item.ItemNameRaw == newName || string.IsNullOrEmpty(newName))
 				return true;
 
+			var coreResult = await associatedInstance.ShellViewModel
+				.TryRenameWithCoreAsync(item, newName);
+			if (coreResult is not null)
+			{
+				if (coreResult.Value)
+					associatedInstance.ToolbarViewModel.CanGoForward = false;
+
+				return coreResult.Value;
+			}
+
 			FilesystemItemType itemType = (item.PrimaryItemAttribute == StorageItemTypes.Folder) ? FilesystemItemType.Directory : FilesystemItemType.File;
 
 			ReturnResult renamed = await associatedInstance.FilesystemHelpers.RenameAsync(StorageHelpers.FromPathAndType(item.ItemPath, itemType), newName, NameCollisionOption.FailIfExists, true, showExtensionDialog);

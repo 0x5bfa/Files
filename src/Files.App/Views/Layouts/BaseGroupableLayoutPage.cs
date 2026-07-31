@@ -240,6 +240,9 @@ namespace Files.App.Views.Layouts
 				return;
 
 			SelectedItems = selectedItems;
+			ParentShellPageInstance?.ShellViewModel.SetCoreSelection(
+				selectedItems,
+				ListViewBase.SelectedItem as ListedItem);
 
 			if (e is null)
 				return;
