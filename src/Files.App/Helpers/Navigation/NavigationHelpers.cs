@@ -2,13 +2,15 @@
 // Licensed under the MIT License.
 
 using Files.Shared.Helpers;
+using Microsoft.UI;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System.IO;
+using System.Runtime.CompilerServices;
 using Windows.Storage;
-using Windows.Storage.Search;
 using Windows.System;
+using Windows.Win32.Foundation;
 
 namespace Files.App.Helpers
 {
@@ -687,81 +689,17 @@ namespace Files.App.Helpers
 							{
 								var fileExtension = Path.GetExtension(path);
 
-								// Use NeighboringFilesQuery to launch photos
-								// The query options no longer work with the Windows 11 Photo App but they still work for Windows 10
 								if (FileExtensionHelpers.IsImageFile(fileExtension))
 								{
-									//try using launcher first
-									bool launchSuccess = false;
-
-									// The Windows 11 Photos app ignores NeighboringFilesQuery when launched as default app.
-									// Use the app URI only when this extension is associated with Microsoft Photos.
-									if (FileAssociationHelpers.IsMicrosoftPhotosDefaultAssociation(fileExtension))
+									try
 									{
-										string uri = $"ms-photos:viewer?fileName={Uri.EscapeDataString(path)}";
-										launchSuccess = await Launcher.LaunchUriAsync(new Uri(uri));
+										FileItemActivation.Activate(path, (HWND)Win32Interop.GetWindowFromWindowId(MainWindow.Instance.AppWindow.Id));
 									}
-
-									BaseStorageFileQueryResult? fileQueryResult = null;
-									//Get folder to create a file query (to pass to apps like Photos, Movies & TV..., needed to scroll through the folder like what Windows Explorer does)
-									BaseStorageFolder currentFolder = await shellViewModel.GetFolderFromPathAsync(PathNormalization.GetParentDir(path));
-									if (!launchSuccess && currentFolder is not null)
+									catch (Exception exception)
 									{
-										QueryOptions queryOptions = new(CommonFileQuery.DefaultQuery, null);
-										//We can have many sort entries
-										SortEntry sortEntry = new()
-										{
-											AscendingOrder = associatedInstance.InstanceViewModel.FolderSettings.DirectorySortDirection == SortDirection.Ascending
-										};
-										//Basically we tell to the launched app to follow how we sorted the files in the directory.
-										var sortOption = associatedInstance.InstanceViewModel.FolderSettings.DirectorySortOption;
-										switch (sortOption)
-										{
-											case SortOption.Name:
-												sortEntry.PropertyName = "System.ItemNameDisplay";
-												queryOptions.SortOrder.Clear();
-												queryOptions.SortOrder.Add(sortEntry);
-												break;
-											case SortOption.DateModified:
-												sortEntry.PropertyName = "System.DateModified";
-												queryOptions.SortOrder.Clear();
-												queryOptions.SortOrder.Add(sortEntry);
-												break;
-											case SortOption.DateCreated:
-												sortEntry.PropertyName = "System.DateCreated";
-												queryOptions.SortOrder.Clear();
-												queryOptions.SortOrder.Add(sortEntry);
-												break;
-											//Unfortunately this is unsupported | Remarks: https://learn.microsoft.com/uwp/api/windows.storage.search.queryoptions.sortorder?view=winrt-19041
-											//case Enums.SortOption.Size:
-											//sortEntry.PropertyName = "System.TotalFileSize";
-											//queryOptions.SortOrder.Clear();
-											//queryOptions.SortOrder.Add(sortEntry);
-											//break;
-											//Unfortunately this is unsupported | Remarks: https://learn.microsoft.com/uwp/api/windows.storage.search.queryoptions.sortorder?view=winrt-19041
-											//case Enums.SortOption.FileType:
-											//sortEntry.PropertyName = "System.FileExtension";
-											//queryOptions.SortOrder.Clear();
-											//queryOptions.SortOrder.Add(sortEntry);
-											//break;
-											//Handle unsupported
-											default:
-												//keep the default one in SortOrder IList
-												break;
-										}
-										var options = InitializeWithWindow(new LauncherOptions());
-										if (currentFolder.AreQueryOptionsSupported(queryOptions))
-										{
-											fileQueryResult = currentFolder.CreateFileQueryWithOptions(queryOptions);
-											options.NeighboringFilesQuery = fileQueryResult.ToStorageFileQueryResult();
-										}
-										// Now launch file with options.
-										var storageItem = (StorageFile)await FilesystemTasks.Wrap(() => childFile.Item.ToStorageFileAsync().AsTask());
-										if (storageItem is not null)
-											launchSuccess = await Launcher.LaunchFileAsync(storageItem, options);
-									}
-									if (!launchSuccess)
+										Debug.WriteLine(exception);
 										await Win32Helper.InvokeWin32ComponentAsync(path, associatedInstance, args);
+									}
 								}
 								else if (childFile.Item is ZipStorageFile zipStorageFile)
 								{
