@@ -8,7 +8,7 @@
 ```mermaid
 flowchart TB
     Views["WinUI ビュー"]
-    ViewModels["Files.App ViewModel"]
+    ViewModels["Files.App2 ViewModel"]
     AppModels["Files.Core AppModel"]
     ItemFeatures["項目機能"]
     CoreModels["OwlCore.Storage CoreModel"]
@@ -87,11 +87,12 @@ flowchart TB
 1. [完了境界](implementation-status.md)
 2. [アプリケーションモデルグラフ](app-models.md)
 3. [合成ルート](composition.md)
-4. [新 Files.App アーキテクチャ](files-app.md)
-5. [Files.App のコマンド実行](commands.md)
-6. [Files.App の項目機能とアクティブ化](files-app-features.md)
-7. [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
-8. [テストと性能](testing.md)
+4. [新 Files.App2 アーキテクチャ](files-app2.md)
+5. [Files.App の Core 統合（互換経路）](files-app.md)
+6. [Files.App のコマンド実行](commands.md)
+7. [Files.App の項目機能とアクティブ化](files-app-features.md)
+8. [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md)
+9. [テストと性能](testing.md)
 
 参照文書:
 
@@ -113,5 +114,7 @@ flowchart TB
 ビューポート先読み、項目機能合成、サムネイル/プロパティ/フォルダー変更/プレビューの垂直スライス、Windows Shell と FTP ストレージ、ストレージ変更、
 合成、テスト、ベンチマーク、専用 CI が含まれています。
 
-検索/タグのバックエンド、クラウド/MTP/SFTP ソース、WinUI レンダラー、アクティブ化、コンテキストメニュー、ドラッグ/ドロップ、永続化は、
-明示的な拡張または Files.App の境界です。これらは Core のモデルグラフを変更せずに追加できます。
+`Files.App2` は `Files.Core` だけを参照する新しい WinUI ホストとして、Windows の Home/フォルダー一覧、ナビゲーション履歴、
+選択、更新を最初の垂直スライスとして実装しています。旧 `Files.App` は移行中の互換経路として残し、新しい Core 機能の正本にはしません。
+検索/タグのバックエンド、クラウド/MTP/SFTP ソース、コンテキストメニュー、ドラッグ/ドロップ、永続化は、明示的な拡張または
+`Files.App2` の後続スライスです。これらは Core のモデルグラフを変更せずに追加できます。

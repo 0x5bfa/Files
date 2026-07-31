@@ -70,6 +70,24 @@ dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj `
 Shell、ディスク、ネットワーク、ソースの遅延をマイクロベンチマークへ混ぜてはいけません。それらはシナリオテストとして、マシンの詳細、ウォーム/コールドキャッシュ状態、項目数、
 インストール済み Shell 拡張を記録して測定します。
 
+## Files.App2 デバッグスモークと性能記録
+
+最初のApp2垂直スライスは、Core契約を通した手動デバッグスモークで確認します。x64のDeveloper PowerShellで
+`src/Files.App2/Files.App2.csproj`をDebugビルドし、次の操作を1回ずつ実行します。
+
+1. 起動してHomeの一覧が表示されることを確認する。
+2. rooted Windows folderへ移動し、folder/fileの表示、back/forward/up、refreshを確認する。
+3. 複数選択を行い、folderをdouble-clickしてselectionとnavigationがCoreへ反映されることを確認する。
+4. ウィンドウを閉じ、Core runtimeの非同期破棄が完了することを確認する。
+
+Visual StudioのDebug Diagnostic Toolsまたは同等の計測で、起動から最初の一覧表示、folder移動の開始から
+一覧表示、refresh完了までを記録します。Debugの値は開発中の退行検出に使い、マシン間比較やリリース基準には使いません。
+記録にはWindowsバージョン、CPU、項目数、cold/warm cache、Shell拡張の有無を含めます。
+
+再現可能な比較値が必要になったら、同じfixtureと項目数でFiles.Core benchmarkをRelease実行し、Debugスモークの
+startup/navigation/refresh観測値と混ぜずに保存します。App2のbenchmarkはUI描画時間ではなく、Coreのresolve、
+enumeration、projection、selection reconciliationの境界を対象に追加します。
+
 ## CI
 
 `.github/workflows/files-core-ci.yml` は Windows x64 で Core のテストをビルド・実行し、push 先が `new` のとき、該当する pull request と手動 dispatch でベンチマークの smoke job を実行します。

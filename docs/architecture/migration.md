@@ -18,26 +18,24 @@ flowchart TB
 flowchart TD
     Contracts["1. 契約を安定させる"]
     Slice["2. 垂直スライスを作る"]
-    Adopt["3. Files.App から採用する"]
+    Host["3. Files.App2 を作る"]
     Move["4. 残りのコードを移動する"]
     Delete["5. 古いプロジェクトを削除する"]
 
     Contracts --> Slice
-    Slice --> Adopt
-    Adopt --> Move
+    Slice --> Host
+    Host --> Move
     Move --> Delete
 ```
 
 1. 新しいプロジェクトで `IStorageSource`、CoreModel の項目機能、AppModel、参照セッションの所有権を安定させます。**完了。**
 2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。最初のスライスは Windows ストレージ、参照、表示、プレビュー、操作です。**完了。**
-3. 機能境界の背後で Files.App に `FilesCoreRuntime` を導入します。process、window、tab、paneの所有権と、ローカルWindows folderのbrowse sliceを接続しました。**完了。**
+3. 既存のFiles.Appサービスグラフをコピーせず、`Files.App2` に `FilesCoreRuntime` とWindows folder browseの最初のUI adapterを実装します。**完了。**
 4. CsWin32 の入力とラッパーは `Files.Core` へ移動済みで、廃止された `Files.Core.Storage` と `Files.App.Storage` プロジェクトは削除済みです。**完了。**
-5. 残りの Files.App コンシューマーを新しい契約へ移し、どの `Files.Shared` コードを Core へ置くか判断します。**進行中。**
+5. 残りの presentation、operation、preview、provider を `Files.App2` の後続vertical sliceとして移し、旧 Files.App を削除可能にします。**進行中。**
 
-現在のFiles.App導入では、既存XAMLとFrameを保持し、`CoreBrowseSessionAdapter`でCoreのversion付きsnapshotを
-`ListedItem`へ投影します。rename、selection、viewport、property/thumbnail、folder changeはCore経路です。
-Home/Search/Library/Tag/FTP、Frame履歴、rename以外の操作は互換経路に残ります。実装済み境界とadapter一覧は
-[Files.AppのCore統合アーキテクチャ](files-app.md)を参照してください。
+旧Files.Appの導入では既存XAMLとFrameを保持した互換adapterを使いますが、新規のApp2機能はこの経路へ戻しません。
+App2の実装済み境界と所有権は[新 Files.App2 アーキテクチャ](files-app2.md)を参照してください。
 
 ## 相互運用コードの所有権
 

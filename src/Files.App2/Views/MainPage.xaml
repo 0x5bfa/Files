@@ -1,0 +1,76 @@
+<!--  Copyright (c) Files Community. Licensed under the MIT License.  -->
+<Page
+	x:Class="Files.App2.Views.MainPage"
+	xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+	xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+	xmlns:local="using:Files.App2.ViewModels">
+	<Grid Padding="20" RowSpacing="12" Loaded="Page_Loaded">
+		<Grid.RowDefinitions>
+			<RowDefinition Height="Auto" />
+			<RowDefinition Height="*" />
+			<RowDefinition Height="Auto" />
+		</Grid.RowDefinitions>
+
+		<StackPanel Orientation="Horizontal" Spacing="8">
+			<Button
+				Click="BackButton_Click"
+				Content="Back"
+				IsEnabled="{x:Bind ViewModel.CanGoBack, Mode=OneWay}" />
+			<Button
+				Click="ForwardButton_Click"
+				Content="Forward"
+				IsEnabled="{x:Bind ViewModel.CanGoForward, Mode=OneWay}" />
+			<Button
+				Click="UpButton_Click"
+				Content="Up"
+				IsEnabled="{x:Bind ViewModel.CanGoUp, Mode=OneWay}" />
+			<Button Click="HomeButton_Click" Content="Home" />
+			<Button
+				Click="RefreshButton_Click"
+				Content="Refresh"
+				IsEnabled="True" />
+			<TextBox
+				x:Name="PathTextBox"
+				MinWidth="420"
+				PlaceholderText="Enter a folder path"
+				KeyDown="PathTextBox_KeyDown"
+				Text="{x:Bind ViewModel.LocationText, Mode=OneWay}" />
+			<Button Click="GoButton_Click" Content="Go" />
+		</StackPanel>
+
+		<ListView
+			x:Name="ItemList"
+			Grid.Row="1"
+			DoubleTapped="ItemList_DoubleTapped"
+			ItemsSource="{x:Bind ViewModel.Items}"
+			SelectionChanged="ItemList_SelectionChanged"
+			SelectionMode="Multiple">
+			<ListView.ItemTemplate>
+				<DataTemplate x:DataType="local:BrowseItemViewModel">
+					<Grid Padding="8" ColumnSpacing="16">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="*" />
+							<ColumnDefinition Width="100" />
+							<ColumnDefinition Width="2*" />
+						</Grid.ColumnDefinitions>
+						<TextBlock Text="{x:Bind Name}" />
+						<TextBlock
+							Grid.Column="1"
+							Opacity="0.7"
+							Text="{x:Bind Kind}" />
+						<TextBlock
+							Grid.Column="2"
+							Opacity="0.7"
+							Text="{x:Bind ReferenceText}"
+							TextTrimming="CharacterEllipsis" />
+					</Grid>
+				</DataTemplate>
+			</ListView.ItemTemplate>
+		</ListView>
+
+		<TextBlock
+			Grid.Row="2"
+			Opacity="0.7"
+			Text="{x:Bind ViewModel.StatusText, Mode=OneWay}" />
+	</Grid>
+</Page>

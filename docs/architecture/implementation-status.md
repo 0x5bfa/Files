@@ -1,7 +1,8 @@
-# Files.Core / Files.App 実装状況
+# Files.Core / Files.App2 / Files.App 実装状況
 
 `Files.Core` はUI非依存のstorage、capability、operation、browse session、application modelを提供します。
-`Files.App` は既存WinUIを維持したまま、primary Windows folder browseをCoreへ接続済みです。
+`Files.App2` は既存のサービスグラフを持ち込まない新しいWinUIホストとして、primary Windows folder browseをCoreへ接続しています。
+`Files.App` は移行期間の互換経路として残します。
 
 ## Files.Core
 
@@ -16,19 +17,16 @@
 | threading | ordered/concurrent/operation用message-pumped Shell STAを実装済み |
 | validation | Files.Core unit/integration testとbenchmark projectが存在 |
 
-## Files.Appで接続済み
+## Files.App2で接続済み
 
 - 起動時に `FilesCoreRuntime` を1つ作成し、最終終了時に非同期破棄する。
-- 既存tabごとに `TabModel` lease、split paneごとに `PaneModel` を割り当てる。
-- rooted local Windows folderをCoreでresolve、enumerate、watch、refreshする。
-- Coreのversion付き一覧を既存 `ListedItem` collectionへUI thread上で投影する。
-- selectionとviewportをCoreへ送り、stable keyでselectionをreconcileする。
-- property/thumbnail prefetchを既存詳細/grid表示へ反映する。
-- renameをCoreのstorage operation pipelineへ送り、通知欠落時だけrefreshする。
-- HomeのQuick Access、drive、network、recent enumerationをCore Windows sourceへ委譲する。
-- file tags/Start pinning用の旧 `IStorageService` shapeをCore Windows sourceへ委譲する。
+- `FilesApplicationModel` が作成した `WindowModel` の active `TabModel`/`PaneModel` をUI adapterへ渡す。
+- Home と rooted local Windows folderをCoreでresolve、enumerate、watch、refreshする。
+- Coreのversion付き一覧をDispatcherQueue上でApp2のpresentation collectionへ投影する。
+- selectionをstable keyでCoreへ送り、Coreのselection stateをUIへreconcileする。
+- back/forward/up、path navigation、refreshを `PaneModel` へroutingする。
 
-## 互換経路
+## 旧 Files.App の互換経路
 
 次は機能を失わないために既存Files.App経路を維持しています。
 
@@ -39,15 +37,16 @@
 - Recycle Bin watcher、drive monitoring、taskbar progress、object picker
 - 旧WinRT FTP itemと一時的な資格情報cache
 
-互換adapterの一覧と破棄順序は[Files.AppのCore統合アーキテクチャ](files-app.md)に記載しています。
+互換adapterの一覧と破棄順序は[Files.AppのCore統合アーキテクチャ](files-app.md)に記載しています。これは新しいApp2の依存方向を
+規定する文書ではありません。
 
 ## 次の優先順位
 
-1. toolbarのback/forward/up/refreshを `PaneModel` へroutingし、Frame履歴との二重管理を解消する。
+1. App2へ preview UIをCore `PaneModel.Preview` とWindows Shell preview sessionへ接続する。
 2. delete/copy/move/createをCore operation requestへ移し、既存dialog、進行状況、elevation、server継続をadapter化する。
-3. preview UIをCore `PaneModel.Preview` とWindows Shell preview sessionへ接続する。
-4. Search/Library/Tag/FTPを型付き `BrowseLocation` とCore sourceへ移す。
-5. `ShellViewModel` のCore投影を独立したtestable presentation modelへ抽出する。
+3. Search/Library/Tag/FTPを型付き `BrowseLocation` とCore sourceへ移す。
+4. App2のWinUI presentation model、localization、activation、永続化を追加する。
+5. 旧 Files.App の互換経路を機能単位で削除する。
 
-Files.Coreの完了はFiles.Appの全機能移行完了を意味しません。現在の完了境界は、ローカルWindows folderの
-主要表示フローがCoreを正として動き、既存UIが狭いadapterでそれを描画できる段階です。
+Files.Coreの完了はFiles.AppまたはFiles.App2の全機能移行完了を意味しません。現在の完了境界は、ローカルWindows folderの
+主要表示フローがCoreを正として動き、App2が狭いadapterでそれを描画できる段階です。
