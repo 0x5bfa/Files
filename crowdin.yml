@@ -2,5 +2,5 @@ commit_message: Translate resources in `%original_file_name%` via Crowdin
 pull_request_title: 'Code Quality: Updated translations'
 append_commit_message: 
 files:
-  - source: /src/Files.App/Strings/en-US/*.resw
-    translation: /src/Files.App/Strings/%locale%/%original_file_name%
+  - source: /src/Files.App2/Strings/en-US/*.resw
+    translation: /src/Files.App2/Strings/%locale%/%original_file_name%
