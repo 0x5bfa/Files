@@ -18,7 +18,7 @@ flowchart TB
 flowchart TD
     Contracts["1. 契約を安定させる"]
     Slice["2. 垂直スライスを作る"]
-    Host["3. Files.App2 を作る"]
+    Host["3. Files を作る"]
     Move["4. 残りのコードを移動する"]
     Delete["5. 古いプロジェクトを削除する"]
 
@@ -30,19 +30,19 @@ flowchart TD
 
 1. 新しいプロジェクトで `IStorageSource`、CoreModel の項目機能、AppModel、参照セッションの所有権を安定させます。
 2. 1 つのソースと 1 つのブラウザ経路をエンドツーエンドで実装します。
-3. 既存のFiles.Appサービスグラフをコピーせず、`Files.App2` に `FilesCoreRuntime` とUI adapterを合成します。
+3. 既存のFiles.Appサービスグラフをコピーせず、`Files` に `FilesCoreRuntime` とUI adapterを合成します。
 4. CsWin32 の入力とラッパーを `Files.Core` に所有させ、生成出力をアプリ層から隠します。
-5. `Files.App2`のRoot/Tab/Pane/FolderBrowser shellを構成し、presentation、operation、preview、providerを
+5. `Files`のRoot/Tab/Pane/FolderBrowser shellを構成し、presentation、operation、preview、providerを
    独立した vertical slice として移します。
 
 各段階の完了状況は [移行進捗](migration-progress.md) にのみ記録します。
 
 旧Files.Appの導入では既存XAMLとFrameを保持した互換adapterを使いますが、新規のApp2機能はこの経路へ戻しません。
-App2の実装済み境界と所有権は[新 Files.App2 アーキテクチャ](files-app2.md)を参照してください。
+App2の実装済み境界と所有権は[新 Files アーキテクチャ](files-app2.md)を参照してください。
 
-### Files.App2 shellの移行境界
+### Files shellの移行境界
 
-`Files.App2`のUIは次の順でCoreの所有階層へ接続します。
+`Files`のUIは次の順でCoreの所有階層へ接続します。
 
 ```mermaid
 flowchart LR
@@ -62,7 +62,7 @@ flowchart LR
 `MainPage`へ戻しません。`DetailsFolderView`はListViewを使う基本的な詳細表示の契約を提供し、列定義や高度な表示設定は
 独立したview sliceとして追加します。
 
-App2のnavigation、tab、pane、folder double-clickは`src/Files.App2/Commands/`のstable command IDへ集約します。
+App2のnavigation、tab、pane、folder double-clickは`src/Files/Commands/`のstable command IDへ集約します。
 process-level `CommandRegistry`は`App2CommandRegistration`で構築し、windowごとの
 `WindowCommandManager`が各ViewModelとcontrolへbindingを提供します。Coreはこの境界からWinUI型を参照しません。
 

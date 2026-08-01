@@ -30,7 +30,7 @@ flowchart TB
 ## 提案するソース配置
 
 ```text
-src/Files.App/
+src/Files/
   Commands/Adapters/
     ClipboardCommandAdapter.cs
     DragDropCommandAdapter.cs

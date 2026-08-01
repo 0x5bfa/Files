@@ -22,8 +22,8 @@ The target shape is:
 
    ```powershell
    git grep -n "DllImport\|MarshalAs\|StringBuilder" -- src
-   git grep -n "Win32PInvoke\." -- src/Files.App
-   git grep -n "using Vanara\|Vanara\.PInvoke\|Kernel32\.\|Shell32\.\|User32\." -- src/Files.App
+   git grep -n "Win32PInvoke\." -- src/Files
+   git grep -n "using Vanara\|Vanara\.PInvoke\|Kernel32\.\|Shell32\.\|User32\." -- src/Files
    ```
 
 2. Add the API and related generated types to `src/Files.Core/NativeMethods.txt`.
@@ -58,8 +58,8 @@ The target shape is:
    Use targeted checks:
 
    ```powershell
-   git grep -n "Win32PInvoke\.RmStartSession\|Win32PInvoke\.SHBrowseForFolder" -- src/Files.App
-   git grep -n "RM_PROCESS_INFO\|BROWSEINFO" -- src/Files.App
+   git grep -n "Win32PInvoke\.RmStartSession\|Win32PInvoke\.SHBrowseForFolder" -- src/Files
+   git grep -n "RM_PROCESS_INFO\|BROWSEINFO" -- src/Files
    ```
 
 6. Build and confirm there are no C# errors.
@@ -124,5 +124,5 @@ Useful heuristics:
 - No caller remains for the deleted manual method or struct.
 - The generated CsWin32 types are used at call sites.
 - `dotnet build src/Files.Core/Files.Core.csproj -c Debug -p:Platform=x64` succeeds.
-- `dotnet build src/Files.App/Files.App.csproj -c Debug -p:Platform=x64` has no new `error CS*` errors.
+- `dotnet build src/Files/Files.csproj -c Debug -p:Platform=x64` has no new `error CS*` errors.
 - Any remaining build failure is called out explicitly, especially XAML compiler failures unrelated to interop.

@@ -1,6 +1,6 @@
-# Files.Core / Files.App2 移行進捗
+# Files.Core / Files 移行進捗
 
-この文書だけが、Files.Core への移行と Files.App2 の実装進捗を記録します。
+この文書だけが、Files.Core への移行と Files の実装進捗を記録します。
 その他の architecture 文書は、完了状況ではなく設計上の概念、契約、所有権、境界を定義します。
 
 ## 完了した境界
@@ -18,7 +18,7 @@
 | threading | ordered/concurrent/operation用message-pumped Shell STAを実装済み |
 | validation | Files.Core unit/integration testとbenchmark projectが存在 |
 
-`Files.App2` の最初の browsing slice は、次の境界まで接続済みです。
+`Files` の最初の browsing slice は、次の境界まで接続済みです。
 
 - `MainWindow`から`RootView`を起点に、custom `TabView`、window単位の`NavigationToolbar`、native `NavigationView`、
   `ToolbarView`、`PaneHost`、`PaneView`、`PaneContentView`、`FolderBrowser`、`DetailsFolderView`を独立したcontrolとして構成する。

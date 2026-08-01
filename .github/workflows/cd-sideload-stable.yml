@@ -33,9 +33,9 @@ jobs:
       WORKING_DIR:                '${{ github.workspace }}' # D:\a\Files\Files\
       ARTIFACTS_STAGING_DIR:      '${{ github.workspace }}\artifacts'
       APPX_PACKAGE_DIR:           '${{ github.workspace }}\artifacts\AppxPackages\'
-      APP_PROJECT_PATH:           'src\Files.App\Files.App.csproj'
-      PACKAGE_MANIFEST_PATH:      'src\Files.App\Package.appxmanifest'
-      LAUNCHER_PROJECT_PATH:      'src\Files.App.Launcher\Files.App.Launcher.vcxproj'
+      APP_PROJECT_PATH:           'src\Files\Files.csproj'
+      PACKAGE_MANIFEST_PATH:      'src\Files\Package.appxmanifest'
+      LAUNCHER_PROJECT_PATH:      'src\FilesLauncher\FilesLauncher.vcxproj'
       TEST_PROJECT_PATH:          'tests\Files.InteractionTests\Files.InteractionTests.csproj'
       APP_INSTALLER_SIDELOAD_URL: 'https://cdn.files.community/files/stable/'
 
@@ -107,7 +107,7 @@ jobs:
         endpoint: https://eus.codesigning.azure.net/
         signing-account-name: ${{ secrets.SIGNING_ACCOUNT_NAME }}
         certificate-profile-name: ${{ secrets.SIGNING_PROFILE_NAME }}
-        files-folder: ${{ github.workspace }}\src\Files.App\Assets\FilesOpenDialog
+        files-folder: ${{ github.workspace }}\src\Files\Assets\FilesOpenDialog
         files-folder-filter: "*.exe"
         files-folder-recurse: false
         file-digest: SHA256

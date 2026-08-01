@@ -2,7 +2,7 @@
 // SPDX-License-Identifier: MPL-2.0
 
 using CommunityToolkit.WinUI;
-using Files.App.Controls;
+using Files.Controls;
 using Files.App.UITests.Data;
 using Microsoft.UI.Xaml.Controls;
 using System.Collections.ObjectModel;

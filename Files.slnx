@@ -4,30 +4,26 @@
     <Platform Name="x64" />
     <Platform Name="x86" />
   </Configurations>
-  <Folder Name="/global/" Id="ddb4ef12-cc4e-5e88-e6fc-71a802f4de97">
-    <File Path="Directory.Build.props" />
-    <File Path="Directory.Packages.props" />
-  </Folder>
   <Folder Name="/src/">
-    <Project Path="src/Files.App.Controls/Files.App.Controls.csproj">
+    <Project Path="src/Files.Controls/Files.Controls.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
     </Project>
-    <Project Path="src/Files.App.Launcher/Files.App.Launcher.vcxproj" Id="25fd5045-6d4c-4dd0-b3ac-613ab59cbb07" />
-    <Project Path="src/Files.App.Server/Files.App.Server.csproj">
+    <Project Path="src/FilesLauncher/FilesLauncher.vcxproj" Id="25fd5045-6d4c-4dd0-b3ac-613ab59cbb07" />
+    <Project Path="src/Files.Operations/Files.Operations.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
       <Deploy />
     </Project>
-    <Project Path="src/Files.App2/Files.App2.csproj">
+    <Project Path="src/Files/Files.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
       <Deploy Solution="Debug|x64" />
     </Project>
-    <Project Path="src/Files.Core.SourceGenerator/Files.Core.SourceGenerator.csproj" />
+    <Project Path="src/Files.SourceGenerators/Files.SourceGenerators.csproj" />
     <Project Path="src/Files.Core/Files.Core.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />

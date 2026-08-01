@@ -1,6 +1,6 @@
-# Files.App2 アーキテクチャ
+# Files アーキテクチャ
 
-`Files.App2` は、旧 `Files.App` のサービスロケーター、設定サービス、legacy storage shapeを持ち込まずに
+`Files` は、旧 `Files.App` のサービスロケーター、設定サービス、legacy storage shapeを持ち込まずに
 `Files.Core`をWinUIへ接続するための移行ホストです。旧アプリは機能互換性を保つために残しますが、App2の
 新しい機能は旧経路へ依存しません。
 
@@ -8,7 +8,7 @@
 
 ```mermaid
 flowchart TB
-    App["Files.App2 App"]
+    App["Files App"]
     Window["MainWindow / RootView"]
     ViewModel["RootViewModel"]
     Commands["CommandRegistry / WindowCommandManager"]
@@ -104,7 +104,7 @@ flowchart TB
 
 ## コマンド登録と実行
 
-`src/Files.App2/Commands/`は、App2専用の最初のコマンド境界です。
+`src/Files/Commands/`は、App2専用の最初のコマンド境界です。
 
 - `App2CommandRegistration.Build()`は`App`のcomposition rootで一度だけ呼び出され、stable `CommandId`を
   `CommandRegistryBuilder`へ明示登録します。

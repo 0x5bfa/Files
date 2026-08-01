@@ -8,7 +8,7 @@
 ```mermaid
 flowchart TB
     Views["WinUI ビュー"]
-    ViewModels["Files.App2 ViewModel"]
+    ViewModels["Files ViewModel"]
     AppModels["Files.Core AppModel"]
     ItemFeatures["項目機能"]
     CoreModels["OwlCore.Storage CoreModel"]
@@ -87,7 +87,7 @@ flowchart TB
 1. [移行進捗](migration-progress.md)
 2. [アプリケーションモデルグラフ](app-models.md)
 3. [合成ルート](composition.md)
-4. [新 Files.App2 アーキテクチャ](files-app2.md)
+4. [新 Files アーキテクチャ](files-app2.md)
 5. [Files.App の Core 統合（互換経路）](files-app.md)
 6. [Files.App のコマンド実行](commands.md)
 7. [Files.App の項目機能とアクティブ化](files-app-features.md)
@@ -103,7 +103,7 @@ flowchart TB
 - [参照ビュー設定と投影](view-settings.md)
 - [プレビューの流れと Shell セッション](previews.md)
 - [ストレージ操作](operations.md)
-- [`Files.App.Server` によるクラッシュ耐性のある操作](server-operations.md)
+- [`Files.Operations` によるクラッシュ耐性のある操作](server-operations.md)
 - [Windows ストレージソース](windows-storage.md)
 - [Windows Shell のスレッド処理](threading.md)
 - [移行原則と物理プロジェクト統合](migration.md)

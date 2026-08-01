@@ -37,12 +37,11 @@ This project is a C#/.NET WinUI 3 desktop app; an alternative to File Explorer.
 
 ```text
 /src
-├── Files.App2                   Main WinUI app
-├── Files.App.Controls           Shared app controls
-├── Files.App.BackgroundTasks    Background task project
-├── Files.App.Server             App service/server project
+├── Files                   Main WinUI app
+├── Files.Controls           Shared app controls
+├── Files.Operations             App service/server project
 ├── Files.Core                   Core models, storage, and Win32 interop
-└── Files.Core.SourceGenerator   Roslyn source generators and analyzers
+└── Files.SourceGenerators   Roslyn source generators and analyzers
 ```
 
 ```text
@@ -67,7 +66,7 @@ If `msbuild` isn't available in the current shell, run it from Visual Studio Dev
 pwsh.exe -NoProfile -Command "& {
   Import-Module 'C:\Program Files\Microsoft Visual Studio\18\Professional\Common7\Tools\Microsoft.VisualStudio.DevShell.dll'
   Enter-VsDevShell 1ba2cc4e -SkipAutomaticLocation -DevCmdArguments '-arch=x64 -host_arch=x64'
-  msbuild -restore src/Files.App2/Files.App2.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
+  msbuild -restore src/Files/Files.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
 }"
 ```
 
@@ -76,8 +75,8 @@ Do not run build commands in parallel.
 
 ```powershell
 msbuild -restore src/Files.Shared/Files.Shared.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
-msbuild -restore src/Files.Core.SourceGenerator/Files.Core.SourceGenerator.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
-msbuild -restore src/Files.App2/Files.App2.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
+msbuild -restore src/Files.SourceGenerators/Files.SourceGenerators.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
+msbuild -restore src/Files/Files.csproj -p:Configuration=Debug -p:Platform=x64 -v:quiet -clp:ErrorsOnly
 ```
 
 ## Test

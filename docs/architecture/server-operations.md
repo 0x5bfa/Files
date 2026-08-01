@@ -1,6 +1,6 @@
-# `Files.App.Server` によるクラッシュ耐性のある操作
+# `Files.Operations` によるクラッシュ耐性のある操作
 
-保証するのは、`Files.App` がクラッシュしても、別プロセスの `Files.App.Server` が実行中のファイル操作を継続することです。
+保証するのは、`Files.App` がクラッシュしても、別プロセスの `Files.Operations` が実行中のファイル操作を継続することです。
 サーバー、Windows、マシンの停止後に中断操作を自動再開しません。安全に再開できないコピーや移動を推測で再実行してはいけません。
 
 1 項目の Core 契約は [ストレージ操作](operations.md) を参照してください。
@@ -23,7 +23,7 @@ Files.App
                                       -> WinRtFileOperationClient
                                       -> FileOperationServer
 
-Files.App.Server
+Files.Operations
   FileOperationServer -> FileOperationHost -> FileOperation
                                           -> OperationJournal
                                           -> StorageRuntime.Operations
@@ -37,7 +37,7 @@ Files.Core
 
 ## Files.Core の操作値
 
-Core は WinRT を知らない通常の C# 型を持ちます。`Files.App` と `Files.App.Server` の内部処理はこの型だけを使います。
+Core は WinRT を知らない通常の C# 型を持ちます。`Files.App` と `Files.Operations` の内部処理はこの型だけを使います。
 
 ```csharp
 namespace Files.Core.Storage.FileOperations;
@@ -169,7 +169,7 @@ public sealed record FileOperationList(
 
 ## 操作専用 `StorageRuntime`
 
-`Files.App.Server` はウィンドウ、AppModel、項目機能、サムネイル、プレビュー、アーカイブを構築しません。
+`Files.Operations` はウィンドウ、AppModel、項目機能、サムネイル、プレビュー、アーカイブを構築しません。
 
 ```csharp
 namespace Files.Core.Storage.Runtime;
@@ -245,7 +245,7 @@ var operations = storage.Operations;
 struct に配列や nullable を入れず、nullable は `HasDestination` などの flag で表します。
 
 ```csharp
-namespace Files.App.Server;
+namespace Files.Operations;
 
 public enum OperationKindData
 {
@@ -535,13 +535,13 @@ activation factory を登録するのは public constructor を持つ `FileOpera
 
 ```xml
 <OutOfProcessServer
-	ServerName="Files.App.Server"
+	ServerName="Files.Operations"
 	uap5:IdentityType="activateAsPackage"
 	uap5:RunFullTrust="true">
-	<Path>Files.App.Server\Files.App.Server.exe</Path>
+	<Path>Files.Operations\Files.Operations.exe</Path>
 	<Instancing>singleInstance</Instancing>
 	<ActivatableClass
-		ActivatableClassId="Files.App.Server.FileOperationServer" />
+		ActivatableClassId="Files.Operations.FileOperationServer" />
 </OutOfProcessServer>
 ```
 
@@ -1324,7 +1324,7 @@ FTP はサーバーが保護された資格情報を自分で解決できるよ�
 2. server が Queued を journal へ書く。
 3. server-owned token で Windows 操作を開始する。
 4. Files.App を強制終了する。
-5. Files.App.Server が操作を完了する。
+5. Files.Operations が操作を完了する。
 6. 新しい Files.App が ListAsync で結果を取得する。
 7. 表示中フォルダーは watcher から更新される。
 ```

@@ -48,7 +48,7 @@ Files.Core は `ICommand`、`XamlUICommand`、ローカライズリソースロ�
 ## 提案するソース配置
 
 ```text
-src/Files.App/Commands/
+src/Files/Commands/
   CommandId.cs
   CommandDescriptor.cs
   CommandContext.cs
@@ -419,9 +419,9 @@ flowchart TB
 
 移行中は、一時的なレガシーハンドラーが古いアクションを呼び出しても構いません。ただし新しいハンドラーは `Ioc.Default` に依存してはいけません。
 
-### Files.App2 への適用
+### Files への適用
 
-`Files.App2` は、`src/Files.App2/Commands/`でこの command boundary を UI adapter として適用します。
+`Files` は、`src/Files/Commands/`でこの command boundary を UI adapter として適用します。
 
 - `App2CommandRegistration.Build()`が`App`のcomposition rootで一度だけ呼び出され、
   `CommandRegistryBuilder`へstable ID、descriptor、handler factoryを明示登録します。

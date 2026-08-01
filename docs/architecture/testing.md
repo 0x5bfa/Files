@@ -70,10 +70,10 @@ dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj `
 Shell、ディスク、ネットワーク、ソースの遅延をマイクロベンチマークへ混ぜてはいけません。それらはシナリオテストとして、マシンの詳細、ウォーム/コールドキャッシュ状態、項目数、
 インストール済み Shell 拡張を記録して測定します。
 
-## Files.App2 デバッグスモークと性能記録
+## Files デバッグスモークと性能記録
 
 最初のApp2垂直スライスは、Core契約を通した手動デバッグスモークで確認します。x64のDeveloper PowerShellで
-`src/Files.App2/Files.App2.csproj`をDebugビルドし、次の操作を1回ずつ実行します。
+`src/Files/Files.csproj`をDebugビルドし、次の操作を1回ずつ実行します。
 
 1. 起動して`RootView`、custom tab strip、window単位の`NavigationToolbar`、native `NavigationView`、Homeの一覧が表示されることを確認する。
 2. rooted Windows folderへ移動し、`ToolbarView`/`PaneHost`、folder/fileの表示、back/forward/up、refreshを確認する。

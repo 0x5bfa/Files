@@ -1,7 +1,7 @@
 ﻿// Copyright (c) Files Community
 // SPDX-License-Identifier: MPL-2.0
 
-using Files.App.Controls;
+using Files.Controls;
 using System;
 
 namespace Files.App.UITests.Data

@@ -6,7 +6,7 @@
 # Custom files
 Files.App.OpenDialog*.dll
 Files.App.SaveDialog*.dll
-Files.App.Launcher.exe
+FilesLauncher.exe
 
 # User-specific files
 *.rsuser
@@ -412,4 +412,4 @@ FodyWeavers.xsd
 # JetBrains Rider
 *.sln.iml
 .idea/
-src/Files.App/Assets/FilesOpenDialog/Files.App.Launcher.exe.sha256
+src/Files/Assets/FilesOpenDialog/FilesLauncher.exe.sha256

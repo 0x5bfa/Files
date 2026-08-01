@@ -153,7 +153,7 @@ elevation、out-of-process operation hostを保ったまま順次置換する必
 
 ## 現在の互換adapter
 
-`src/Files.App/Adapters` の役割は限定されています。
+`src/Files/Adapters` の役割は限定されています。
 
 | Adapter | 残している理由 |
 | --- | --- |

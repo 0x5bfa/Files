@@ -11,7 +11,7 @@
 
 				<XamlControlsResources xmlns="using:Microsoft.UI.Xaml.Controls" />
 
-				<ResourceDictionary Source="ms-appx:///Files.App.Controls/Themes/Generic.xaml" />
+				<ResourceDictionary Source="ms-appx:///Files.Controls/Themes/Generic.xaml" />
 
 				<ResourceDictionary>
 
