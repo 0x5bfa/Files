@@ -23,10 +23,20 @@
 			IsSettingsVisible="False"
 			PaneDisplayMode="LeftCompact"
 			SelectionChanged="NavigationView_SelectionChanged">
+			<NavigationView.Resources>
+				<ResourceDictionary>
+					<StaticResource x:Key="NavigationViewContentBackground" ResourceKey="ControlFillColorTransparentBrush" />
+					<StaticResource x:Key="NavigationViewContentGridBorderBrush" ResourceKey="ControlFillColorTransparentBrush" />
+					<Thickness x:Key="NavigationViewContentGridBorderThickness">0</Thickness>
+					<CornerRadius x:Key="NavigationViewContentGridCornerRadius">0</CornerRadius>
+					<Thickness x:Key="NavigationViewContentMargin">0,0,8,8</Thickness>
+				</ResourceDictionary>
+			</NavigationView.Resources>
+
 			<NavigationView.MenuItems>
 				<NavigationViewItem
 					x:Name="HomeItem"
-					Content="Home"
+					x:Uid="HomeNavigationItem"
 					Tag="Home">
 					<NavigationViewItem.Icon>
 						<SymbolIcon Symbol="Home" />

@@ -8,6 +8,8 @@ namespace Files.App2.Views;
 
 public sealed partial class FolderBrowser : Microsoft.UI.Xaml.Controls.UserControl
 {
+	private FolderBrowserViewModel? subscribedViewModel;
+
 	public static readonly DependencyProperty ViewModelProperty =
 		DependencyProperty.Register(
 			nameof(ViewModel),
@@ -18,6 +20,8 @@ public sealed partial class FolderBrowser : Microsoft.UI.Xaml.Controls.UserContr
 	public FolderBrowser()
 	{
 		InitializeComponent();
+		Loaded += FolderBrowser_Loaded;
+		Unloaded += FolderBrowser_Unloaded;
 	}
 
 	public FolderBrowserViewModel? ViewModel
@@ -35,17 +39,36 @@ public sealed partial class FolderBrowser : Microsoft.UI.Xaml.Controls.UserContr
 			return;
 		}
 
-		if (args.OldValue is FolderBrowserViewModel oldViewModel)
-		{
-			oldViewModel.PropertyChanged -= folderBrowser.ViewModel_PropertyChanged;
-		}
-
-		if (args.NewValue is FolderBrowserViewModel newViewModel)
-		{
-			newViewModel.PropertyChanged += folderBrowser.ViewModel_PropertyChanged;
-		}
-
+		folderBrowser.SetSubscribedViewModel(
+			folderBrowser.IsLoaded
+				? args.NewValue as FolderBrowserViewModel
+				: null);
 		folderBrowser.UpdateFolderView();
+	}
+
+	private void FolderBrowser_Loaded(object sender, RoutedEventArgs e) =>
+		SetSubscribedViewModel(ViewModel);
+
+	private void FolderBrowser_Unloaded(object sender, RoutedEventArgs e) =>
+		SetSubscribedViewModel(null);
+
+	private void SetSubscribedViewModel(FolderBrowserViewModel? value)
+	{
+		if (ReferenceEquals(subscribedViewModel, value))
+		{
+			return;
+		}
+
+		if (subscribedViewModel is not null)
+		{
+			subscribedViewModel.PropertyChanged -= ViewModel_PropertyChanged;
+		}
+
+		subscribedViewModel = value;
+		if (subscribedViewModel is not null)
+		{
+			subscribedViewModel.PropertyChanged += ViewModel_PropertyChanged;
+		}
 	}
 
 	private void ViewModel_PropertyChanged(

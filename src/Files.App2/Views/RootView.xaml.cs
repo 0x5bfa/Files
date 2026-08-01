@@ -3,6 +3,7 @@
 
 using Files.App2.ViewModels;
 using Files.App2.Commands;
+using Files.App2.Infrastructure;
 using Files.Core.AppModels;
 using Files.Core.Data;
 using Microsoft.UI.Dispatching;
@@ -27,7 +28,7 @@ public sealed partial class RootView : Page, IDisposable
 		viewModel = new RootViewModel(
 			window,
 			dataRoot,
-			dispatcherQueue,
+			new DispatcherQueueUiDispatcher(dispatcherQueue),
 			commandRegistry);
 		Sidebar.SelectedItem = HomeItem;
 		Loaded += RootView_Loaded;

@@ -3,9 +3,9 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using Files.App2.Commands;
+using Files.App2.Infrastructure;
 using Files.Core.AppModels;
 using Files.Core.Data;
-using Microsoft.UI.Dispatching;
 
 namespace Files.App2.ViewModels;
 
@@ -26,7 +26,7 @@ public sealed class PaneViewModel : ObservableObject, IDisposable
 	public PaneViewModel(
 		PaneModel pane,
 		IFilesDataRoot dataRoot,
-		DispatcherQueue dispatcherQueue,
+		IUiDispatcher dispatcher,
 		WindowCommandManager commandManager)
 	{
 		ArgumentNullException.ThrowIfNull(pane);
@@ -34,7 +34,7 @@ public sealed class PaneViewModel : ObservableObject, IDisposable
 		FolderBrowser = new FolderBrowserViewModel(
 			pane,
 			dataRoot,
-			dispatcherQueue,
+			dispatcher,
 			commandManager);
 		FolderBrowser.PropertyChanged += FolderBrowser_PropertyChanged;
 	}

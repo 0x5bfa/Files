@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.App2.ViewModels;
+using Files.App2.Localization;
 
 namespace Files.App2.Commands.Handlers;
 
@@ -59,16 +60,15 @@ internal sealed class NavigationCommandHandler(CommandId id) : ICommandHandler
 				await browser.GoUpAsync(cancellationToken).ConfigureAwait(false);
 				break;
 			case var commandId when commandId == CommandIds.NavigateHome:
-				await browser.NavigateToPathAsync(
-					"Home",
-					cancellationToken).ConfigureAwait(false);
+				await browser.NavigateHomeAsync(cancellationToken)
+					.ConfigureAwait(false);
 				break;
 			case var commandId when commandId == CommandIds.NavigatePath:
 				if (string.IsNullOrWhiteSpace(context.Path))
 				{
 					return CommandExecutionResult.Failed(
 						new ArgumentException(
-							"A folder path is required.",
+							AppStrings.FolderPathRequired,
 							nameof(context.Path)));
 				}
 

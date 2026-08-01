@@ -6,6 +6,6 @@
 	<Border
 		Padding="24"
 		Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-		<TextBlock Text="Web view" />
+		<TextBlock x:Uid="WebViewText" />
 	</Border>
 </UserControl>

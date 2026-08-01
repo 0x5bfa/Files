@@ -21,6 +21,8 @@ public sealed partial class ListFolderView : UserControl
 	public ListFolderView()
 	{
 		InitializeComponent();
+		Loaded += FolderView_Loaded;
+		Unloaded += FolderView_Unloaded;
 	}
 
 	public FolderBrowserViewModel? ViewModel
@@ -38,9 +40,27 @@ public sealed partial class ListFolderView : UserControl
 			return;
 		}
 
-		view.interaction?.Dispose();
-		view.interaction = args.NewValue is FolderBrowserViewModel newViewModel
-			? new FolderViewInteraction(view.ItemList, newViewModel)
-			: null;
+		view.UpdateInteraction();
+	}
+
+	private void FolderView_Loaded(object sender, RoutedEventArgs e) =>
+		UpdateInteraction();
+
+	private void FolderView_Unloaded(object sender, RoutedEventArgs e) =>
+		DisposeInteraction();
+
+	private void UpdateInteraction()
+	{
+		DisposeInteraction();
+		if (IsLoaded && ViewModel is { } viewModel)
+		{
+			interaction = new FolderViewInteraction(ItemList, viewModel);
+		}
+	}
+
+	private void DisposeInteraction()
+	{
+		interaction?.Dispose();
+		interaction = null;
 	}
 }

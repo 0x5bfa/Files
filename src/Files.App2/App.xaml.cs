@@ -5,6 +5,7 @@ using Files.App2.Views;
 using Files.App2.Commands;
 using Files.Core.Composition;
 using Microsoft.UI.Xaml;
+using System.Diagnostics;
 
 namespace Files.App2;
 
@@ -12,16 +13,31 @@ public partial class App : Application
 {
 	private FilesCoreRuntime? runtime;
 	private MainWindow? mainWindow;
-	private readonly CommandRegistry commandRegistry =
-		App2CommandRegistration.Build();
-	private int isClosing;
+	private readonly CommandRegistry commandRegistry;
+	private readonly object shutdownLock = new();
+	private Task? shutdownTask;
 
 	public App()
 	{
 		InitializeComponent();
+		commandRegistry = App2CommandRegistration.Build();
 	}
 
 	protected override async void OnLaunched(LaunchActivatedEventArgs args)
+	{
+		try
+		{
+			await LaunchAsync().ConfigureAwait(true);
+		}
+		catch (Exception exception)
+		{
+			Debug.WriteLine($"Files.App2 failed to start: {exception}");
+			await ShutdownAsync().ConfigureAwait(true);
+			Exit();
+		}
+	}
+
+	private async Task LaunchAsync()
 	{
 		runtime = new FilesCoreBuilder()
 			.AddWindowsStorage()
@@ -39,24 +55,26 @@ public partial class App : Application
 		mainWindow = new MainWindow(
 			coreWindow,
 			runtime.DataRoot,
-			commandRegistry);
-		mainWindow.Closed += MainWindow_Closed;
+			commandRegistry,
+			ShutdownAsync);
 		mainWindow.Activate();
 	}
 
-	private async void MainWindow_Closed(object sender, WindowEventArgs args)
+	private Task ShutdownAsync()
 	{
-		if (Interlocked.Exchange(ref isClosing, 1) is not 0)
+		lock (shutdownLock)
 		{
-			return;
+			return shutdownTask ??= ShutdownCoreAsync();
 		}
+	}
 
-		mainWindow?.Dispose();
+	private async Task ShutdownCoreAsync()
+	{
 		mainWindow = null;
 
 		if (Interlocked.Exchange(ref runtime, null) is { } currentRuntime)
 		{
-			await currentRuntime.DisposeAsync();
+			await currentRuntime.DisposeAsync().ConfigureAwait(true);
 		}
 	}
 }

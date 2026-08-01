@@ -21,6 +21,8 @@ public sealed partial class GridFolderView : UserControl
 	public GridFolderView()
 	{
 		InitializeComponent();
+		Loaded += FolderView_Loaded;
+		Unloaded += FolderView_Unloaded;
 	}
 
 	public FolderBrowserViewModel? ViewModel
@@ -38,9 +40,27 @@ public sealed partial class GridFolderView : UserControl
 			return;
 		}
 
-		view.interaction?.Dispose();
-		view.interaction = args.NewValue is FolderBrowserViewModel newViewModel
-			? new FolderViewInteraction(view.ItemGrid, newViewModel)
-			: null;
+		view.UpdateInteraction();
+	}
+
+	private void FolderView_Loaded(object sender, RoutedEventArgs e) =>
+		UpdateInteraction();
+
+	private void FolderView_Unloaded(object sender, RoutedEventArgs e) =>
+		DisposeInteraction();
+
+	private void UpdateInteraction()
+	{
+		DisposeInteraction();
+		if (IsLoaded && ViewModel is { } viewModel)
+		{
+			interaction = new FolderViewInteraction(ItemGrid, viewModel);
+		}
+	}
+
+	private void DisposeInteraction()
+	{
+		interaction?.Dispose();
+		interaction = null;
 	}
 }

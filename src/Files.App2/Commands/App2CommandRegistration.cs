@@ -2,6 +2,7 @@
 // Licensed under the MIT License.
 
 using Files.App2.Commands.Handlers;
+using Files.App2.Localization;
 
 namespace Files.App2.Commands;
 
@@ -22,56 +23,56 @@ public static class App2CommandRegistration
 			new(
 				CommandIds.NavigateBack,
 				"Navigation.Back",
-				"Back",
-				"Navigation",
+				AppStrings.Back,
+				AppStrings.Navigation,
 				10),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateBack));
 		builder.Register(
 			new(
 				CommandIds.NavigateForward,
 				"Navigation.Forward",
-				"Forward",
-				"Navigation",
+				AppStrings.Forward,
+				AppStrings.Navigation,
 				20),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateForward));
 		builder.Register(
 			new(
 				CommandIds.NavigateUp,
 				"Navigation.Up",
-				"Up",
-				"Navigation",
+				AppStrings.Up,
+				AppStrings.Navigation,
 				30),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateUp));
 		builder.Register(
 			new(
 				CommandIds.NavigateHome,
 				"Navigation.Home",
-				"Home",
-				"Navigation",
+				AppStrings.Home,
+				AppStrings.Navigation,
 				40),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateHome));
 		builder.Register(
 			new(
 				CommandIds.NavigatePath,
 				"Navigation.Path",
-				"Address",
-				"Navigation",
+				AppStrings.Address,
+				AppStrings.Navigation,
 				50),
 			static _ => new NavigationCommandHandler(CommandIds.NavigatePath));
 		builder.Register(
 			new(
 				CommandIds.Refresh,
 				"Navigation.Refresh",
-				"Refresh",
-				"Navigation",
+				AppStrings.Refresh,
+				AppStrings.Navigation,
 				60),
 			static _ => new NavigationCommandHandler(CommandIds.Refresh));
 		builder.Register(
 			new(
 				CommandIds.OpenItem,
 				"Item.Open",
-				"Open",
-				"Item",
+				AppStrings.Open,
+				AppStrings.Item,
 				10),
 			static _ => new NavigationCommandHandler(CommandIds.OpenItem));
 	}
@@ -82,16 +83,16 @@ public static class App2CommandRegistration
 			new(
 				CommandIds.NewTab,
 				"Tab.New",
-				"Add",
-				"Tabs",
+				AppStrings.Add,
+				AppStrings.Tabs,
 				10),
 			static _ => new WindowCommandHandler(CommandIds.NewTab));
 		builder.Register(
 			new(
 				CommandIds.CloseTab,
 				"Tab.Close",
-				"Close",
-				"Tabs",
+				AppStrings.Close,
+				AppStrings.Tabs,
 				20),
 			static _ => new WindowCommandHandler(CommandIds.CloseTab));
 	}
@@ -102,16 +103,16 @@ public static class App2CommandRegistration
 			new(
 				CommandIds.NewPane,
 				"Pane.New",
-				"Add",
-				"Panes",
+				AppStrings.Add,
+				AppStrings.Panes,
 				10),
 			static _ => new PaneCommandHandler(CommandIds.NewPane));
 		builder.Register(
 			new(
 				CommandIds.ClosePane,
 				"Pane.Close",
-				"Close",
-				"Panes",
+				AppStrings.Close,
+				AppStrings.Panes,
 				20),
 			static _ => new PaneCommandHandler(CommandIds.ClosePane));
 	}

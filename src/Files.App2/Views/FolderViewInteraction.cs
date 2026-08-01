@@ -13,7 +13,10 @@ internal sealed class FolderViewInteraction : IDisposable
 {
 	private readonly ListViewBase listView;
 	private readonly FolderBrowserViewModel viewModel;
+	private readonly HashSet<int> realizedIndices = [];
 	private bool synchronizingSelection;
+	private bool viewportUpdateQueued;
+	private bool isDisposed;
 
 	public FolderViewInteraction(
 		ListViewBase listView,
@@ -24,15 +27,24 @@ internal sealed class FolderViewInteraction : IDisposable
 
 		listView.DoubleTapped += ListView_DoubleTapped;
 		listView.SelectionChanged += ListView_SelectionChanged;
+		listView.ContainerContentChanging += ListView_ContainerContentChanging;
 		viewModel.PropertyChanged += ViewModel_PropertyChanged;
 		SynchronizeSelection();
 	}
 
 	public void Dispose()
 	{
+		if (isDisposed)
+		{
+			return;
+		}
+
+		isDisposed = true;
 		listView.DoubleTapped -= ListView_DoubleTapped;
 		listView.SelectionChanged -= ListView_SelectionChanged;
+		listView.ContainerContentChanging -= ListView_ContainerContentChanging;
 		viewModel.PropertyChanged -= ViewModel_PropertyChanged;
+		realizedIndices.Clear();
 	}
 
 	private async void ListView_DoubleTapped(
@@ -58,6 +70,57 @@ internal sealed class FolderViewInteraction : IDisposable
 			viewModel.SetSelection(
 				listView.SelectedItems.OfType<BrowseItemViewModel>());
 		}
+	}
+
+	private void ListView_ContainerContentChanging(
+		ListViewBase sender,
+		ContainerContentChangingEventArgs args)
+	{
+		if (args.InRecycleQueue)
+		{
+			realizedIndices.Remove(args.ItemIndex);
+		}
+		else
+		{
+			realizedIndices.Add(args.ItemIndex);
+		}
+
+		QueueViewportUpdate();
+	}
+
+	private void QueueViewportUpdate()
+	{
+		if (viewportUpdateQueued || isDisposed)
+		{
+			return;
+		}
+
+		viewportUpdateQueued = true;
+		if (!listView.DispatcherQueue.TryEnqueue(UpdateViewport))
+		{
+			viewportUpdateQueued = false;
+		}
+	}
+
+	private void UpdateViewport()
+	{
+		viewportUpdateQueued = false;
+		if (isDisposed)
+		{
+			return;
+		}
+
+		if (realizedIndices.Count is 0)
+		{
+			viewModel.UpdateViewport(new BrowseViewport(0, 0));
+			return;
+		}
+
+		var firstIndex = realizedIndices.Min();
+		var lastIndex = realizedIndices.Max();
+		viewModel.UpdateViewport(new BrowseViewport(
+			firstIndex,
+			lastIndex - firstIndex + 1));
 	}
 
 	private void ViewModel_PropertyChanged(

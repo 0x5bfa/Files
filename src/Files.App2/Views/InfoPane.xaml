@@ -6,6 +6,6 @@
 	<Border
 		Padding="12,8"
 		Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-		<TextBlock Text="Info pane" />
+		<TextBlock x:Uid="InfoPaneText" />
 	</Border>
 </UserControl>

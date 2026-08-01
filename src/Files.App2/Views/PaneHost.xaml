@@ -7,25 +7,26 @@
 	xmlns:controls="using:Microsoft.UI.Xaml.Controls"
 	xmlns:local="using:Files.App2.Views"
 	xmlns:vm="using:Files.App2.ViewModels">
-	<ScrollViewer
-		HorizontalScrollBarVisibility="Auto"
-		VerticalScrollBarVisibility="Auto">
-		<controls:ItemsRepeater
-			x:Name="PaneRepeater"
-			ItemsSource="{x:Bind ViewModel.Panes, Mode=OneWay}">
-			<controls:ItemsRepeater.Layout>
-				<controls:StackLayout
-					x:Name="PaneLayout"
-					Orientation="Horizontal"
-					Spacing="1" />
-			</controls:ItemsRepeater.Layout>
-			<controls:ItemsRepeater.ItemTemplate>
-				<DataTemplate x:DataType="vm:PaneViewModel">
-					<local:PaneView
-						Activated="PaneView_Activated"
-						ViewModel="{x:Bind}" />
-				</DataTemplate>
-			</controls:ItemsRepeater.ItemTemplate>
-		</controls:ItemsRepeater>
-	</ScrollViewer>
+	<controls:ItemsRepeater
+		x:Name="PaneRepeater"
+		HorizontalAlignment="Stretch"
+		VerticalAlignment="Stretch"
+		ElementPrepared="PaneRepeater_ElementPrepared"
+		ItemsSource="{x:Bind ViewModel.Panes, Mode=OneWay}">
+		<controls:ItemsRepeater.Layout>
+			<controls:StackLayout
+				x:Name="PaneLayout"
+				Orientation="Horizontal"
+				Spacing="1" />
+		</controls:ItemsRepeater.Layout>
+		<controls:ItemsRepeater.ItemTemplate>
+			<DataTemplate x:DataType="vm:PaneViewModel">
+				<local:PaneView
+					HorizontalAlignment="Stretch"
+					VerticalAlignment="Stretch"
+					Activated="PaneView_Activated"
+					ViewModel="{x:Bind}" />
+			</DataTemplate>
+		</controls:ItemsRepeater.ItemTemplate>
+	</controls:ItemsRepeater>
 </UserControl>

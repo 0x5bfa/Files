@@ -2,14 +2,14 @@
 // Licensed under the MIT License.
 
 using Files.App2.ViewModels;
-using Microsoft.UI.Dispatching;
+using Files.App2.Infrastructure;
 
 namespace Files.App2.Commands;
 
 public sealed class WindowCommandManager : IDisposable
 {
 	private readonly RootViewModel root;
-	private readonly DispatcherQueue dispatcherQueue;
+	private readonly IUiDispatcher dispatcher;
 	private readonly Dictionary<CommandId, ICommandHandler> handlers;
 	private readonly Dictionary<CommandId, CommandBindingViewModel> bindings = [];
 	private readonly Dictionary<CommandId, CancellationTokenSource> activeCalls = [];
@@ -20,14 +20,14 @@ public sealed class WindowCommandManager : IDisposable
 	public WindowCommandManager(
 		RootViewModel root,
 		CommandRegistry registry,
-		DispatcherQueue dispatcherQueue)
+		IUiDispatcher dispatcher)
 	{
 		ArgumentNullException.ThrowIfNull(root);
 		ArgumentNullException.ThrowIfNull(registry);
-		ArgumentNullException.ThrowIfNull(dispatcherQueue);
+		ArgumentNullException.ThrowIfNull(dispatcher);
 
 		this.root = root;
-		this.dispatcherQueue = dispatcherQueue;
+		this.dispatcher = dispatcher;
 		handlers = new(registry.CreateHandlers(root));
 		foreach (var descriptor in registry.Descriptors)
 		{
@@ -56,9 +56,9 @@ public sealed class WindowCommandManager : IDisposable
 			return;
 		}
 
-		if (!dispatcherQueue.HasThreadAccess)
+		if (!dispatcher.HasThreadAccess)
 		{
-			if (!dispatcherQueue.TryEnqueue(
+			if (!dispatcher.TryEnqueue(
 				() =>
 				{
 					if (Volatile.Read(ref isDisposed) is 0)
@@ -195,13 +195,13 @@ public sealed class WindowCommandManager : IDisposable
 			return;
 		}
 
-		if (dispatcherQueue.HasThreadAccess)
+		if (dispatcher.HasThreadAccess)
 		{
 			root.ReportOperationError(exception);
 			return;
 		}
 
-		if (!dispatcherQueue.TryEnqueue(
+		if (!dispatcher.TryEnqueue(
 			() => root.ReportOperationError(exception)))
 		{
 			throw new InvalidOperationException(

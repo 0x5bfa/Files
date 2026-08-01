@@ -4,10 +4,11 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using Files.App2.Adapters;
 using Files.App2.Commands;
+using Files.App2.Infrastructure;
+using Files.App2.Localization;
 using Files.Core.AppModels;
 using Files.Core.Browsing;
 using Files.Core.Data;
-using Microsoft.UI.Dispatching;
 
 namespace Files.App2.ViewModels;
 
@@ -22,7 +23,6 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 {
 	private readonly CoreBrowseAdapter browseAdapter;
 	private string? operationError;
-	private IReadOnlyList<BrowseItemViewModel>? appliedItems;
 	private bool isApplyingUpdate;
 	private int isDisposed;
 	private FolderViewMode viewMode = FolderViewMode.Details;
@@ -30,12 +30,12 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 	public FolderBrowserViewModel(
 		PaneModel pane,
 		IFilesDataRoot dataRoot,
-		DispatcherQueue dispatcherQueue,
+		IUiDispatcher dispatcher,
 		WindowCommandManager commandManager)
 	{
 		ArgumentNullException.ThrowIfNull(commandManager);
 		CommandManager = commandManager;
-		browseAdapter = new CoreBrowseAdapter(pane, dataRoot, dispatcherQueue);
+		browseAdapter = new CoreBrowseAdapter(pane, dataRoot, dispatcher);
 		browseAdapter.Updated += BrowseAdapter_Updated;
 	}
 
@@ -78,6 +78,9 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 		CancellationToken cancellationToken = default) =>
 		browseAdapter.NavigateToPathAsync(path, cancellationToken);
 
+	public Task NavigateHomeAsync(CancellationToken cancellationToken = default) =>
+		browseAdapter.NavigateHomeAsync(cancellationToken);
+
 	public Task NavigateToItemAsync(
 		BrowseItemViewModel item,
 		CancellationToken cancellationToken = default) =>
@@ -94,6 +97,9 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 
 	public Task RefreshAsync(CancellationToken cancellationToken = default) =>
 		browseAdapter.RefreshAsync(cancellationToken);
+
+	public void UpdateViewport(BrowseViewport viewport) =>
+		browseAdapter.UpdateViewport(viewport);
 
 	public void SetSelection(IEnumerable<BrowseItemViewModel> selectedItems) =>
 		browseAdapter.SetSelection(selectedItems);
@@ -117,7 +123,7 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 
 	public void ReportOperationCanceled()
 	{
-		operationError = "The operation was canceled.";
+		operationError = AppStrings.OperationCanceled;
 		OnPropertyChanged(nameof(StatusText));
 	}
 
@@ -132,21 +138,41 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 		browseAdapter.Dispose();
 	}
 
-	private void BrowseAdapter_Updated(object? sender, EventArgs args)
+	private void BrowseAdapter_Updated(
+		object? sender,
+		CoreBrowseUpdatedEventArgs args)
 	{
 		isApplyingUpdate = true;
 		try
 		{
-			if (!ReferenceEquals(appliedItems, browseAdapter.Items))
+			foreach (var change in args.ItemChanges)
 			{
-				Items.Clear();
-				foreach (var item in browseAdapter.Items)
+				switch (change)
 				{
-					Items.Add(item);
-				}
+					case BrowseItemViewModelAdded added:
+						Items.Insert(added.Index, added.Item);
+						break;
+					case BrowseItemViewModelRemoved removed:
+						Items.RemoveAt(removed.Index);
+						break;
+					case BrowseItemViewModelReplaced replaced:
+						Items[replaced.Index] = replaced.Item;
+						break;
+					case BrowseItemViewModelMoved moved:
+						Items.Move(moved.PreviousIndex, moved.CurrentIndex);
+						break;
+					case BrowseItemViewModelsReset reset:
+						Items.Clear();
+						foreach (var item in reset.Items)
+						{
+							Items.Add(item);
+						}
 
-				appliedItems = browseAdapter.Items;
-				OnPropertyChanged(nameof(Items));
+						break;
+					default:
+						throw new InvalidOperationException(
+							$"Unsupported browse item change '{change.GetType().Name}'.");
+				}
 			}
 
 			operationError = null;

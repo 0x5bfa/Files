@@ -3,10 +3,11 @@
 
 using CommunityToolkit.Mvvm.ComponentModel;
 using Files.App2.Commands;
+using Files.App2.Infrastructure;
+using Files.App2.Localization;
 using Files.Core.AppModels;
 using Files.Core.Browsing;
 using Files.Core.Data;
-using Microsoft.UI.Dispatching;
 
 namespace Files.App2.ViewModels;
 
@@ -14,33 +15,34 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 {
 	private readonly WindowModel window;
 	private readonly IFilesDataRoot dataRoot;
-	private readonly DispatcherQueue dispatcherQueue;
+	private readonly IUiDispatcher dispatcher;
 	private readonly WindowCommandManager commandManager;
 	private readonly Dictionary<Guid, TabViewModel> tabViewModels = [];
 	private string? operationError;
 	private int isDisposed;
+	private int refreshQueued;
 	private bool isRefreshing;
 	private int activeTabIndex = -1;
 
 	public RootViewModel(
 		WindowModel window,
 		IFilesDataRoot dataRoot,
-		DispatcherQueue dispatcherQueue,
+		IUiDispatcher dispatcher,
 		CommandRegistry commandRegistry)
 	{
 		ArgumentNullException.ThrowIfNull(window);
 		ArgumentNullException.ThrowIfNull(dataRoot);
-		ArgumentNullException.ThrowIfNull(dispatcherQueue);
+		ArgumentNullException.ThrowIfNull(dispatcher);
 		ArgumentNullException.ThrowIfNull(commandRegistry);
 
 		this.window = window;
 		this.dataRoot = dataRoot;
-		this.dispatcherQueue = dispatcherQueue;
+		this.dispatcher = dispatcher;
 		Tabs = [];
 		commandManager = new WindowCommandManager(
 			this,
 			commandRegistry,
-			dispatcherQueue);
+			dispatcher);
 
 		window.StateChanged += Window_StateChanged;
 		RefreshFromCore();
@@ -80,7 +82,7 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 	public CommandBindingViewModel ClosePaneCommand =>
 		commandManager.GetBinding(CommandIds.ClosePane);
 
-	internal DispatcherQueue DispatcherQueue => dispatcherQueue;
+	internal IUiDispatcher Dispatcher => dispatcher;
 
 	public TabViewModel? ActiveTab =>
 		Tabs.FirstOrDefault(tab => tab.Id == window.ActiveTab?.Id);
@@ -97,7 +99,7 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 	public string StatusText =>
 		operationError
 		?? ActiveTab?.StatusText
-		?? "No tabs";
+		?? AppStrings.NoTabs;
 
 	public async Task InitializeAsync()
 	{
@@ -174,8 +176,19 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 
 	private void Window_StateChanged(object? sender, EventArgs args)
 	{
-		if (!dispatcherQueue.TryEnqueue(RefreshFromCore))
+		if (Interlocked.Exchange(ref refreshQueued, 1) is not 0)
 		{
+			return;
+		}
+
+		if (!dispatcher.TryEnqueue(
+			() =>
+			{
+				Interlocked.Exchange(ref refreshQueued, 0);
+				RefreshFromCore();
+			}))
+		{
+			Interlocked.Exchange(ref refreshQueued, 0);
 			if (Volatile.Read(ref isDisposed) is 0)
 			{
 				throw new InvalidOperationException(
@@ -231,7 +244,7 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 					var tabViewModel = new TabViewModel(
 						coreTab,
 						dataRoot,
-						dispatcherQueue,
+						dispatcher,
 						commandManager);
 					tabViewModel.PropertyChanged += TabViewModel_PropertyChanged;
 					tabViewModels[coreTab.Id] = tabViewModel;
@@ -241,14 +254,7 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 			var orderedTabs = coreTabs
 				.Select(coreTab => tabViewModels[coreTab.Id])
 				.ToArray();
-			if (!Tabs.SequenceEqual(orderedTabs))
-			{
-				Tabs.Clear();
-				foreach (var tab in orderedTabs)
-				{
-					Tabs.Add(tab);
-				}
-			}
+			ObservableCollectionSynchronizer.Synchronize(Tabs, orderedTabs);
 
 			var activeTabId = window.ActiveTab?.Id;
 			ActiveTabIndex = activeTabId is { } id
