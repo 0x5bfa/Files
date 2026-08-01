@@ -1,6 +1,6 @@
-# Files.App の項目機能とアクティブ化
+# Files の項目機能とアクティブ化
 
-この文書では、Quick Look、クラウドプロバイダー検出、詳細ビューの列、ファイルを開く操作を、新しい Files.App と Files.Core のどちらへ置くかを定義します。
+この文書では、Quick Look、クラウドプロバイダー検出、詳細ビューの列、ファイルを開く操作を、新しい Files と Files.Core のどちらへ置くかを定義します。
 これらはすべて項目に関係しますが、同じライフタイムや合成単位ではありません。
 
 ## 最初に分けるもの
@@ -8,7 +8,7 @@
 `model.Get<TFeature>()` が返す項目機能は、1 つの `IStorableModel` に束縛された任意機能です。
 インストール済みアプリ、現在のウィンドウ、一覧全体の列、サイドバーのクラウドルートを表すグローバル capability ではありません。
 
-| 関心事 | Files.Core の項目機能 | Files.App の所有物 | View / ViewModel の役割 |
+| 関心事 | Files.Core の項目機能 | Files の所有物 | View / ViewModel の役割 |
 | --- | --- | --- | --- |
 | 通常のプレビュー | `IPreviewSource` | `PreviewPresenter` | スナップショットを表示する |
 | Quick Look | `ILaunchTargetSource` | `QuickLookService` とウィンドウごとの `QuickLookSession` | `files.item.quickLook` を呼ぶ |
@@ -21,7 +21,7 @@
 flowchart LR
     Item["IStorableModel"]
     ItemFeatures["項目機能\nILaunchTargetSource\nICloudInfoSource\nIPropertySource"]
-    AppServices["Files.App\nQuickLookService\nCloudRootCatalog\nColumnCatalog\nFileLauncher"]
+    AppServices["Files\nQuickLookService\nCloudRootCatalog\nColumnCatalog\nFileLauncher"]
     Commands["ウィンドウコマンド"]
     VM["ViewModel"]
     View["WinUI View"]
@@ -35,13 +35,13 @@ flowchart LR
 ```
 
 この分割により、Core は WinUI、インストール済みアプリ、ウィンドウハンドル、アプリ選択 UI を知りません。
-Files.App はストレージソース固有のパス生成やクラウド判定を View に書きません。
+Files はストレージソース固有のパス生成やクラウド判定を View に書きません。
 
 ### 既存機能の置き場所
 
 新しい契約を増やす前に、既存機能を次の形へ寄せます。
 
-| Files.App の機能 | 新しい形 |
+| Files の機能 | 新しい形 |
 | --- | --- |
 | Tags | 表示と並べ替えは `IPropertySource`、変更はタグ用コマンドハンドラー |
 | Git 状態と履歴 | 1 列ごとの機能ではなく、共有 Git reader に基づく `IPropertySource` |
@@ -104,7 +104,7 @@ Quick Look は Core のプレビュー機能とは別です。
 
 したがって `IQuickLookSource` を全モデルに登録したり、`FilesCoreBuilder` で Quick Look のグローバル有効フラグを作ったりはしません。
 
-### Files.App の形
+### Files の形
 
 名前を簡単に保つため、外部アプリごとの実装を `IQuickLookApp`、選択された実装を使う共有サービスを `QuickLookService` と呼びます。
 
@@ -175,8 +175,8 @@ PowerToys Peek のように切り替えに対応しない実装は `false` を�
 
 ### `CloudRootCatalog`
 
-`CloudRootCatalog` は Files.App のアプリケーションスコープです。Windows の登録済み同期ルートを一度読み、サイドバーと項目判定に使える不変値を公開します。
-Windows API とレジストリを読む低レベル実装は `Files.Core/Storage/Windows` に置き、Files.App はその結果の更新とスナップショットを所有します。
+`CloudRootCatalog` は Files のアプリケーションスコープです。Windows の登録済み同期ルートを一度読み、サイドバーと項目判定に使える不変値を公開します。
+Windows API とレジストリを読む低レベル実装は `Files.Core/Storage/Windows` に置き、Files はその結果の更新とスナップショットを所有します。
 
 ```csharp
 public sealed record CloudRootInfo(
@@ -205,7 +205,7 @@ public interface ICloudRootCatalog
 アイコン、表示名、パスの文字列だけからプロバイダーを推測しません。
 レジストリ走査、アイコン読み込み、`DriveItem` 作成を 1 クラスに混ぜず、カタログは UI 非依存の値を返し、サイドバー ViewModel が表示項目へ変換します。
 既存の `CloudDrivesDetector` は Windows 用カタログ実装へ、`CloudDrivesManager` はサイドバー ViewModel へ分割して移行します。
-`AddWindowsStorage` は Windows 用の読み取り実装を利用可能にするだけです。すべての項目へクラウド機能を付けたり、Files.App が使わないカタログを起動したりはしません。
+`AddWindowsStorage` は Windows 用の読み取り実装を利用可能にするだけです。すべての項目へクラウド機能を付けたり、Files が使わないカタログを起動したりはしません。
 
 ### 項目ごとの `ICloudInfoSource`
 
@@ -246,7 +246,7 @@ ViewModel が表示文字列を解析して同期状態を逆算してはいけ�
 - 列の値は項目単位なので、`IPropertySource` が返します。
 - 表示中の列、幅、順序はユーザー状態なので、`BrowseViewSettings` が保持します。
 
-Files.App は、現在の `BrowseLocationContext` に対して `ColumnCatalog` を 1 回解決します。
+Files は、現在の `BrowseLocationContext` に対して `ColumnCatalog` を 1 回解決します。
 各列のまとまりは、難しい名前を避けて `IColumnSet` と呼びます。
 
 ```csharp
@@ -299,7 +299,7 @@ Files が所有する列の `DisplayName` はローカライズリソースか�
 Git 履歴やクラウド同期状態を、10,000 項目のフォルダー全体に eager に読み込みません。
 
 詳細ビューは `BrowseColumnDefinition` からセルを作り、Git やタグの固定列インデックスを XAML または code-behind に持ちません。
-特別な表示が必要なら Files.App 内の `ValueKind` とテンプレート選択へ閉じ込めます。
+特別な表示が必要なら Files 内の `ValueKind` とテンプレート選択へ閉じ込めます。
 
 ## ファイルを開く
 
@@ -354,7 +354,7 @@ sequenceDiagram
     end
 ```
 
-`FileLauncher` は Files.App のアプリケーションサービスで、Windows の関連付け起動、Open With、所有ウィンドウ付きエラー UI、実行ファイルの確認などを扱います。
+`FileLauncher` は Files のアプリケーションサービスで、Windows の関連付け起動、Open With、所有ウィンドウ付きエラー UI、実行ファイルの確認などを扱います。
 `.lnk` や Shell 仮想項目の解決は Windows 用 launcher / 項目機能へ置き、View にショートカット解析を書きません。
 画像アプリへ近隣ファイルを渡す最適化は launcher の任意ポリシーであり、基本のオープンフローを変更しません。
 ハンドラーは起動対象を値として取得した後、`IStorableModel` を platform 呼び出しやプロンプトへ渡しません。
@@ -392,7 +392,7 @@ flowchart TD
 ## 実装順序
 
 1. `ILaunchTargetSource` と Windows ファイルシステム実装を Files.Core に追加する。
-2. Files.App に `FileLauncher` と `OpenItemCommandHandler` を追加し、1 つの詳細ビューのダブルクリックを `files.item.open` へ移す。
+2. Files に `FileLauncher` と `OpenItemCommandHandler` を追加し、1 つの詳細ビューのダブルクリックを `files.item.open` へ移す。
 3. 残りのビュー、Enter、単一クリック設定、コンテキストメニューを同じコマンドへ移す。
 4. 既存 Quick Look 実装を `IQuickLookApp` へ適応し、`QuickLookService` とウィンドウ単位の `QuickLookSession` を追加する。
 5. `CloudDrivesDetector` を Windows 用 `CloudRootCatalog` へ分割し、サイドバーをカタログへ接続する。

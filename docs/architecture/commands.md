@@ -1,11 +1,11 @@
-# Files.App のコマンド実行
+# Files のコマンド実行
 
-Files.App は、コマンドバー、キーボードショートカット、コンテキストメニュー、コマンドパレット、
+Files は、コマンドバー、キーボードショートカット、コンテキストメニュー、コマンドパレット、
 自動化から利用できる 1 つのコマンド経路を必要とします。この経路は、ウィンドウ単位の UI 意図を、
 Files.Core にすでに実装されているナビゲーションとストレージのユースケースへ適応します。
 
 これはアプリケーション境界です。Files.Core はナビゲーション状態、ストレージ操作要求、ソース選択、
-結果の契約を引き続き所有します。Files.App はローカライズされた表示、入力ジェスチャー、プロンプト、
+結果の契約を引き続き所有します。Files はローカライズされた表示、入力ジェスチャー、プロンプト、
 進行状況 UI、エラーポリシーを所有します。
 
 ## 目標
@@ -42,7 +42,7 @@ flowchart TB
 ```
 
 Files.Core は `ICommand`、`XamlUICommand`、ローカライズリソースローダー、ダイアログ、ウィンドウハンドル、
-キーボード型を参照してはいけません。Files.App のハンドラーは、直接渡された AppModel と必要最小限のアダプター
+キーボード型を参照してはいけません。Files のハンドラーは、直接渡された AppModel と必要最小限のアダプター
 インターフェースには依存できますが、グローバルコンテナーから依存関係を解決してはいけません。
 
 ## 提案するソース配置
@@ -265,7 +265,7 @@ sequenceDiagram
 開く処理では通常のフォルダー形状より先に `IArchiveEntry` と `IArchiveSource` を確認します。これにより Shell 優先のアーカイブ動作と、
 暗号化アーカイブのフォールバックを維持できます。参照できないファイルを開く場合は、フォルダーナビゲーションではなくプラットフォーム起動アダプターへ送ります。
 ダブルクリック、Enter、単一クリック設定、コンテキストメニューはすべてこのコマンドへ集約します。
-通常ファイルの起動対象、Quick Look、クリック時の参照取得は [Files.App の項目機能とアクティブ化](files-app-features.md#ファイルを開く) で定義します。
+通常ファイルの起動対象、Quick Look、クリック時の参照取得は [Files の項目機能とアクティブ化](files-app-features.md#ファイルを開く) で定義します。
 
 ナビゲーションのキャンセルでは、新しい場所が正常に開くまで履歴を変更しません。ペインが履歴の権威ある所有者です。
 
@@ -295,7 +295,7 @@ sequenceDiagram
 ソースが変更通知を提供しない場合、アダプターは操作完了後に範囲を限定した更新を 1 回要求します。
 
 既存の操作要求は意図的に単一項目です。複数選択では範囲を限定したスケジューリングを使い、すべての項目結果を保持します。
-将来、ハンドラーが専用の一括要求を追加することはできますが、バックエンドが提供できない原子性を Files.App が主張してはいけません。
+将来、ハンドラーが専用の一括要求を追加することはできますが、バックエンドが提供できない原子性を Files が主張してはいけません。
 
 同一ソースの要求は引き続き `IStorageOperationService` を通ります。Windows と FTP 間などソースをまたぐコマンドには、
 [クリップボード、ドラッグ/ドロップ、Shell 連携](platform-interactions.md) で説明する別の汎用転送コーディネーターが必要です。
@@ -347,7 +347,7 @@ Files 標準とプラグインのコマンドでは、この契約を使えま�
 マネージャーは、コマンド ID、呼び出し元、所要時間、最終状態、バックエンドカテゴリを記録します。項目名、パス、FTP 認証情報、
 クリップボードの内容、Shell コマンドパラメーターは、既定では記録しません。
 
-Files.App は結果を次のように扱います。
+Files は結果を次のように扱います。
 
 - キャンセル: エラー UI を表示しない。
 - 未サポート: コマンドを無効にするか、簡潔な説明を表示する。
@@ -355,13 +355,13 @@ Files.App は結果を次のように扱います。
 - 部分成功: 失敗した項目だけを表示し、成功した作業は保持する。
 - 想定外の失敗: 例外をログに記録し、安定したエラーコードを表示する。
 
-Files.App がメッセージを選ぶ必要がある場合、ハンドラーはバックエンドのエラーを変更せずに返します。例外を握りつぶしてコマンドを成功したように見せてはいけません。
+Files がメッセージを選ぶ必要がある場合、ハンドラーはバックエンドのエラーを変更せずに返します。例外を握りつぶしてコマンドを成功したように見せてはいけません。
 
 ## 所有権
 
 ```mermaid
 flowchart TB
-    Host["FilesAppHost"]
+    Host["FilesHost"]
     Registry["CommandRegistry"]
     Window["WindowCommandManager"]
     Bindings["コマンドバインディング"]
@@ -423,7 +423,7 @@ flowchart TB
 
 `Files` は、`src/Files/Commands/`でこの command boundary を UI adapter として適用します。
 
-- `App2CommandRegistration.Build()`が`App`のcomposition rootで一度だけ呼び出され、
+- `App2CommandRegistration.Build()`（改名前の残存型名）が `App` の composition root で一度だけ呼び出され、
   `CommandRegistryBuilder`へstable ID、descriptor、handler factoryを明示登録します。
 - `CommandRegistry`はprocess-levelのimmutable catalogです。`MainWindow`から作られた各`RootViewModel`は、
   そのcatalogから独立した`WindowCommandManager`を作成します。
@@ -433,6 +433,12 @@ flowchart TB
 - browsing command はCore modelをXAMLへ公開せず、`RootViewModel`のactive tab/browserと
   `CoreBrowseAdapter`を使います。storage operation、shortcut、localization、extension commandは
   同じ登録境界へ追加します。
+
+これは Trickle-down MVVM の例外ではありません。registry は process scope、manager は window scope、
+`CommandContext` は active pane scope とし、ViewModel は binding adapter に留めます。新しい pane/context command は
+`RootViewModel` の全体状態を直接読むのではなく、`PaneModel` または明示的な window/pane context から評価します。
+Control は `FolderBrowser` や現在の pane の command surface を dependency property で受け取り、
+handler や service を Control 内で解決しません。
 
 ## 実装順序
 

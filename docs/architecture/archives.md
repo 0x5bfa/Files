@@ -23,7 +23,7 @@ SevenZipSharp では、シーク可能なストリームに対して `SevenZipEx
 ```mermaid
 sequenceDiagram
     actor User
-    participant App as Files.App
+    participant App as Files
     participant Session as BrowseSessionModel
     participant Resolver as BrowseLocationResolver
     participant Handler as ArchiveBrowseLocationHandler
@@ -79,10 +79,10 @@ sequenceDiagram
 アーカイブエントリが参照セッションへ確定される前に選択を完了させます。Shell の子と SevenZip の子を混在させません。
 識別情報、パスの正規化、メタデータ、変更動作が同じだとは仮定しません。
 
-## Files.App のエントリーポイント
+## Files のエントリーポイント
 
 Shell のアーカイブフォルダーと通常のファイルは、どちらも `IArchiveSource` を公開できます。
-Files.App は `IFolderModel` を通常のフォルダーとして扱う前に、この項目機能を確認しなければなりません。
+Files は `IFolderModel` を通常のフォルダーとして扱う前に、この項目機能を確認しなければなりません。
 
 ```csharp
 BrowseLocation CreateOpenLocation(IStorableModel item)
@@ -178,7 +178,7 @@ SevenZipSharp はネイティブ 7-Zip ライブラリのマネージドラッ�
 
 ## 認証情報
 
-Files.Core は `IArchiveCredentialResolver` を定義し、Files.App が実装を提供します。Core はダイアログを作りません。
+Files.Core は `IArchiveCredentialResolver` を定義し、Files が実装を提供します。Core はダイアログを作りません。
 
 ```csharp
 public sealed class ArchiveCredentialResolver
@@ -203,7 +203,7 @@ public sealed class ArchiveCredentialResolver
 
 一部の ZIP 形式は暗号化されていないディレクトリメタデータを公開し、暗号化エントリを抽出するときだけパスワードを検証します。
 SevenZip マウントは同じ認証情報リゾルバー契約を維持し、新しいプロンプトを直列化し、シーク可能な backing stream 上に extractor を作り直し、部分出力をクリアして再試行します。
-そのため Files.App のリゾルバーは、場所のオープンと後続のエントリストリームのオープンの両方から安全に呼び出せなければなりません。
+そのため Files のリゾルバーは、場所のオープンと後続のエントリストリームのオープンの両方から安全に呼び出せなければなりません。
 
 ## 所有権
 

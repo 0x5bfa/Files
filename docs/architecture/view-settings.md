@@ -36,9 +36,9 @@ flowchart TD
 
 列 ID には `IPropertySource` が返す安定した識別子と同じものを使います。ViewModel はその ID をローカライズされたラベルと WinUI 列オブジェクトへ変換します。
 
-列定義自体は `BrowseViewSettings` に保存しません。Files.App の `ColumnCatalog` が現在の場所に対して Shell、Files 基本、Tags、Git、Cloud の列セットを合成し、
+列定義自体は `BrowseViewSettings` に保存しません。Files の `ColumnCatalog` が現在の場所に対して Shell、Files 基本、Tags、Git、Cloud の列セットを合成し、
 設定はその結果に幅、順序、表示状態を適用します。保存済みの列が現在の場所で利用できなくても設定から削除しません。
-詳細な合成規則とプロパティ ID は [Files.App の項目機能とアクティブ化](files-app-features.md#列の合成) を参照してください。
+詳細な合成規則とプロパティ ID は [Files の項目機能とアクティブ化](files-app-features.md#列の合成) を参照してください。
 
 ## ナビゲーションフロー
 
@@ -62,7 +62,7 @@ sequenceDiagram
 ```
 
 セッションにストアを直接渡さない場合は、`BrowseLocation` ごとにメモリ内の値を保持します。`FilesCoreBuilder` は既定で `InMemoryViewSettingsStore` を渡します。
-Files.App は Files の設定データベースをバックエンドにした永続ストアを注入してください。
+Files は Files の設定データベースをバックエンドにした永続ストアを注入してください。
 
 セッションは新しいコンテキストの読み込みが完了した後にだけ、アクティブなコンテキストと項目リストを置き換えます。
 ナビゲーションが失敗またはキャンセルされた場合は、新しいコンテキストと部分的な項目を破棄し、現在のコンテキストと項目を保持します。

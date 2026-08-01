@@ -1,6 +1,6 @@
 # `Files.Operations` によるクラッシュ耐性のある操作
 
-保証するのは、`Files.App` がクラッシュしても、別プロセスの `Files.Operations` が実行中のファイル操作を継続することです。
+保証するのは、`Files` がクラッシュしても、別プロセスの `Files.Operations` が実行中のファイル操作を継続することです。
 サーバー、Windows、マシンの停止後に中断操作を自動再開しません。安全に再開できないコピーや移動を推測で再実行してはいけません。
 
 1 項目の Core 契約は [ストレージ操作](operations.md) を参照してください。
@@ -18,7 +18,7 @@ class 内で本体を省略して `;` で終えている member は、追加す�
 | Files プロセス数でサーバー終了 | active operation + active call + idle timeout |
 
 ```text
-Files.App
+Files
   CommandHandler -> FileOperationsModel -> IFileOperationClient
                                       -> WinRtFileOperationClient
                                       -> FileOperationServer
@@ -37,7 +37,7 @@ Files.Core
 
 ## Files.Core の操作値
 
-Core は WinRT を知らない通常の C# 型を持ちます。`Files.App` と `Files.Operations` の内部処理はこの型だけを使います。
+Core は WinRT を知らない通常の C# 型を持ちます。`Files` と `Files.Operations` の内部処理はこの型だけを使います。
 
 ```csharp
 namespace Files.Core.Storage.FileOperations;
@@ -531,7 +531,7 @@ static async Task Main()
 
 現在の public sealed class 全走査を explicit allowlist に置き換えます。
 activation factory を登録するのは public constructor を持つ `FileOperationServer` だけです。server が返す `OperationListResult` と `OperationSnapshotResult` は activatable class ではありません。
-`AppInstanceMonitor` と `Files.App/Program.cs` の server kill は削除します。
+`AppInstanceMonitor` と `Files/Program.cs` の server kill は削除します。
 
 ```xml
 <OutOfProcessServer
@@ -1087,7 +1087,7 @@ activeCalls == 0
 
 新しい call または operation は idle timer の generation を無効化します。
 
-## Files.App client と model
+## Files client と model
 
 ViewModel は生成された WinRT class を直接保持しません。
 
@@ -1231,7 +1231,7 @@ public sealed class FileOperationsModel : IAsyncDisposable
 }
 ```
 
-`FileOperationsModel` は Files.App のアプリケーションスコープです。WinUI、observable collection、ローカライズ文字列を持ちません。
+`FileOperationsModel` は Files のアプリケーションスコープです。WinUI、observable collection、ローカライズ文字列を持ちません。
 各ウィンドウの `FileOperationsViewModel` が dispatcher 上で observable collection へ適応し、Status Center へ依存関係プロパティで trickle down します。
 
 ```csharp
@@ -1252,7 +1252,7 @@ public sealed partial class FileOperationsViewModel
 
 ## コマンドからの開始
 
-削除確認、完全削除、競合動作、新しい名前、昇格、資格情報は Files.App で確定してから送信します。
+削除確認、完全削除、競合動作、新しい名前、昇格、資格情報は Files で確定してから送信します。
 
 ```csharp
 public async ValueTask ExecuteAsync(
@@ -1320,12 +1320,12 @@ FTP はサーバーが保護された資格情報を自分で解決できるよ�
 ## 受け入れ条件
 
 ```text
-1. Files.App が StartAsync を呼ぶ。
+1. Files が StartAsync を呼ぶ。
 2. server が Queued を journal へ書く。
 3. server-owned token で Windows 操作を開始する。
-4. Files.App を強制終了する。
+4. Files を強制終了する。
 5. Files.Operations が操作を完了する。
-6. 新しい Files.App が ListAsync で結果を取得する。
+6. 新しい Files が ListAsync で結果を取得する。
 7. 表示中フォルダーは watcher から更新される。
 ```
 

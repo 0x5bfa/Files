@@ -37,8 +37,8 @@ flowchart TD
 
 各段階の完了状況は [移行進捗](migration-progress.md) にのみ記録します。
 
-旧Files.Appの導入では既存XAMLとFrameを保持した互換adapterを使いますが、新規のApp2機能はこの経路へ戻しません。
-App2の実装済み境界と所有権は[新 Files アーキテクチャ](files-app2.md)を参照してください。
+旧 `Files.App` の導入では既存 XAML と Frame を保持した互換 adapter を使いますが、新規の `Files` 機能はこの経路へ戻しません。
+`Files` の実装済み境界と所有権は [Files アーキテクチャ](files.md) を参照してください。
 
 ### Files shellの移行境界
 
@@ -62,8 +62,8 @@ flowchart LR
 `MainPage`へ戻しません。`DetailsFolderView`はListViewを使う基本的な詳細表示の契約を提供し、列定義や高度な表示設定は
 独立したview sliceとして追加します。
 
-App2のnavigation、tab、pane、folder double-clickは`src/Files/Commands/`のstable command IDへ集約します。
-process-level `CommandRegistry`は`App2CommandRegistration`で構築し、windowごとの
+`Files` の navigation、tab、pane、folder double-click は `src/Files/Commands/` の stable command ID へ集約します。
+process-level `CommandRegistry` は `App2CommandRegistration`（改名前の残存型名）で構築し、window ごとの
 `WindowCommandManager`が各ViewModelとcontrolへbindingを提供します。Coreはこの境界からWinUI型を参照しません。
 
 ## 相互運用コードの所有権
@@ -78,7 +78,7 @@ flowchart LR
 
 生成出力は追跡対象外のままにし、直接編集してはいけません。アセンブリが移動しても、既存の `Windows.Win32` 名前空間は維持します。
 
-正確な導入スライスは[新 Files.App アーキテクチャ](files-app.md)を参照してください。
+正確な導入スライスは [Files アーキテクチャ](files.md) を参照してください。旧 UI の互換境界は [Files.App の Core 統合](files-app.md) を参照します。
 
 ## 競合の抑制
 

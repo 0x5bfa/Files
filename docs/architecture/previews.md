@@ -57,7 +57,7 @@ flowchart LR
 アクセスの判定は `IPreviewStreamAccessPolicy` によってストリームのオープンから分離します。
 ポリシーはストリームを開く前に、`RequiresHydration`、`AccessDenied`、`DisabledByPolicy`、その他の
 `PreviewBlockReason` を返せます。要求の `PreviewHydrationPolicy` はポリシーへそのまま渡されます。
-`FilesCoreBuilder` は寛容なフォールバックを提供します。本番の Files.App は hydration と信頼のポリシーを
+`FilesCoreBuilder` は寛容なフォールバックを提供します。本番の Files は hydration と信頼のポリシーを
 注入してください。
 
 ## ストリームの所有権とサイズ制限
@@ -127,7 +127,7 @@ COM クリーンアップは Core で実装します。
 `Unload()`、`SetSite(null)`、すべての COM 解放を試行します。破棄は冪等です。
 
 キャンセルはキューに入った操作の開始を防ぎますが、実行中の同期的なサードパーティー COM メソッドを中断することはできません。
-Files.App アダプターは専用ホスト HWND を作成し、配置サイズを物理ピクセル境界へ変換し、テーマ・フォーカス・キーボードイベントを
+Files アダプターは専用ホスト HWND を作成し、配置サイズを物理ピクセル境界へ変換し、テーマ・フォーカス・キーボードイベントを
 転送し、アンロード時にセッションを破棄します。XAML コントロールとホストウィンドウの作成は意図的に Core に含めません。
 
 セッションの終了はスレッド境界をまたいで順序付けます。まずプレビューコントローラーと COM 状態を専用プレビュー STA で破棄し、
@@ -136,4 +136,4 @@ Files.App アダプターは専用ホスト HWND を作成し、配置サイズ�
 
 `AddWindowsStorage` は `StreamPreviewLoader` に優先度 200、`WindowsShellPreviewLoader` に優先度 100 を与えます。そのため既知の
 ストリーム形式が優先されます。ブロックされた結果はフォールバックを停止し、`null` のストリーム結果なら Shell 記述子ソースを実行できます。
-残る実装は、[新 Files.App アーキテクチャ](files-app.md) に記載する Files.App のレンダラーとホストです。
+残る実装は、[旧 Files.App の互換アーキテクチャ](files-app.md) に記載する旧 Files.App のレンダラーとホストです。

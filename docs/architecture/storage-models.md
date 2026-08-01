@@ -11,6 +11,18 @@ WinUI の概念を公開しません。`Files.Core.AppModels` にはウィンド
 
 `Files.Core` プロジェクトには CoreModel アダプターと AppModel の両方を含めます。プロジェクトの配置を、この文書で定める依存境界の代わりに使ってはいけません。
 
+### OwlCore.Storage を使うときの規則
+
+OwlCore.Storage の最小契約は、異なるストレージを同じ形で扱い、実装とテストの負担を抑えるための出発点です。
+
+- `IStorable` の `Id` と `Name` だけを、すべての項目が提供できる値として扱います。
+- `IFile.OpenStreamAsync` と `IFolder.GetItemsAsync` は、ファイル/フォルダーの基本能力です。
+- パスや親を必要とする処理は `IAddressableStorable`/`IAddressableFolder` などの能力を確認してから実行します。
+- 変更通知と変更操作は別の能力です。読み取り専用の項目へ書き込み API を要求したり、例外を能力判定の代わりに使ったりしません。
+- Files の `IStorageSource` は、認証・ルート・解決を所有する source 境界です。`IStorable` の代替や、項目 AppModel の親として公開しません。
+
+したがって、Files の `StorableReference` は source ID と項目 ID を結合しますが、`StorageAddress` や `LastKnownAddress` を識別子へ昇格させません。
+
 ```mermaid
 classDiagram
     class IStorageSource {
@@ -134,7 +146,7 @@ flowchart LR
 
 参照セッションの置換、更新、差分の削除/名前変更/更新、ナビゲーション失敗、セッション終了では、すべて `IStorableModel.DisposeAsync` を待機します。
 クリーンアップは所有するすべての項目を試行し、残りのモデルを放棄せずに失敗を集約します。同期 `Dispose` メンバーは互換性ブリッジです。
-Files.App は UI スレッド上の破棄を非同期のまま維持しなければなりません。
+Files は UI スレッド上の破棄を非同期のまま維持しなければなりません。
 
 ストレージソースと共有サービスはより長いライフタイムを持ち、`FilesDataRoot` またはアプリケーションの合成ルートが所有します。
 これにより、ネイティブリソースの数をビジュアルツリーではなくモデルグラフに対応させて制限できます。

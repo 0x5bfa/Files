@@ -36,7 +36,7 @@ Windows テストは実際の一時ファイルと Shell API を使い、次を�
 プロセスレベルの Shell 動作を共有するテストには `DoNotParallelize` を付けます。各テストは固有の一時ディレクトリを作成し、`finally` で削除します。
 
 Windows Shell プレビューコントローラーには別の手動スモーク境界があります。ホストされたテストマシンにインストールされた第三者ハンドラーやアウトオブプロセス COM サーバーは決定論的にできないため、
-代表的なローカル `.txt`、`.pdf`、Office ファイルに対して Files.App のホストアダプターを実行します。
+代表的なローカル `.txt`、`.pdf`、Office ファイルに対して `Files` のホストアダプターを実行します。
 
 アーカイブシナリオテストでは、次の小さな fixture をコミットして保持します。暗号化なし/ありの ZIP と 7z、ヘッダー暗号化 7z、合成フォルダー、大文字小文字が異なる名前、
 不正なトラバーサルエントリ、シーク不可の backing stream です。Shell の適用可否は OS バージョンではなく項目機能を基準に決まるため、各 fixture を Windows 10 と現在の Windows 11 イメージで実行します。
@@ -72,7 +72,7 @@ Shell、ディスク、ネットワーク、ソースの遅延をマイクロベ
 
 ## Files デバッグスモークと性能記録
 
-最初のApp2垂直スライスは、Core契約を通した手動デバッグスモークで確認します。x64のDeveloper PowerShellで
+最初の `Files` 垂直スライスは、Core 契約を通した手動デバッグスモークで確認します。x64 の Developer PowerShell で
 `src/Files/Files.csproj`をDebugビルドし、次の操作を1回ずつ実行します。
 
 1. 起動して`RootView`、custom tab strip、window単位の`NavigationToolbar`、native `NavigationView`、Homeの一覧が表示されることを確認する。
@@ -86,7 +86,7 @@ Visual StudioのDebug Diagnostic Toolsまたは同等の計測で、起動から
 記録にはWindowsバージョン、CPU、項目数、cold/warm cache、Shell拡張の有無を含めます。
 
 再現可能な比較値が必要になったら、同じfixtureと項目数でFiles.Core benchmarkをRelease実行し、Debugスモークの
-startup/navigation/refresh観測値と混ぜずに保存します。App2のbenchmarkはUI描画時間ではなく、Coreのresolve、
+startup/navigation/refresh観測値と混ぜずに保存します。`Files.Benchmarks` は UI 描画時間ではなく、Core の resolve、
 enumeration、projection、selection reconciliationの境界を対象に追加します。
 
 ## CI

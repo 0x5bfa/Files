@@ -34,7 +34,7 @@ builder は常に次を登録します。
 | AppModel | `BrowsePaneFactory` と `FilesApplicationModel` |
 | 操作 | 登録済みハンドラーを使う `StorageOperationService` |
 
-Files.App は `Build` の前に、永続化された `IViewSettingsStore` と durable または instrumented な `IThumbnailCache` を注入します。
+Files は `Build` の前に、永続化された `IViewSettingsStore` と durable または instrumented な `IThumbnailCache` を注入します。
 
 ## Windows の垂直スライス
 
@@ -58,7 +58,7 @@ await using var runtime = builder.Build();
 ストリームローダーが `null` を返すと Shell ローダーへフォールバックし、ブロック結果は終端結果になります。
 
 `AddWindowsStorage(enablePreviews: false)` は 2 つのプレビュー経路を省略します。寛容な既定ポリシーはテストと初期統合に便利です。
-本番の Files.App では、クラウド hydration、信頼、管理ポリシー、ユーザー設定を考慮するポリシーを注入します。
+本番の Files では、クラウド hydration、信頼、管理ポリシー、ユーザー設定を考慮するポリシーを注入します。
 
 `AddWindowsStorage(enableArchives: false)` はアーカイブ項目機能とその場所ハンドラーを省略します。
 `AddArchiveBrowsing` はカスタムバックエンド、probe、認証情報リゾルバーを使って独立して登録できます。既定のセレクターは Windows Shell を優先度 200、SevenZipSharp を優先度 100 で使います。
@@ -81,7 +81,7 @@ builder.AddFtpStorage(
 	archiveCredentialResolver: archiveCredentials);
 ```
 
-プロファイルにパスワードを含めてはいけません。Files.App は保護されたアプリケーション基盤を背後に持つ `IFtpCredentialResolver` を提供します。
+プロファイルにパスワードを含めてはいけません。Files は保護されたアプリケーション基盤を背後に持つ `IFtpCredentialResolver` を提供します。
 保存済みプロファイルごとに `Build` の前に `AddFtpStorage` を 1 回呼び出してください。識別情報、ストリーム所有権、現在のランタイム登録制限は[FTP ストレージソース](ftp-storage.md)を参照してください。
 
 ## Core の拡張
@@ -114,7 +114,7 @@ builder.ItemFeatures.Add<IPropertySource>(
 
 | プロパティ | コンシューマー |
 | --- | --- |
-| `Application` | ウィンドウ単位の Files.App ホスト |
+| `Application` | ウィンドウ単位の Files ホスト |
 | `PaneFactory` | テストまたはウィンドウ復元を行う特殊ホスト |
 | `LocationResolver` | 診断とカスタム AppModel |
 | `DataRoot` | ソース検出と明示的な参照解決 |
@@ -138,7 +138,7 @@ runtime は次の順で破棄します。
 
 ```mermaid
 flowchart TD
-    UI["Files.App ViewModel とプレゼンター"]
+    UI["Files ViewModel とプレゼンター"]
     App["Application model graph"]
     Shared["Core が所有する共有サービス"]
     Sources["FilesDataRoot とソース"]
@@ -148,7 +148,7 @@ flowchart TD
     Shared --> Sources
 ```
 
-最初のノードは Files.App が所有し、runtime より先に破棄しなければなりません。runtime 内部では、アプリケーションモデル、プレビュー STA などの専用サービス、ストレージソースの順に破棄します。
+最初のノードは Files が所有し、runtime より先に破棄しなければなりません。runtime 内部では、アプリケーションモデル、プレビュー STA などの専用サービス、ストレージソースの順に破棄します。
 各段階はエラー後も継続し、最終破棄は冪等です。
 
 ## アンチパターン
@@ -159,5 +159,5 @@ flowchart TD
 - 項目ごとにスケジューラー、キャッシュ、ソースを作る。
 - モデル内部でグローバル IoC コンテナーから依存関係を解決する。
 - WinUI レンダラーを項目機能として登録する。
-- `FilesDataRoot` から借りたソースを Files.App が破棄する。
+- `FilesDataRoot` から借りたソースを Files が破棄する。
 - `WindowsStorable` モデルを `StorableReference` の代わりに保持する。

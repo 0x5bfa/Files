@@ -48,15 +48,33 @@ flowchart TB
 | プロパティとサムネイルのスケジュール | `BrowsePrefetchCoordinator` |
 | プレビューの選択とライフタイム | `BrowsePreviewModel` |
 | 作成、名前変更、コピー、移動、削除 | `IStorageOperationService` |
-| observable collection と dispatcher への適用 | Files.App のコレクションアダプター |
-| コマンド、ダイアログ、表示状態 | Files.App |
+| observable collection と dispatcher への適用 | Files のコレクションアダプター |
+| コマンド、ダイアログ、表示状態 | Files |
 
-最初の Files.App 導入スライスでは `IBrowseSessionModel` を安定させます。新しい処理が独自のライフタイム、キュー、整合性不変条件を持つ場合、
+最初の Files 導入スライスでは `IBrowseSessionModel` を安定させます。新しい処理が独自のライフタイム、キュー、整合性不変条件を持つ場合、
 責務を直接追加せず、この aggregate の背後に内部コラボレーターを抽出します。候補はナビゲーション準備、フォルダー変更の調整、表示状態です。
 ソースファイルを短くするだけの目的で抽出せず、最初の UI コンシューマーで独立してテストできる境界を確認してください。
 
 次のものを `BrowseSessionModel` に入れてはいけません。WinUI 型、observable collection、ローカライズ文字列、コマンド実装、ダイアログ、
 Shell 相互運用、ソース固有の分岐、プロセスサービスの検索です。
+
+## Trickle-down MVVM の適用
+
+モデルグラフと ViewModel グラフは、同じ所有階層と粒度を保ちます。
+
+| 層 | 原則 | 禁止すること |
+| --- | --- | --- |
+| AppModel | 子モデルを作成・所有し、設定済みの依存関係を子へ渡す | WinUI 型、View の表示状態、サービスロケーター |
+| ViewModel | 直接の AppModel を通知、コマンド binding、表示用コレクションへ適応する | `FilesCoreRuntime`、`IFilesDataRoot`、`IServiceProvider` の探索 |
+| View / Control | DP で ViewModel を受け取り、template と code-behind で UI 挙動を所有する | Control 内部実装のための汎用 ViewModel、Core の直接呼び出し |
+
+ViewModel が Core の差分を `ObservableCollection` へ投影する場合は、明示的な UI adapter を合成ルートで作ります。
+adapter のために dispatcher や data root が必要でも、それを入れ子の ViewModel へ無制限に引き継がないでください。
+現在の `RootViewModel`、`TabViewModel`、`PaneViewModel`、`FolderBrowserViewModel` に残るこの形は、最初の browsing slice の移行例外です。
+新しい ViewModel は、直接モデル 1 つで構築できることを受け入れ条件にします。
+
+View は次の境界を守ります。`PaneHost` は pane の配置と active 状態だけを扱い、`PaneView` が pane ごとのスクロールを所有します。
+`PaneContentView` は content kind の template 選択、`FolderBrowser` は view mode の選択、各 folder view は入力・選択・viewport の UI 操作を所有します。
 
 ## グラフの作成
 
@@ -112,7 +130,7 @@ sequenceDiagram
 `ArchiveLocation` は外側アーカイブの安定した参照と、正規化された論理エントリパスを含みます。スコープ付きアーカイブエントリのソース ID や認証情報を含めてはいけません。
 
 `BrowseNavigationHistorySnapshot` は不変で、カーソルを検証します。多相な `BrowseLocation` の値を明示的なシリアライズスキーマへ変換すれば、
-Files.App の永続化 DTO に適しています。ウィンドウセッションの保存とバージョン管理は、アプリケーションのアクティブ化とユーザー設定ポリシーを含むため Files.App に属します。
+Files の永続化 DTO に適しています。ウィンドウセッションの保存とバージョン管理は、アプリケーションのアクティブ化とユーザー設定ポリシーを含むため Files に属します。
 
 ## 上位へのナビゲーション
 
@@ -161,7 +179,7 @@ UI は実体化された要素ごとではなく、範囲が変わった後に�
 
 ## イベントと UI dispatch
 
-AppModel のイベントは、モデル遷移を確定したスレッドで発生します。WinUI dispatcher 上で実行される保証はありません。Files.App は次を行います。
+AppModel のイベントは、モデル遷移を確定したスレッドで発生します。WinUI dispatcher 上で実行される保証はありません。Files は次を行います。
 
 1. イベントハンドラーで不変のモデルスナップショットを取得する。
 2. ウィンドウ dispatcher に 1 回の更新をキューへ登録する。
@@ -199,5 +217,5 @@ flowchart TD
 - 所有権と逆の順序で子を破棄する。
 - 後続の子を放棄せず、クリーンアップ失敗を集約する。
 
-Files.App はまず ViewModel とアクティブな Shell プレビューセッションを破棄し、その後 `FilesCoreRuntime` を破棄します。
+Files はまず ViewModel とアクティブな Shell プレビューセッションを破棄し、その後 `FilesCoreRuntime` を破棄します。
 UI スレッドからこれらの非同期破棄経路を同期的にブロックしてはいけません。

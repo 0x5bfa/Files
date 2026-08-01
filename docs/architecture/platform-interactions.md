@@ -1,9 +1,9 @@
 # クリップボード、ドラッグ/ドロップ、Shell 連携
 
-クリップボード、ドラッグ/ドロップ、Windows Shell のコンテキストメニューは、新しい Files.App のモデルグラフを他のアプリケーションやネイティブ拡張へ接続します。
+クリップボード、ドラッグ/ドロップ、Windows Shell のコンテキストメニューは、新しい Files のモデルグラフを他のアプリケーションやネイティブ拡張へ接続します。
 これらは、信頼できない外部データ、HWND と OLE STA の親和性、遅延ストリーム、可変な選択、破壊的なストレージ操作を組み合わせる高リスクなプラットフォームアダプターです。
 
-これらのアダプターを所有するのは Files.App です。Files.Core は安定した項目参照、ソース解決、同一ソース操作、将来のソース間転送コーディネーターを提供します。
+これらのアダプターを所有するのは Files です。Files.Core は安定した項目参照、ソース解決、同一ソース操作、将来のソース間転送コーディネーターを提供します。
 WinUI や OLE のデータオブジェクトを CoreModel や AppModel に入れてはいけません。
 
 ## 境界
@@ -104,7 +104,7 @@ public interface IStorageTransferService
 
 リンクは、宛先ソースがリンク操作を明示的にサポートする場合だけ扱います。コピーへ暗黙的に劣化させてはいけません。
 
-競合のプロンプトは Files.App に残します。Core には解決済みのポリシーまたはソース非依存のコールバック契約を渡し、UI は表示させません。
+競合のプロンプトは Files に残します。Core には解決済みのポリシーまたはソース非依存のコールバック契約を渡し、UI は表示させません。
 
 ## クリップボードアーキテクチャ
 
@@ -321,7 +321,7 @@ Windows 以外のソースには Files 標準メニューだけを表示しま�
 
 ### Shell ターゲットブリッジ
 
-Files.App はパスから Windows の識別情報を再構築してはいけません。現在の `StorableReference` 値を不変の Shell ターゲット記述子へ変換する、狭い Windows 固有ブリッジを追加します。
+Files はパスから Windows の識別情報を再構築してはいけません。現在の `StorableReference` 値を不変の Shell ターゲット記述子へ変換する、狭い Windows 固有ブリッジを追加します。
 
 ```csharp
 public sealed record ShellSelectionTarget(
@@ -336,7 +336,7 @@ public interface IWindowsShellSelectionTargetResolver
 }
 ```
 
-記述子に含めるのはコピーされた PIDL バイト列であり、借用ポインターや生存中の COM オブジェクトではありません。Files.App は所有する PIDL を再構築し、メニューの STA で親フォルダーを束縛します。
+記述子に含めるのはコピーされた PIDL バイト列であり、借用ポインターや生存中の COM オブジェクトではありません。Files は所有する PIDL を再構築し、メニューの STA で親フォルダーを束縛します。
 リゾルバーはすべての参照を検証し、選択を表現できないときは `null` を返します。
 
 最初の実装では、共通の Shell 親を 1 つ持つ項目をサポートします。親が混在する場合は Files 標準コマンドにフォールバックします。選択の一部だけのコンテキストメニューを黙って構築してはいけません。
@@ -355,7 +355,7 @@ public interface IWindowsShellSelectionTargetResolver
 
 ```mermaid
 sequenceDiagram
-    participant App as Files.App
+    participant App as Files
     participant Resolver as Shell ターゲットリゾルバー
     participant Menu as Shell メニューセッション
     participant Window as 所有ウィンドウ

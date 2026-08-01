@@ -81,7 +81,7 @@ flowchart TD
 | コンポーネント | 責務 |
 | --- | --- |
 | `FtpConnectionProfile` | 秘密情報を除くエンドポイント、ルート、TLS、比較設定 |
-| `IFtpCredentialResolver` | Files.App のポリシーに従って一時的な認証情報を提供 |
+| `IFtpCredentialResolver` | Files のポリシーに従って一時的な認証情報を提供 |
 | `FtpConnection` | 認証情報をキャッシュし、拒否された認証情報を 1 回だけ再試行し、分離されたコマンドセッションを作成 |
 | `IFtpSession` | テスト可能な FTP コマンドおよびデータストリーム境界 |
 | `FluentFtpSession` | FluentFTP 型を変換する唯一のレイヤー |
@@ -174,7 +174,7 @@ sequenceDiagram
 `GenerateUniqueName` は `name (2).ext`、`name (3).ext` のような名前を生成します。
 
 FTP にはごみ箱がありません。`Permanently == false` の `DeleteOperationRequest` は失敗結果を返し、
-Files.App が明示的な確認を求められるようにします。
+Files が明示的な確認を求められるようにします。
 
 FTP と別のソース間の転送は、このソースの内部に隠しません。両方のソースを解決し、CoreModel 間で
 ストリームを転送する、将来のストレージ非依存クロスソース転送コーディネーターの責務です。
@@ -219,12 +219,12 @@ await using var runtime = builder.Build();
 共有ローダーやハンドラーが重複登録されません。FTP プロパティファクトリはソース単位のままです。
 
 現在の `FilesDataRoot` のソース集合は `Build` 後には不変です。保存済み接続を実行時に追加・削除するには、
-ソースの有効期間を明示した将来のソースレジストリ契約が必要です。初期の Files.App はプロセス起動時に
+ソースの有効期間を明示した将来のソースレジストリ契約が必要です。初期の Files はプロセス起動時に
 プロファイルを読み込めます。
 
-## Files.App の責務
+## Files の責務
 
-Files.App が所有するもの:
+Files が所有するもの:
 
 - 秘密情報を含まないプロファイルの永続化。
 - Windows Credential Manager または別の保護された秘密ストア。
