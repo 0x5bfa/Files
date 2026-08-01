@@ -13,6 +13,20 @@ This project is a C#/.NET WinUI 3 desktop app; an alternative to File Explorer.
 - For Win32, COM, Shell, clipboard, hotkey, and file operation interop, prefer `src/Files.Core/NativeMethods.txt` and the existing wrappers/helpers in `src/Files.Core/Interop/Windows`.
 - Avoid ad hoc P/Invoke declarations when CsWin32 or existing interop code can cover the API.
 - Do not edit generated CsWin32 output directly. Update source declarations, wrappers, or generator inputs instead.
+
+### CsWin32 generated interop characteristics
+
+- CsWin32 output is build-generated under `src/Files.Core/obj/<platform>/<configuration>/<target-framework>/Generated/CsWin32`; the large `Windows.Win32.NativeMethods.g.cs` file and its manifest are disposable build artifacts. Inspect targeted declarations only and never edit them.
+- `src/Files.Core/NativeMethods.txt` and `NativeMethods.json` are the inputs. The current JSON enables public output, source-generated COM interop, and `preserveSig` for all COM methods; change those inputs or a wrapper when behavior must change.
+- Native entry points are emitted as `Windows.Win32.PInvoke` partial methods using `LibraryImport`, `DefaultDllImportSearchPaths(System32)`, Unicode `W` entry points where applicable, and `SupportedOSPlatform` annotations. Do not add a duplicate `DllImport` for an API already listed in `NativeMethods.txt`.
+- `Files.Core` enables `DisableRuntimeMarshalling` and `AllowUnsafeBlocks`; generated declarations therefore rely on source-generated marshalling and pointer-safe code. Keep unsafe code at the interop boundary instead of reintroducing runtime-marshalling assumptions.
+- For APIs whose metadata permits it, the generator emits both an unsafe pointer-level declaration and managed overloads using `string`, `Span`/`ReadOnlySpan`, nullable structs, `SafeHandle`, or generic COM outputs. Prefer the managed overload; use the raw overload only when the pointer, buffer, or ownership contract requires it.
+- Native typedefs are represented by generated types such as `HANDLE`, `HWND`, `PCWSTR`, `PWSTR`, `HSTRING`, `BOOL`, `HRESULT`, and typed enums. Keep those types at the interop boundary instead of replacing them with `IntPtr`, `string`, or untyped integers.
+- Generated SafeHandle overloads encode ownership and invalid-handle values and protect input handles with `DangerousAddRef`/`DangerousRelease`. Preserve the generated ownership semantics; do not manually close a borrowed handle or call `DangerousGetHandle` unless crossing an unavoidable raw-pointer boundary.
+- `HRESULT` results expose `Succeeded`, `Failed`, and `ThrowOnFailure`; APIs marked `SetLastError` use the Win32 last-error channel. Check the correct channel for each API and read `Marshal.GetLastPInvokeError()` immediately after a failing last-error call.
+- COM declarations use `[GeneratedComInterface]`, an explicit GUID, `InterfaceIsIUnknown`, and preserved HRESULT signatures. Co-creatable classes expose `CreateInstance<T>()` and reject direct construction; pass a generated COM interface type and handle the returned HRESULT.
+- Pointer outputs such as PIDLs, `PWSTR*`, HSTRINGs, and other native buffers retain their native allocator contract. Release them exactly once with the matching existing helper (`CoTaskMemFree`, `WindowsDeleteString`, `LocalFree`, or a generated SafeHandle) on every path.
+- Generated structs may contain explicit unions, inline arrays, and unmanaged `Stdcall` function pointers. Use the generated layout and callback type exactly, keep buffers valid for the full call, and avoid hand-written layout substitutes.
 - For UI work, use existing XAML resources, controls, converters, commands, and localization patterns. Avoid one-off styles or hard-coded user-visible strings.
 - Start by identifying the smallest relevant project, feature area, and files for the task.
 - Read nearby code before adding new abstractions. Prefer existing WinUI, MVVM, service, command, and storage patterns.
@@ -28,8 +42,7 @@ This project is a C#/.NET WinUI 3 desktop app; an alternative to File Explorer.
 ├── Files.App.BackgroundTasks    Background task project
 ├── Files.App.Server             App service/server project
 ├── Files.Core                   Core models, storage, and Win32 interop
-├── Files.Core.SourceGenerator   Roslyn source generators and analyzers
-└── Files.Shared                 Shared attributes, extensions, and common code
+└── Files.Core.SourceGenerator   Roslyn source generators and analyzers
 ```
 
 ```text
