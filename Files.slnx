@@ -31,21 +31,21 @@
     </Project>
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/Files.Core.Tests/Files.Core.Tests.csproj">
+    <Project Path="tests/Files.UnitTests/Files.UnitTests.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
     </Project>
-    <Project Path="tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj">
+    <Project Path="tests/Files.Benchmarks/Files.Benchmarks.csproj">
       <Platform Solution="Debug|x64" Project="x64" />
     </Project>
-    <Project Path="tests/Files.App.UITests/Files.App.UITests.csproj">
+    <Project Path="tests/Files.ControlTests/Files.ControlTests.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />
       <Deploy />
     </Project>
-    <Project Path="tests/Files.InteractionTests/Files.InteractionTests.csproj">
+    <Project Path="tests/Files.AxeTests/Files.AxeTests.csproj">
       <Platform Solution="*|arm64" Project="arm64" />
       <Platform Solution="*|x64" Project="x64" />
       <Platform Solution="*|x86" Project="x86" />

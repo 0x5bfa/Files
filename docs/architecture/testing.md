@@ -4,7 +4,7 @@
 
 ## ユニットテスト
 
-`tests/Files.Core.Tests` では次を対象にします。
+`tests/Files.UnitTests` では次を対象にします。
 
 - 遅延項目機能の解決、合成、所有権、非同期破棄。
 - サムネイルキャッシュの無効化競合と LRU 動作。
@@ -48,7 +48,7 @@ FTP パスワードをテスト出力、アドレス、スナップショット�
 
 ## ベンチマーク
 
-`tests/Files.Core.Benchmarks` は決定論的なアーキテクチャオーバーヘッドを測定します。
+`tests/Files.Benchmarks` は決定論的なアーキテクチャオーバーヘッドを測定します。
 
 - ファクトリ数を変えた項目機能解決の cold/cached 動作。
 - サムネイルキャッシュのヒット、ミス、挿入、追い出し。
@@ -56,14 +56,14 @@ FTP パスワードをテスト出力、アドレス、スナップショット�
 実行方法:
 
 ```powershell
-dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj `
+dotnet run --project tests/Files.Benchmarks/Files.Benchmarks.csproj `
 	-c Release -- --filter '*'
 ```
 
 dry smoke 設定:
 
 ```powershell
-dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj `
+dotnet run --project tests/Files.Benchmarks/Files.Benchmarks.csproj `
 	-c Release -- --smoke
 ```
 
@@ -96,11 +96,11 @@ enumeration、projection、selection reconciliationの境界を対象に追加�
 ローカルでコミットする前に:
 
 ```powershell
-dotnet build tests/Files.Core.Tests/Files.Core.Tests.csproj `
+dotnet build tests/Files.UnitTests/Files.UnitTests.csproj `
 	-c Release -p:Platform=x64
-dotnet test tests/Files.Core.Tests/Files.Core.Tests.csproj `
+dotnet test tests/Files.UnitTests/Files.UnitTests.csproj `
 	-c Release -p:Platform=x64 --no-build
-dotnet run --project tests/Files.Core.Benchmarks/Files.Core.Benchmarks.csproj `
+dotnet run --project tests/Files.Benchmarks/Files.Benchmarks.csproj `
 	-c Release -p:Platform=x64 -- --smoke
 git diff --check
 ```

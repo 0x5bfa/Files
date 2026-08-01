@@ -83,7 +83,7 @@ jobs:
         run: |
           xstyler -l None -r -d src/Files
           xstyler -l None -r -d src/Files.Controls
-          xstyler -l None -r -d tests/Files.App.UITests
+          xstyler -l None -r -d tests/Files.ControlTests
 
       - name: Commit formatted files
         if: env.CAN_RUN == 1

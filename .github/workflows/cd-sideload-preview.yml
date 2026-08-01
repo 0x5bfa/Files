@@ -36,7 +36,7 @@ jobs:
       APP_PROJECT_PATH:           'src\Files\Files.csproj'
       PACKAGE_MANIFEST_PATH:      'src\Files\Package.appxmanifest'
       LAUNCHER_PROJECT_PATH:      'src\FilesLauncher\FilesLauncher.vcxproj'
-      TEST_PROJECT_PATH:          'tests\Files.InteractionTests\Files.InteractionTests.csproj'
+      TEST_PROJECT_PATH:          'tests\Files.AxeTests\Files.AxeTests.csproj'
       APP_INSTALLER_SIDELOAD_URL: 'https://cdn.files.community/files/preview/'
 
     steps:

@@ -49,17 +49,18 @@ This project is a C#/.NET WinUI 3 desktop app; an alternative to File Explorer.
 ```text
 /src
 ├── Files                   Main WinUI app
-├── Files.Controls           Shared app controls
-├── Files.Operations             App service/server project
-├── Files.Core                   Core models, storage, and Win32 interop
-└── Files.SourceGenerators   Roslyn source generators and analyzers
+├── Files.Controls          Shared app controls
+├── Files.Operations        App service/server project
+├── Files.Core              Core models, storage, and Win32 interop
+└── Files.SourceGenerators  Roslyn source generators and analyzers
 ```
 
 ```text
 /tests
-├── Files.App.UITests
-├── Files.App.UnitTests
-└── Files.InteractionTests
+├── Files.UnitTests
+├── Files.Benchmarks
+├── Files.ControlTests
+└── Files.AxeTests
 ```
 
 ## Build
@@ -92,7 +93,8 @@ msbuild -restore src/Files/Files.csproj -p:Configuration=Debug -p:Platform=x64 -
 
 ## Test
 
-We currently don't have a suitable set of tests for AI agents. Just make sure that the builds succeed.
+Most of the backend code resides in `Files.Core` and is covered by unit tests. The UI code is covered by interaction tests and UI tests.
+Make sure to run the relevant tests for your change. If you are unsure, run all tests under `/tests`.
 
 ## Commit & Push
 

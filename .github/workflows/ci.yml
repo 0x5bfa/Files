@@ -33,8 +33,8 @@ env:
   APP_PROJECT_PATH: '${{ github.workspace }}\src\Files\Files.csproj'
   AUTOMATED_TESTS_ARCHITECTURE: 'x64'
   AUTOMATED_TESTS_CONFIGURATION: 'Release'
-  AUTOMATED_TESTS_PROJECT_DIR: '${{ github.workspace }}\tests\Files.InteractionTests'
-  AUTOMATED_TESTS_PROJECT_PATH: '${{ github.workspace }}\tests\Files.InteractionTests\Files.InteractionTests.csproj'
+  AUTOMATED_TESTS_PROJECT_DIR: '${{ github.workspace }}\tests\Files.AxeTests'
+  AUTOMATED_TESTS_PROJECT_PATH: '${{ github.workspace }}\tests\Files.AxeTests\Files.AxeTests.csproj'
   AUTOMATED_TESTS_ASSEMBLY_DIR: '${{ github.workspace }}\artifacts\TestsAssembly'
   ARTIFACTS_STAGING_DIR: '${{ github.workspace }}\artifacts'
   APPX_PACKAGE_DIR: '${{ github.workspace }}\artifacts\AppxPackages\'
@@ -260,7 +260,7 @@ jobs:
         shell: pwsh
         command: |
           dotnet test `
-            --test-modules **\Files.InteractionTests.dll `
+            --test-modules **\Files.AxeTests.dll `
             --root-directory $env:AUTOMATED_TESTS_ASSEMBLY_DIR `
             --results-directory $env:AUTOMATED_TESTS_ASSEMBLY_DIR `
             --report-trx `
