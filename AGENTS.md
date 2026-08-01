@@ -14,6 +14,17 @@ This project is a C#/.NET WinUI 3 desktop app; an alternative to File Explorer.
 - Avoid ad hoc P/Invoke declarations when CsWin32 or existing interop code can cover the API.
 - Do not edit generated CsWin32 output directly. Update source declarations, wrappers, or generator inputs instead.
 
+### Licensing
+
+- MPL-2.0 is the preferred license for new and modified code.
+- Retain MIT only for historical contributions made before the CLA was introduced by contributors who have not signed it. The CLA applies retroactively; do not change those historical headers without authorization.
+- Use this header for MPL-2.0 code:
+
+  ```text
+  // Copyright (c) Files Community
+  // SPDX-License-Identifier: MPL-2.0
+  ```
+
 ### CsWin32 generated interop characteristics
 
 - CsWin32 output is build-generated under `src/Files.Core/obj/<platform>/<configuration>/<target-framework>/Generated/CsWin32`; the large `Windows.Win32.NativeMethods.g.cs` file and its manifest are disposable build artifacts. Inspect targeted declarations only and never edit them.
