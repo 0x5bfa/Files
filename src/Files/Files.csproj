@@ -12,6 +12,7 @@
 		<EnableMsixTooling>true</EnableMsixTooling>
 		<ApplicationManifest>app.manifest</ApplicationManifest>
 		<AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+		<EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
 	</PropertyGroup>
 
 	<ItemGroup>

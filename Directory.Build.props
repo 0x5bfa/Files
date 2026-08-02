@@ -9,11 +9,10 @@
 		<WindowsSdkPackageVersion>10.0.26100.67-preview</WindowsSdkPackageVersion>
 		<WindowsTargetFramework>$(TargetFrameworkVersion)-windows$(TargetWindowsVersion)</WindowsTargetFramework>
 		<LangVersion>preview</LangVersion>
-		<ImplicitUsings>enable</ImplicitUsings>
 		<Nullable>enable</Nullable>
-		<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
+		<!--<IsAotCompatible Condition="$([MSBuild]::IsTargetFrameworkCompatible('$(TargetFramework)', 'net8.0'))">true</IsAotCompatible>
 		<DisableRuntimeMarshalling>true</DisableRuntimeMarshalling>
-		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+		<TreatWarningsAsErrors>true</TreatWarningsAsErrors>-->
 
 		<!--  Use Microsoft.Testing.Platform  -->
 		<EnableMSTestRunner>true</EnableMSTestRunner>

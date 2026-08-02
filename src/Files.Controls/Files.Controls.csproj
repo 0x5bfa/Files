@@ -17,7 +17,6 @@
 		<PackageReference Include="CommunityToolkit.Labs.WinUI.DependencyPropertyGenerator" />
 		<PackageReference Include="Microsoft.WindowsAppSDK" />
 		<PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
-		<PackageReference Include="Microsoft.Windows.CsWinRT" />
 	</ItemGroup>
 
 	<ItemGroup>

@@ -23,7 +23,7 @@
 	<ItemGroup>
 		<ProjectReference Include="..\..\src\Files.Controls\Files.Controls.csproj" />
 		<PackageReference Include="Microsoft.Windows.SDK.BuildTools" />
-		<PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX" />
+		<!--<PackageReference Include="Microsoft.Windows.SDK.BuildTools.MSIX" />-->
 		<PackageReference Include="Microsoft.WindowsAppSDK" />
 	</ItemGroup>
 

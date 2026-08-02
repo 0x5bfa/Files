@@ -46,8 +46,6 @@ jobs:
 
   check-formatting:
 
-    if: github.repository_owner == 'files-community'
-
     runs-on: windows-2025-vs2026
 
     steps:
@@ -81,8 +79,6 @@ jobs:
       run: exit 1
 
   build:
-
-    if: github.repository_owner == 'files-community'
 
     runs-on: windows-2025-vs2026
     strategy:
@@ -180,7 +176,7 @@ jobs:
 
   test:
 
-    if: github.repository_owner == 'files-community' && always()
+    if: always()
 
     needs: [build]
     runs-on: windows-2025-vs2026
