@@ -6,6 +6,6 @@
 	<Border
 		Padding="24"
 		Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-		<TextBlock x:Uid="WebViewText" />
+		<TextBlock Text="{x:Bind Text, Mode=OneWay}" />
 	</Border>
 </UserControl>

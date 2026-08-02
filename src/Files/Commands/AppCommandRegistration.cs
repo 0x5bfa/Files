@@ -6,7 +6,7 @@ using Files.Localization;
 
 namespace Files.Commands;
 
-public static class App2CommandRegistration
+public static class AppCommandRegistration
 {
 	public static CommandRegistry Build()
 	{
@@ -22,57 +22,57 @@ public static class App2CommandRegistration
 		builder.Register(
 			new(
 				CommandIds.NavigateBack,
+				Strings.Back,
 				"Navigation.Back",
-				AppStrings.Back,
-				AppStrings.Navigation,
+				Strings.Navigation,
 				10),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateBack));
 		builder.Register(
 			new(
 				CommandIds.NavigateForward,
+				Strings.Forward,
 				"Navigation.Forward",
-				AppStrings.Forward,
-				AppStrings.Navigation,
+				Strings.Navigation,
 				20),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateForward));
 		builder.Register(
 			new(
 				CommandIds.NavigateUp,
+				Strings.Up,
 				"Navigation.Up",
-				AppStrings.Up,
-				AppStrings.Navigation,
+				Strings.Navigation,
 				30),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateUp));
 		builder.Register(
 			new(
 				CommandIds.NavigateHome,
+				Strings.Home,
 				"Navigation.Home",
-				AppStrings.Home,
-				AppStrings.Navigation,
+				Strings.Navigation,
 				40),
 			static _ => new NavigationCommandHandler(CommandIds.NavigateHome));
 		builder.Register(
 			new(
 				CommandIds.NavigatePath,
+				Strings.Address,
 				"Navigation.Path",
-				AppStrings.Address,
-				AppStrings.Navigation,
+				Strings.Navigation,
 				50),
 			static _ => new NavigationCommandHandler(CommandIds.NavigatePath));
 		builder.Register(
 			new(
 				CommandIds.Refresh,
+				Strings.Refresh,
 				"Navigation.Refresh",
-				AppStrings.Refresh,
-				AppStrings.Navigation,
+				Strings.Navigation,
 				60),
 			static _ => new NavigationCommandHandler(CommandIds.Refresh));
 		builder.Register(
 			new(
 				CommandIds.OpenItem,
+				Strings.Open,
 				"Item.Open",
-				AppStrings.Open,
-				AppStrings.Item,
+				Strings.Item,
 				10),
 			static _ => new NavigationCommandHandler(CommandIds.OpenItem));
 	}
@@ -82,17 +82,17 @@ public static class App2CommandRegistration
 		builder.Register(
 			new(
 				CommandIds.NewTab,
+				Strings.NewTab,
 				"Tab.New",
-				AppStrings.Add,
-				AppStrings.Tabs,
+				Strings.Tabs,
 				10),
 			static _ => new WindowCommandHandler(CommandIds.NewTab));
 		builder.Register(
 			new(
 				CommandIds.CloseTab,
+				Strings.Close,
 				"Tab.Close",
-				AppStrings.Close,
-				AppStrings.Tabs,
+				Strings.Tabs,
 				20),
 			static _ => new WindowCommandHandler(CommandIds.CloseTab));
 	}
@@ -102,17 +102,17 @@ public static class App2CommandRegistration
 		builder.Register(
 			new(
 				CommandIds.NewPane,
+				Strings.NewPane,
 				"Pane.New",
-				AppStrings.Add,
-				AppStrings.Panes,
+				Strings.Panes,
 				10),
 			static _ => new PaneCommandHandler(CommandIds.NewPane));
 		builder.Register(
 			new(
 				CommandIds.ClosePane,
+				Strings.ClosePane,
 				"Pane.Close",
-				AppStrings.Close,
-				AppStrings.Panes,
+				Strings.Panes,
 				20),
 			static _ => new PaneCommandHandler(CommandIds.ClosePane));
 	}

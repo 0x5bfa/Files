@@ -15,19 +15,18 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 {
 	private readonly WindowModel window;
 	private readonly IFilesDataRoot dataRoot;
-	private readonly IUiDispatcher dispatcher;
+	private readonly IUIDispatcher dispatcher;
 	private readonly WindowCommandManager commandManager;
 	private readonly Dictionary<Guid, TabViewModel> tabViewModels = [];
 	private string? operationError;
 	private int isDisposed;
 	private int refreshQueued;
 	private bool isRefreshing;
-	private int activeTabIndex = -1;
 
 	public RootViewModel(
 		WindowModel window,
 		IFilesDataRoot dataRoot,
-		IUiDispatcher dispatcher,
+		IUIDispatcher dispatcher,
 		CommandRegistry commandRegistry)
 	{
 		ArgumentNullException.ThrowIfNull(window);
@@ -43,12 +42,31 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 			this,
 			commandRegistry,
 			dispatcher);
+		TabStrip = new(
+			Tabs,
+			NewTabCommand,
+			CloseTabCommand,
+			SetActiveTabAt);
+		NavigationToolbar = new(
+			BackCommand,
+			ForwardCommand,
+			UpCommand,
+			HomeCommand,
+			NavigatePathCommand,
+			RefreshCommand);
+		Toolbar = new(NewPaneCommand, ClosePaneCommand);
 
 		window.StateChanged += Window_StateChanged;
 		RefreshFromCore();
 	}
 
 	public ObservableCollection<TabViewModel> Tabs { get; }
+
+	public TabStripViewModel TabStrip { get; }
+
+	public NavigationToolbarViewModel NavigationToolbar { get; }
+
+	public ToolbarViewModel Toolbar { get; }
 
 	public WindowCommandManager Commands => commandManager;
 
@@ -82,7 +100,7 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 	public CommandBindingViewModel ClosePaneCommand =>
 		commandManager.GetBinding(CommandIds.ClosePane);
 
-	internal IUiDispatcher Dispatcher => dispatcher;
+	internal IUIDispatcher Dispatcher => dispatcher;
 
 	public TabViewModel? ActiveTab =>
 		Tabs.FirstOrDefault(tab => tab.Id == window.ActiveTab?.Id);
@@ -90,16 +108,10 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 	public FolderBrowserViewModel? ActiveFolderBrowser =>
 		ActiveTab?.ActivePane?.FolderBrowser;
 
-	public int ActiveTabIndex
-	{
-		get => activeTabIndex;
-		private set => SetProperty(ref activeTabIndex, value);
-	}
-
 	public string StatusText =>
 		operationError
 		?? ActiveTab?.StatusText
-		?? AppStrings.NoTabs;
+		?? Strings.NoTabs.GetLocalized();
 
 	public async Task InitializeAsync()
 	{
@@ -163,6 +175,8 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 		}
 
 		window.StateChanged -= Window_StateChanged;
+		NavigationToolbar.Dispose();
+		Toolbar.Dispose();
 		commandManager.Dispose();
 		foreach (var tab in tabViewModels.Values)
 		{
@@ -208,6 +222,8 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 		{
 			OnPropertyChanged(nameof(StatusText));
 			OnPropertyChanged(nameof(ActiveFolderBrowser));
+			NavigationToolbar.SetActiveFolderBrowser(ActiveFolderBrowser);
+			Toolbar.SetActiveTab(ActiveTab);
 			commandManager.RefreshStates();
 		}
 	}
@@ -257,16 +273,19 @@ public sealed class RootViewModel : ObservableObject, IDisposable
 			ObservableCollectionSynchronizer.Synchronize(Tabs, orderedTabs);
 
 			var activeTabId = window.ActiveTab?.Id;
-			ActiveTabIndex = activeTabId is { } id
+			var activeTabIndex = activeTabId is { } id
 				? Tabs
 					.Select((tab, index) => (tab, index))
 					.FirstOrDefault(value => value.tab.Id == id)
 					.index
 				: -1;
+			TabStrip.SetActiveTabIndex(activeTabIndex);
 
 			operationError = null;
 			OnPropertyChanged(nameof(ActiveTab));
 			OnPropertyChanged(nameof(ActiveFolderBrowser));
+			NavigationToolbar.SetActiveFolderBrowser(ActiveFolderBrowser);
+			Toolbar.SetActiveTab(ActiveTab);
 			OnPropertyChanged(nameof(StatusText));
 			commandManager.RefreshStates();
 		}

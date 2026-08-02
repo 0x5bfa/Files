@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // SPDX-License-Identifier: MPL-2.0
 
+using System.Globalization;
 using Files.Infrastructure;
 using Files.Localization;
 using Files.ViewModels;
@@ -17,7 +18,7 @@ internal sealed class CoreBrowseAdapter : IDisposable
 {
 	private readonly PaneModel pane;
 	private readonly IFilesDataRoot dataRoot;
-	private readonly IUiDispatcher dispatcher;
+	private readonly IUIDispatcher dispatcher;
 	private readonly CancellationTokenSource lifetime = new();
 	private readonly object pendingLock = new();
 	private readonly Queue<PendingItemBatch> pendingItemBatches = new();
@@ -32,7 +33,7 @@ internal sealed class CoreBrowseAdapter : IDisposable
 	public CoreBrowseAdapter(
 		PaneModel pane,
 		IFilesDataRoot dataRoot,
-		IUiDispatcher dispatcher)
+		IUIDispatcher dispatcher)
 	{
 		ArgumentNullException.ThrowIfNull(pane);
 		ArgumentNullException.ThrowIfNull(dataRoot);
@@ -53,7 +54,7 @@ internal sealed class CoreBrowseAdapter : IDisposable
 
 	public IReadOnlyList<StorableKey> SelectedKeys { get; private set; }
 
-	public string LocationText { get; private set; } = AppStrings.Home;
+	public string LocationText { get; private set; } = Strings.Home.GetLocalized();
 
 	public string? ErrorMessage { get; private set; }
 
@@ -68,8 +69,13 @@ internal sealed class CoreBrowseAdapter : IDisposable
 	public string StatusText =>
 		ErrorMessage
 		?? (IsLoading
-			? AppStrings.Loading
-			: AppStrings.FormatItemCount(items.Count));
+			? Strings.Loading.GetLocalized()
+			: string.Format(
+				CultureInfo.CurrentCulture,
+				items.Count is 1
+					? Strings.ItemCountSingle.GetLocalized()
+					: Strings.ItemCountPlural.GetLocalized(),
+				items.Count));
 
 	public event EventHandler<CoreBrowseUpdatedEventArgs>? Updated;
 
@@ -92,7 +98,7 @@ internal sealed class CoreBrowseAdapter : IDisposable
 		EnsureActive();
 		ArgumentException.ThrowIfNullOrWhiteSpace(path);
 
-		if (string.Equals(path, AppStrings.Home, StringComparison.OrdinalIgnoreCase)
+		if (string.Equals(path, Strings.Home.GetLocalized(), StringComparison.OrdinalIgnoreCase)
 			|| string.Equals(path, "Home", StringComparison.OrdinalIgnoreCase))
 		{
 			await InitializeAsync(cancellationToken).ConfigureAwait(false);
@@ -108,7 +114,10 @@ internal sealed class CoreBrowseAdapter : IDisposable
 			if (model is not IFolderModel)
 			{
 				throw new InvalidOperationException(
-					AppStrings.FormatNotFolder(path));
+					string.Format(
+						CultureInfo.CurrentCulture,
+						Strings.NotFolderFormat.GetLocalized(),
+						path));
 			}
 
 			await pane.NavigateAsync(
@@ -509,14 +518,14 @@ internal sealed class CoreBrowseAdapter : IDisposable
 	{
 		return location switch
 		{
-			HomeLocation => AppStrings.Home,
+			HomeLocation => Strings.Home.GetLocalized(),
 			FolderLocation folder when folder.Folder.LastKnownAddress is
 				{ Scheme: var scheme, Value: var value }
 				&& string.Equals(scheme, "file", StringComparison.OrdinalIgnoreCase)
 				=> value,
 			FolderLocation folder => folder.Folder.LastKnownAddress?.ToString()
 				?? folder.Folder.ItemId,
-			_ => location?.GetType().Name ?? AppStrings.Home,
+			_ => location?.GetType().Name ?? Strings.Home.GetLocalized(),
 		};
 	}
 

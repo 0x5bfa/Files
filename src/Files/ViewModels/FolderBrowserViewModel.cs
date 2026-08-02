@@ -30,7 +30,7 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 	public FolderBrowserViewModel(
 		PaneModel pane,
 		IFilesDataRoot dataRoot,
-		IUiDispatcher dispatcher,
+		IUIDispatcher dispatcher,
 		WindowCommandManager commandManager)
 	{
 		ArgumentNullException.ThrowIfNull(commandManager);
@@ -123,7 +123,7 @@ public sealed class FolderBrowserViewModel : ObservableObject, IDisposable
 
 	public void ReportOperationCanceled()
 	{
-		operationError = AppStrings.OperationCanceled;
+		operationError = Strings.OperationCanceled.GetLocalized();
 		OnPropertyChanged(nameof(StatusText));
 	}
 

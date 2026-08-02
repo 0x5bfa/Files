@@ -4,6 +4,8 @@
 	<data name="Loading" xml:space="preserve"><value>Loading...</value></data>
 	<data name="NoTabs" xml:space="preserve"><value>No tabs</value></data>
 	<data name="NewTab" xml:space="preserve"><value>New tab</value></data>
+	<data name="NewPane" xml:space="preserve"><value>New pane</value></data>
+	<data name="ClosePane" xml:space="preserve"><value>Close pane</value></data>
 	<data name="NoPane" xml:space="preserve"><value>No pane</value></data>
 	<data name="OperationCanceled" xml:space="preserve"><value>The operation was canceled.</value></data>
 	<data name="Folder" xml:space="preserve"><value>Folder</value></data>
@@ -24,19 +26,7 @@
 	<data name="Item" xml:space="preserve"><value>Item</value></data>
 	<data name="Tabs" xml:space="preserve"><value>Tabs</value></data>
 	<data name="Panes" xml:space="preserve"><value>Panes</value></data>
-	<data name="HomeNavigationItem.Content" xml:space="preserve"><value>Home</value></data>
-	<data name="BackButton.Content" xml:space="preserve"><value>Back</value></data>
-	<data name="ForwardButton.Content" xml:space="preserve"><value>Forward</value></data>
-	<data name="UpButton.Content" xml:space="preserve"><value>Up</value></data>
-	<data name="HomeButton.Content" xml:space="preserve"><value>Home</value></data>
-	<data name="PathTextBox.PlaceholderText" xml:space="preserve"><value>Enter a folder path</value></data>
-	<data name="RefreshButton.Content" xml:space="preserve"><value>Refresh</value></data>
-	<data name="NewTabButton.ToolTipService.ToolTip" xml:space="preserve"><value>New tab</value></data>
-	<data name="NewTabButton.AutomationProperties.Name" xml:space="preserve"><value>New tab</value></data>
-	<data name="NewPaneButton.ToolTipService.ToolTip" xml:space="preserve"><value>New pane</value></data>
-	<data name="NewPaneButton.AutomationProperties.Name" xml:space="preserve"><value>New pane</value></data>
-	<data name="ClosePaneButton.ToolTipService.ToolTip" xml:space="preserve"><value>Close pane</value></data>
-	<data name="ClosePaneButton.AutomationProperties.Name" xml:space="preserve"><value>Close pane</value></data>
-	<data name="InfoPaneText.Text" xml:space="preserve"><value>Info pane</value></data>
-	<data name="WebViewText.Text" xml:space="preserve"><value>Web view</value></data>
+	<data name="EnterFolderPath" xml:space="preserve"><value>Enter a folder path</value></data>
+	<data name="InfoPane" xml:space="preserve"><value>Info pane</value></data>
+	<data name="WebView" xml:space="preserve"><value>Web view</value></data>
 </root>

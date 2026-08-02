@@ -16,35 +16,45 @@
 		</Grid.ColumnDefinitions>
 
 		<Button
-			x:Uid="BackButton"
+			Content="{x:Bind ViewModel.BackCommand.Label, Mode=OneWay}"
+			ToolTipService.ToolTip="{x:Bind ViewModel.BackCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.BackCommand.AutomationName, Mode=OneWay}"
 			Command="{x:Bind ViewModel.BackCommand.Command}"
 			IsEnabled="{x:Bind ViewModel.BackCommand.IsEnabled, Mode=OneWay}" />
 		<Button
-			x:Uid="ForwardButton"
+			Content="{x:Bind ViewModel.ForwardCommand.Label, Mode=OneWay}"
+			ToolTipService.ToolTip="{x:Bind ViewModel.ForwardCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.ForwardCommand.AutomationName, Mode=OneWay}"
 			Grid.Column="1"
 			Command="{x:Bind ViewModel.ForwardCommand.Command}"
 			IsEnabled="{x:Bind ViewModel.ForwardCommand.IsEnabled, Mode=OneWay}" />
 		<Button
-			x:Uid="UpButton"
+			Content="{x:Bind ViewModel.UpCommand.Label, Mode=OneWay}"
+			ToolTipService.ToolTip="{x:Bind ViewModel.UpCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.UpCommand.AutomationName, Mode=OneWay}"
 			Grid.Column="2"
 			Command="{x:Bind ViewModel.UpCommand.Command}"
 			IsEnabled="{x:Bind ViewModel.UpCommand.IsEnabled, Mode=OneWay}" />
 		<Button
-			x:Uid="HomeButton"
+			Content="{x:Bind ViewModel.HomeCommand.Label, Mode=OneWay}"
+			ToolTipService.ToolTip="{x:Bind ViewModel.HomeCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.HomeCommand.AutomationName, Mode=OneWay}"
 			Grid.Column="3"
 			Command="{x:Bind ViewModel.HomeCommand.Command}"
 			IsEnabled="{x:Bind ViewModel.HomeCommand.IsEnabled, Mode=OneWay}" />
 
 		<TextBox
 			x:Name="PathTextBox"
-			x:Uid="PathTextBox"
+			PlaceholderText="{x:Bind ViewModel.PathPlaceholderText, Mode=OneWay}"
 			Grid.Column="4"
 			MinWidth="260"
 			HorizontalAlignment="Stretch"
 			KeyDown="PathTextBox_KeyDown"
-			Text="{x:Bind ViewModel.ActiveFolderBrowser.LocationText, Mode=OneWay}" />
+			Text="{x:Bind ViewModel.LocationText, Mode=OneWay}" />
 		<Button
-			x:Uid="RefreshButton"
+			Content="{x:Bind ViewModel.RefreshCommand.Label, Mode=OneWay}"
+			ToolTipService.ToolTip="{x:Bind ViewModel.RefreshCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.RefreshCommand.AutomationName, Mode=OneWay}"
 			Grid.Column="5"
 			Command="{x:Bind ViewModel.RefreshCommand.Command}"
 			IsEnabled="{x:Bind ViewModel.RefreshCommand.IsEnabled, Mode=OneWay}" />

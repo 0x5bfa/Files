@@ -76,13 +76,14 @@ flowchart TB
 
 Trickle-down MVVM では、Control は View の一部であり、内部実装のための汎用 ViewModel を必ずしも持ちません。WinUI の `DependencyProperty` が ViewModel、項目コレクション、表示設定を親から受け取り、テンプレートと code-behind が Control の振る舞いを所有します。
 
-- `RootView` は window の ViewModel を 1 つ受け取ります。
-- `TabView`、`PaneView`、`FolderBrowser`、各 folder view は対応する ViewModel を DP で受け取ります。
+- `RootView` だけが window の `RootViewModel` を受け取ります。
+- `TabView`、`NavigationToolbar`、`ToolbarView` は、それぞれ `TabStripViewModel`、`NavigationToolbarViewModel`、`ToolbarViewModel` を DP で受け取ります。親の `RootViewModel` をそのまま子 Control へ渡しません。
+- `PaneView`、`FolderBrowser`、各 folder view は対応する ViewModel を DP で受け取ります。
 - `PaneHost` は `ItemsRepeater` の配置と active pane の routing だけを行い、`ScrollViewer` を持ちません。
 - `PaneView` が pane ごとの `ScrollViewer` を所有します。`TabModel.SplitOrientation` に応じて各 pane を水平方向または垂直方向に stretch します。
 - `PaneContentView` は pane の content kind を `ContentPresenter` で選択するだけで、pane のスクロールや navigation を所有しません。
 - `FolderBrowser` は folder view の選択だけを行い、各 view が一覧の入力、選択、viewport を所有します。
-- 各 `FolderBrowser` は pane/tab に属する状態を表示します。`ToolbarView` と `InfoPane` のような共有 UI は Sidebar 側に 1 つだけ置き、active `FolderBrowserViewModel` を DP で受け取ります。
+- 各 `FolderBrowser` は pane/tab に属する状態を表示します。`ToolbarView` と `InfoPane` のような共有 UI は Sidebar 側に 1 つだけ置き、必要な表示モデルまたは表示値だけを DP で受け取ります。
 - Details view はチェックボックスではなく選択状態の視覚表現を使い、各項目の thumbnail を表示します。
 
 新しい Control に専用 ViewModel を追加する前に、DP、`DataTemplate`、既存の親 ViewModel で表現できない理由を確認してください。Control の内部状態が外部のデータ形状と異なる場合だけ、Control 専用の小さな投影を作ります。

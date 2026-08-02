@@ -21,15 +21,18 @@
 		<TextBlock
 			VerticalAlignment="Center"
 			FontWeight="SemiBold"
-			Text="{x:Bind ViewModel.ActiveTab.Title, Mode=OneWay}" />
+			Text="{x:Bind ViewModel.ActiveTabTitle, Mode=OneWay}" />
 		<Button
-			x:Uid="NewPaneButton"
+			ToolTipService.ToolTip="{x:Bind ViewModel.NewPaneCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.NewPaneCommand.AutomationName, Mode=OneWay}"
 			Grid.Column="1"
-			Command="{x:Bind ViewModel.NewPaneCommand.Command}">
+			Command="{x:Bind ViewModel.NewPaneCommand.Command}"
+			IsEnabled="{x:Bind ViewModel.NewPaneCommand.IsEnabled, Mode=OneWay}">
 			<SymbolIcon Symbol="Add" />
 		</Button>
 		<Button
-			x:Uid="ClosePaneButton"
+			ToolTipService.ToolTip="{x:Bind ViewModel.ClosePaneCommand.ToolTip, Mode=OneWay}"
+			AutomationProperties.Name="{x:Bind ViewModel.ClosePaneCommand.AutomationName, Mode=OneWay}"
 			Grid.Column="2"
 			Command="{x:Bind ViewModel.ClosePaneCommand.Command}"
 			IsEnabled="{x:Bind ViewModel.ClosePaneCommand.IsEnabled, Mode=OneWay}">

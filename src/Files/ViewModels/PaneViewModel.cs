@@ -26,7 +26,7 @@ public sealed class PaneViewModel : ObservableObject, IDisposable
 	public PaneViewModel(
 		PaneModel pane,
 		IFilesDataRoot dataRoot,
-		IUiDispatcher dispatcher,
+		IUIDispatcher dispatcher,
 		WindowCommandManager commandManager)
 	{
 		ArgumentNullException.ThrowIfNull(pane);

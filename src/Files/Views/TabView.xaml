@@ -24,12 +24,14 @@
 				TabItemsSource="{x:Bind ViewModel.Tabs, Mode=OneWay}">
 				<controls:TabView.TabStripHeader>
 					<Button
-						x:Uid="NewTabButton"
+						ToolTipService.ToolTip="{x:Bind ViewModel.NewTabCommand.ToolTip, Mode=OneWay}"
+						AutomationProperties.Name="{x:Bind ViewModel.NewTabCommand.AutomationName, Mode=OneWay}"
 						Width="36"
 						Height="36"
 						Margin="4,0"
 						Padding="0"
-						Command="{x:Bind ViewModel.NewTabCommand.Command}">
+						Command="{x:Bind ViewModel.NewTabCommand.Command}"
+						IsEnabled="{x:Bind ViewModel.NewTabCommand.IsEnabled, Mode=OneWay}">
 						<SymbolIcon Symbol="Add" />
 					</Button>
 				</controls:TabView.TabStripHeader>

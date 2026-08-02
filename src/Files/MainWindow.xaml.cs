@@ -5,11 +5,9 @@ using Files.Views;
 using Files.Commands;
 using Files.Core.AppModels;
 using Files.Core.Data;
-using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using System.Diagnostics;
-using WinRT.Interop;
 
 namespace Files;
 
@@ -42,9 +40,7 @@ public sealed partial class MainWindow : Window
 		RootFrame.Content = rootView;
 		rootView.AttachWindow(this);
 
-		var windowHandle = WindowNative.GetWindowHandle(this);
-		var windowId = Win32Interop.GetWindowIdFromWindow(windowHandle);
-		appWindow = AppWindow.GetFromWindowId(windowId);
+		appWindow = AppWindow;
 		appWindow.Closing += AppWindow_Closing;
 	}
 

@@ -14,7 +14,7 @@ public sealed class TabViewModel : ObservableObject, IDisposable
 {
 	private readonly TabModel tab;
 	private readonly IFilesDataRoot dataRoot;
-	private readonly IUiDispatcher dispatcher;
+	private readonly IUIDispatcher dispatcher;
 	private readonly WindowCommandManager commandManager;
 	private readonly Dictionary<Guid, PaneViewModel> paneViewModels = [];
 	private int isDisposed;
@@ -25,7 +25,7 @@ public sealed class TabViewModel : ObservableObject, IDisposable
 	public TabViewModel(
 		TabModel tab,
 		IFilesDataRoot dataRoot,
-		IUiDispatcher dispatcher,
+		IUIDispatcher dispatcher,
 		WindowCommandManager commandManager)
 	{
 		ArgumentNullException.ThrowIfNull(tab);
@@ -52,12 +52,12 @@ public sealed class TabViewModel : ObservableObject, IDisposable
 
 	public PaneSplitOrientation SplitOrientation => tab.SplitOrientation;
 
-	public string Title => ActivePane?.Title ?? AppStrings.NewTab;
+	public string Title => ActivePane?.Title ?? Strings.NewTab.GetLocalized();
 
 	public string StatusText =>
 		operationError
 		?? ActivePane?.FolderBrowser.StatusText
-		?? AppStrings.NoPane;
+		?? Strings.NoPane.GetLocalized();
 
 	public bool CanClosePane => Panes.Count > 1;
 

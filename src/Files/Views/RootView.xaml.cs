@@ -28,7 +28,7 @@ public sealed partial class RootView : Page, IDisposable
 		viewModel = new RootViewModel(
 			window,
 			dataRoot,
-			new DispatcherQueueUiDispatcher(dispatcherQueue),
+			new DispatcherQueueUIDispatcher(dispatcherQueue),
 			commandRegistry);
 		Sidebar.SelectedItem = HomeItem;
 		Loaded += RootView_Loaded;

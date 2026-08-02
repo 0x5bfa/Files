@@ -3,6 +3,7 @@
 
 using System.Windows.Input;
 using CommunityToolkit.Mvvm.ComponentModel;
+using Files.Localization;
 
 namespace Files.Commands;
 
@@ -23,6 +24,12 @@ public sealed class CommandBindingViewModel : ObservableObject
 	public CommandId Id => Descriptor.Id;
 
 	public CommandDescriptor Descriptor { get; }
+
+	public string Label => Descriptor.LabelResourceKey.GetLocalized();
+
+	public string ToolTip => Label;
+
+	public string AutomationName => Label;
 
 	public ICommand Command { get; }
 

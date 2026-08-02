@@ -68,7 +68,7 @@ internal sealed class NavigationCommandHandler(CommandId id) : ICommandHandler
 				{
 					return CommandExecutionResult.Failed(
 						new ArgumentException(
-							AppStrings.FolderPathRequired,
+							Strings.FolderPathRequired.GetLocalized(),
 							nameof(context.Path)));
 				}
 

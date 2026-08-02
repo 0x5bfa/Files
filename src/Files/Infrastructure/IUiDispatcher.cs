@@ -3,7 +3,7 @@
 
 namespace Files.Infrastructure;
 
-public interface IUiDispatcher
+public interface IUIDispatcher
 {
 	bool HasThreadAccess { get; }
 

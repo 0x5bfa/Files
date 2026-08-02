@@ -20,7 +20,7 @@ public partial class App : Application
 	public App()
 	{
 		InitializeComponent();
-		commandRegistry = App2CommandRegistration.Build();
+		commandRegistry = AppCommandRegistration.Build();
 	}
 
 	protected override async void OnLaunched(LaunchActivatedEventArgs args)

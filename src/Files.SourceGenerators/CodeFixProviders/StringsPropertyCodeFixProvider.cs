@@ -1,4 +1,4 @@
-﻿// Copyright (c) Files Community
+// Copyright (c) Files Community
 // Licensed under the MIT License.
 
 using static Files.SourceGenerators.Constants.DiagnosticDescriptors;
@@ -57,7 +57,7 @@ namespace Files.SourceGenerators.CodeFixProviders
 				CodeAction.Create(
 					CodeFixProviderTitle,
 					c => Task.FromResult(newDocument),
-					null),
+					FSG1002.Id),
 				diagnostic);
 		}
 	}

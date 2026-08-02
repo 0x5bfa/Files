@@ -5,11 +5,11 @@ using Microsoft.UI.Dispatching;
 
 namespace Files.Infrastructure;
 
-public sealed class DispatcherQueueUiDispatcher : IUiDispatcher
+public sealed class DispatcherQueueUIDispatcher : IUIDispatcher
 {
 	private readonly DispatcherQueue dispatcherQueue;
 
-	public DispatcherQueueUiDispatcher(DispatcherQueue dispatcherQueue)
+	public DispatcherQueueUIDispatcher(DispatcherQueue dispatcherQueue)
 	{
 		ArgumentNullException.ThrowIfNull(dispatcherQueue);
 		this.dispatcherQueue = dispatcherQueue;

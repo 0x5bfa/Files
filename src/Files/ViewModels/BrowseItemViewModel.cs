@@ -36,7 +36,8 @@ public sealed class BrowseItemViewModel : ObservableObject
 		private set => SetProperty(ref thumbnail, value);
 	}
 
-	public string Kind => IsFolder ? AppStrings.Folder : AppStrings.File;
+	public string Kind =>
+		(IsFolder ? Strings.Folder : Strings.File).GetLocalized();
 
 	public string ReferenceText =>
 		Reference.LastKnownAddress?.Value ?? Reference.ItemId;

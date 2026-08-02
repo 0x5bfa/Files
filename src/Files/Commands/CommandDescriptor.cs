@@ -7,5 +7,5 @@ public sealed record CommandDescriptor(
 	CommandId Id,
 	string LabelResourceKey,
 	string IconKey,
-	string Group,
+	string GroupResourceKey,
 	int Order);

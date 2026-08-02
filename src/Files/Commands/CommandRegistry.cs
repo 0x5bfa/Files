@@ -15,7 +15,7 @@ public sealed class CommandRegistry
 		this.registrations = registrations;
 		Descriptors = registrations.Values
 			.Select(static registration => registration.Descriptor)
-			.OrderBy(static descriptor => descriptor.Group)
+			.OrderBy(static descriptor => descriptor.GroupResourceKey)
 			.ThenBy(static descriptor => descriptor.Order)
 			.ToArray()
 			.AsReadOnly();

@@ -14,7 +14,7 @@ public sealed partial class NavigationToolbar : UserControl
 	public static readonly DependencyProperty ViewModelProperty =
 		DependencyProperty.Register(
 			nameof(ViewModel),
-			typeof(RootViewModel),
+			typeof(NavigationToolbarViewModel),
 			typeof(NavigationToolbar),
 			new PropertyMetadata(null));
 
@@ -23,9 +23,9 @@ public sealed partial class NavigationToolbar : UserControl
 		InitializeComponent();
 	}
 
-	public RootViewModel? ViewModel
+	public NavigationToolbarViewModel? ViewModel
 	{
-		get => (RootViewModel?)GetValue(ViewModelProperty);
+		get => (NavigationToolbarViewModel?)GetValue(ViewModelProperty);
 		set => SetValue(ViewModelProperty, value);
 	}
 

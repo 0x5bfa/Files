@@ -9,7 +9,7 @@ namespace Files.Commands;
 public sealed class WindowCommandManager : IDisposable
 {
 	private readonly RootViewModel root;
-	private readonly IUiDispatcher dispatcher;
+	private readonly IUIDispatcher dispatcher;
 	private readonly Dictionary<CommandId, ICommandHandler> handlers;
 	private readonly Dictionary<CommandId, CommandBindingViewModel> bindings = [];
 	private readonly Dictionary<CommandId, CancellationTokenSource> activeCalls = [];
@@ -20,7 +20,7 @@ public sealed class WindowCommandManager : IDisposable
 	public WindowCommandManager(
 		RootViewModel root,
 		CommandRegistry registry,
-		IUiDispatcher dispatcher)
+		IUIDispatcher dispatcher)
 	{
 		ArgumentNullException.ThrowIfNull(root);
 		ArgumentNullException.ThrowIfNull(registry);

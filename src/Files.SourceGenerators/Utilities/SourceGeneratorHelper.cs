@@ -11,7 +11,7 @@ namespace Files.SourceGenerators.Utilities
 	internal static class SourceGeneratorHelper
 	{
 		internal const string AttributeNamespace = $"{nameof(Files)}.Shared.Attributes.";
-		internal const string HelperNamespace = $"{nameof(Files)}.App.Helpers.";
+		internal const string StringsNamespace = "Files.Localization";
 		internal const string DisableSourceGeneratorAttribute = AttributeNamespace + "DisableSourceGeneratorAttribute";
 		internal const string AssemblyName = $"{nameof(Files)}.{nameof(SourceGenerators)}.";
 		internal const string AssemblyVersion = "1.1.1";

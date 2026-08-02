@@ -6,6 +6,6 @@
 	<Border
 		Padding="12,8"
 		Background="{ThemeResource CardBackgroundFillColorDefaultBrush}">
-		<TextBlock x:Uid="InfoPaneText" />
+		<TextBlock Text="{x:Bind Text, Mode=OneWay}" />
 	</Border>
 </UserControl>

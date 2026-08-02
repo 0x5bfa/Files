@@ -1,4 +1,4 @@
-﻿// Copyright (c) Files Community
+// Copyright (c) Files Community
 // Licensed under the MIT License.
 
 using System.Xml.Linq;
@@ -20,12 +20,17 @@ namespace Files.SourceGenerators.Parser
 		{
 			var document = XDocument.Parse(text);
 			var keys = document
-				.Descendants("data")
+				.Descendants()
+				.Where(static element => element.Name.LocalName == "data")
 				.Select(element => new ParserItem
 				{
-					Key = element.Attribute("name")?.Value.Replace('.', ConstantSeparator)!,
-					Value = element.Element("value")?.Value ?? string.Empty,
-					Comment = element.Element("comment")?.Value
+					Key = element.Attribute("name")?.Value!,
+					Value = element.Elements()
+						.FirstOrDefault(static child => child.Name.LocalName == "value")
+						?.Value ?? string.Empty,
+					Comment = element.Elements()
+						.FirstOrDefault(static child => child.Name.LocalName == "comment")
+						?.Value
 				})
 				.Where(item => !string.IsNullOrEmpty(item.Key));
 

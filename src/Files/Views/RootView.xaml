@@ -12,9 +12,9 @@
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<views:TabView x:Name="TabStrip" ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
+		<views:TabView x:Name="TabStrip" ViewModel="{x:Bind ViewModel.TabStrip, Mode=OneWay}" />
 
-		<views:NavigationToolbar Grid.Row="1" ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
+		<views:NavigationToolbar Grid.Row="1" ViewModel="{x:Bind ViewModel.NavigationToolbar, Mode=OneWay}" />
 
 		<NavigationView
 			x:Name="Sidebar"
@@ -36,7 +36,8 @@
 			<NavigationView.MenuItems>
 				<NavigationViewItem
 					x:Name="HomeItem"
-					x:Uid="HomeNavigationItem"
+					AutomationProperties.Name="{x:Bind ViewModel.HomeCommand.AutomationName, Mode=OneWay}"
+					Content="{x:Bind ViewModel.HomeCommand.Label, Mode=OneWay}"
 					Tag="Home">
 					<NavigationViewItem.Icon>
 						<SymbolIcon Symbol="Home" />
@@ -53,7 +54,7 @@
 						<RowDefinition Height="Auto" />
 					</Grid.RowDefinitions>
 
-					<views:ToolbarView ViewModel="{x:Bind ViewModel, Mode=OneWay}" />
+					<views:ToolbarView ViewModel="{x:Bind ViewModel.Toolbar, Mode=OneWay}" />
 
 					<views:PaneHost Grid.Row="1" ViewModel="{x:Bind ViewModel.ActiveTab, Mode=OneWay}" />
 

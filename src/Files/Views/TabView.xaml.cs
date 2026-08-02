@@ -18,7 +18,7 @@ public sealed partial class TabView : UserControl
 	public static readonly DependencyProperty ViewModelProperty =
 		DependencyProperty.Register(
 			nameof(ViewModel),
-			typeof(RootViewModel),
+			typeof(TabStripViewModel),
 			typeof(TabView),
 			new PropertyMetadata(null));
 
@@ -27,9 +27,9 @@ public sealed partial class TabView : UserControl
 		InitializeComponent();
 	}
 
-	public RootViewModel? ViewModel
+	public TabStripViewModel? ViewModel
 	{
-		get => (RootViewModel?)GetValue(ViewModelProperty);
+		get => (TabStripViewModel?)GetValue(ViewModelProperty);
 		set => SetValue(ViewModelProperty, value);
 	}
 

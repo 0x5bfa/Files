@@ -1,4 +1,4 @@
-﻿// Copyright (c) Files Community
+// Copyright (c) Files Community
 // Licensed under the MIT License.
 
 namespace Files.SourceGenerators
@@ -49,6 +49,17 @@ namespace Files.SourceGenerators
 				description: "This diagnostic detects cases where multiple localization string files are being generated with the same name," +
 				"which can cause conflicts and overwrite issues.");
 
+			/// <summary>
+			/// Diagnostic descriptor for malformed resource files.
+			/// </summary>
+			internal static readonly DiagnosticDescriptor FSG1004 = new(
+				id: nameof(FSG1004),
+				title: "Resource file could not be parsed",
+				messageFormat: "Resource file '{0}' could not be parsed: {1}",
+				category: "FileGeneration",
+				defaultSeverity: DiagnosticSeverity.Error,
+				isEnabledByDefault: true);
+
 		}
 
 		/// <summary>
@@ -72,7 +83,7 @@ namespace Files.SourceGenerators
 			/// <summary>
 			/// The fully qualified name of the generated metadata class that contains string constants.
 			/// </summary>
-			internal const string StringsMetadataName = $"{SourceGeneratorHelper.HelperNamespace}{StringsClassName}";
+			internal const string StringsMetadataName = $"{SourceGeneratorHelper.StringsNamespace}.{StringsClassName}";
 
 			/// <summary>
 			/// The name of the property that represents the name of the constant.
@@ -84,6 +95,7 @@ namespace Files.SourceGenerators
 			/// These methods are used to identify string literals that can be replaced with constants from the Strings class.
 			/// </summary>
 			internal static HashSet<string> LocalizedMethodNames = [
+				"GetLocalized",
 				/* TODO: Future use only this */ "ToLocalized",
 				/* TODO: Rewrite with ToLocalized */ "GetLocalizedResource",
 				/* TODO: Rewrite with ToLocalized */ "GetLocalizedFormatResource"];
