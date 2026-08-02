@@ -48,6 +48,9 @@ public sealed record ThumbnailCacheKey
 
 	public string ItemId { get; }
 
+	/// <summary>
+	/// Gets the requested bitmap edge in physical pixels.
+	/// </summary>
 	public int RequestedSize { get; }
 
 	public ThumbnailMode Mode { get; }

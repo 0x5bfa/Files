@@ -111,6 +111,45 @@ public sealed class MemoryThumbnailCacheTests
 	}
 
 	[TestMethod]
+	public async Task WrapperSharesAnInFlightExtraction()
+	{
+		var factory = new TestModelFactory();
+		var coreModel = new TestStorable("item", "Item");
+		var reference = new StorableReference(
+			factory.Source.SourceId,
+			coreModel.Id);
+		var entered = new TaskCompletionSource<bool>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		var release = new TaskCompletionSource<bool>(
+			TaskCreationOptions.RunContinuationsAsynchronously);
+		var source = new TestThumbnailSource
+		{
+			Handler = async (_, _) =>
+			{
+				entered.TrySetResult(true);
+				await release.Task;
+				return new ThumbnailResult(
+					new byte[] { 1 },
+					"image/png",
+					IsFallback: false);
+			},
+		};
+		var decorated = new ThumbnailCacheWrapper(new MemoryThumbnailCache()).Wrap(
+			new ItemContext(factory.Source, coreModel, reference),
+			source);
+		var request = new ThumbnailRequest(64, ThumbnailMode.Content);
+
+		var first = decorated.GetThumbnailAsync(request).AsTask();
+		await entered.Task.WaitAsync(TimeSpan.FromSeconds(5));
+		var second = decorated.GetThumbnailAsync(request).AsTask();
+		release.TrySetResult(true);
+
+		var results = await Task.WhenAll(first, second);
+		Assert.AreEqual(1, source.CallCount);
+		Assert.IsTrue(results.All(static result => result is not null));
+	}
+
+	[TestMethod]
 	public async Task CacheEntryReturnsAnIndependentReadOnlyStream()
 	{
 		var cache = new MemoryThumbnailCache();

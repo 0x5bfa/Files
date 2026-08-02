@@ -11,15 +11,18 @@ public sealed record BrowseViewport
 	public BrowseViewport(
 		int firstVisibleIndex,
 		int visibleCount,
-		int lookAheadCount = 20)
+		int lookAheadCount = 20,
+		int dpi = 96)
 	{
 		ArgumentOutOfRangeException.ThrowIfNegative(firstVisibleIndex);
 		ArgumentOutOfRangeException.ThrowIfNegative(visibleCount);
 		ArgumentOutOfRangeException.ThrowIfNegative(lookAheadCount);
+		ArgumentOutOfRangeException.ThrowIfNegativeOrZero(dpi);
 
 		FirstVisibleIndex = firstVisibleIndex;
 		VisibleCount = visibleCount;
 		LookAheadCount = lookAheadCount;
+		Dpi = dpi;
 	}
 
 	public int FirstVisibleIndex { get; }
@@ -30,4 +33,9 @@ public sealed record BrowseViewport
 	/// Gets the maximum number of items prefetched on each side of the visible range.
 	/// </summary>
 	public int LookAheadCount { get; }
+
+	/// <summary>
+	/// Gets the display density used for DPI-aware thumbnail requests.
+	/// </summary>
+	public int Dpi { get; }
 }

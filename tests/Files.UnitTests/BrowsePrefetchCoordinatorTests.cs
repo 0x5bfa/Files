@@ -53,13 +53,14 @@ public sealed class BrowsePrefetchCoordinatorTests
 		await session.NavigateAsync(new FolderLocation(locationModel.Reference));
 
 		var settings = new BrowseViewSettings(
+			layoutMode: ViewLayoutMode.Details,
 			columns: [
 				new ViewColumnSettings("System.Size", 120, 0),
 				new ViewColumnSettings("System.Hidden", 120, 1, isVisible: false)],
 			sortPropertyId: "System.DateModified");
 		await using var coordinator = new BrowsePrefetchCoordinator(session);
 		coordinator.UpdateViewport(
-			new BrowseViewport(1, 1, 1),
+			new BrowseViewport(1, 1, 1, dpi: 144),
 			settings,
 			session.Generation);
 
@@ -73,7 +74,8 @@ public sealed class BrowsePrefetchCoordinatorTests
 				new[] { "System.Size", "System.DateModified" },
 				propertySources[id].Requests.Single().ToArray());
 			Assert.AreEqual(1, thumbnailSources[id].CallCount);
-			Assert.AreEqual(96, thumbnailSources[id].Requests.Single().RequestedSize);
+			Assert.AreEqual(16, thumbnailSources[id].Requests.Single().RequestedSize);
+			Assert.AreEqual(24, thumbnailSources[id].Requests.Single().RequestedPixelSize);
 			Assert.AreEqual(
 				ThumbnailMode.PreferContent,
 				thumbnailSources[id].Requests.Single().Mode);

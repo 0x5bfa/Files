@@ -7,7 +7,7 @@ using Files.Localization;
 
 namespace Files.Commands;
 
-public sealed class CommandBindingViewModel : ObservableObject
+public sealed partial class CommandBindingViewModel : ObservableObject
 {
 	private readonly WindowCommandManager manager;
 	private CommandState state = new(false, false);
@@ -87,7 +87,7 @@ public sealed class CommandBindingViewModel : ObservableObject
 		await ExecuteAsync(parameter).ConfigureAwait(false);
 	}
 
-	private sealed class BindingCommand(
+	private sealed partial class BindingCommand(
 		CommandBindingViewModel owner) : ICommand
 	{
 		public bool CanExecute(object? parameter) => owner.IsEnabled;

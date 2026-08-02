@@ -112,7 +112,7 @@ internal sealed class FolderViewInteraction : IDisposable
 
 		if (realizedIndices.Count is 0)
 		{
-			viewModel.UpdateViewport(new BrowseViewport(0, 0));
+			viewModel.UpdateViewport(new BrowseViewport(0, 0, dpi: GetDpi()));
 			return;
 		}
 
@@ -120,7 +120,14 @@ internal sealed class FolderViewInteraction : IDisposable
 		var lastIndex = realizedIndices.Max();
 		viewModel.UpdateViewport(new BrowseViewport(
 			firstIndex,
-			lastIndex - firstIndex + 1));
+			lastIndex - firstIndex + 1,
+			dpi: GetDpi()));
+	}
+
+	private int GetDpi()
+	{
+		var scale = listView.XamlRoot?.RasterizationScale ?? 1.0;
+		return Math.Max(1, (int)Math.Round(scale * 96.0));
 	}
 
 	private void ViewModel_PropertyChanged(

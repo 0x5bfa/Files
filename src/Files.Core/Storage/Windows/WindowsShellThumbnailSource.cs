@@ -3,7 +3,6 @@
 
 using System.Runtime.Versioning;
 using Files.Core.ItemFeatures.Thumbnails;
-using Windows.Win32.UI.Shell;
 
 namespace Files.Core.Storage.Windows;
 
@@ -37,9 +36,11 @@ internal sealed class WindowsShellThumbnailSource : IThumbnailSource
 		var payload = await resolver
 			.InvokeConcurrentAsync(
 				locator,
-				shellItem => shellItem is IShellItemImageFactory imageFactory
-					? backend.GetThumbnail(imageFactory, request, cancellationToken)
-					: null,
+				shellItem => backend.GetThumbnail(
+					shellItem,
+					locator,
+					request,
+					cancellationToken),
 				cancellationToken)
 			.ConfigureAwait(false);
 

@@ -256,6 +256,9 @@ SetFileAttributes
 INVALID_FILE_ATTRIBUTES
 SHDefExtractIconW
 GdipCreateBitmapFromHICON
+GdipLoadImageFromStream
+GdipCreateHBITMAPFromBitmap
+GdiFlush
 SHGetSetFolderCustomSettings
 FCSM_ICONFILE
 FCS_FORCEWRITE
@@ -274,6 +277,35 @@ SetCurrentProcessExplicitAppUserModelID
 GdipCreateBitmapFromScan0
 BITMAP
 GetObject
+
+# Windows Shell thumbnail cache and fallback providers
+IThumbnailCache
+ISharedBitmap
+WTS_FLAGS
+WTS_CACHEFLAGS
+WTS_ALPHATYPE
+WTS_THUMBNAILID
+IExtractImage
+IExtractIconW
+Windows.Win32.UI.Controls.IImageList
+SHGetImageList
+SHParseDisplayName
+SHBindToParent
+DestroyIcon
+
+# Windows GDI icon rendering and bitmap conversion
+GetDIBits
+GetDC
+ReleaseDC
+CreateCompatibleDC
+CreateDIBSection
+SelectObject
+DeleteDC
+DrawIconEx
+DI_FLAGS
+DIB_USAGE
+BITMAPINFO
+BITMAPINFOHEADER
 _SICHINTF
 RoGetAgileReference
 IQueryInfo

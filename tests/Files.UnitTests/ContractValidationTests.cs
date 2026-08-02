@@ -39,6 +39,23 @@ public sealed class ContractValidationTests
 	}
 
 	[TestMethod]
+	public void ThumbnailRequestsScaleLogicalSizeToDisplayPixels()
+	{
+		var request = new ThumbnailRequest(
+			16,
+			ThumbnailMode.Content,
+			dpi: 144);
+
+		Assert.AreEqual(16, request.RequestedSize);
+		Assert.AreEqual(144, request.Dpi);
+		Assert.AreEqual(24, request.RequestedPixelSize);
+		Assert.Throws<ArgumentOutOfRangeException>(
+			() => new ThumbnailRequest(16, dpi: 0));
+		Assert.Throws<ArgumentOutOfRangeException>(
+			() => new ThumbnailRequest(4097));
+	}
+
+	[TestMethod]
 	public void ViewSettingsRejectAmbiguousOrNonFiniteValues()
 	{
 		Assert.Throws<ArgumentOutOfRangeException>(

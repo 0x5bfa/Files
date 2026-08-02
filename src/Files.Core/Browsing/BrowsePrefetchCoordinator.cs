@@ -15,6 +15,7 @@ namespace Files.Core.Browsing;
 public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 {
 	private const int DefaultThumbnailSize = 96;
+	private const int DetailsThumbnailSize = 16;
 	private const string ItemNamePropertyId = "System.ItemNameDisplay";
 
 	private readonly IBrowseSessionModel session;
@@ -131,6 +132,9 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 		try
 		{
 			var propertyIds = GetPropertyIds(settings);
+			var requestedThumbnailSize = settings.LayoutMode is ViewLayoutMode.Details
+				? DetailsThumbnailSize
+				: thumbnailSize;
 			var items = session.Items;
 			foreach (var index in EnumerateIndices(items.Count, viewport))
 			{
@@ -147,6 +151,8 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 				await PrefetchItemAsync(
 					items[index],
 					propertyIds,
+					requestedThumbnailSize,
+					viewport.Dpi,
 					workId,
 					generation,
 					contentVersion,
@@ -165,6 +171,8 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 	private async ValueTask PrefetchItemAsync(
 		IStorableModel item,
 		IReadOnlyList<string> propertyIds,
+		int requestedThumbnailSize,
+		int dpi,
 		long workId,
 		long generation,
 		long contentVersion,
@@ -226,8 +234,9 @@ public sealed class BrowsePrefetchCoordinator : IBrowsePrefetchCoordinator
 				var thumbnail = await thumbnailSource
 					.GetThumbnailAsync(
 						new ThumbnailRequest(
-							thumbnailSize,
-							ThumbnailMode.PreferContent),
+							requestedThumbnailSize,
+							ThumbnailMode.PreferContent,
+							dpi),
 						cancellationToken)
 					.ConfigureAwait(false);
 				if (thumbnail is null
