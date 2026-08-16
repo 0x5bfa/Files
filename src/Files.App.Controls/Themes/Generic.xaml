@@ -26,6 +26,10 @@
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon/ThemedIconLayer/ThemedIconLayer.xaml" />
 		<!--#endregion-->
 
+		<!--#region ThemedIcon2-->
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/ThemedIcon2.xaml" />
+		<!--#endregion-->
+
 		<!--#region ToolbarButtons-->
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/Toolbar/Toolbar.xaml" />
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/Toolbar/ToolbarSeparator/ToolbarSeparator.xaml" />
@@ -49,6 +53,24 @@
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon/Styles/Icons.Settings.Sidebar.xaml" />
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon/Styles/Icons.Settings.xaml" />
 		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon/Styles/Icons.SizeLayout28.xaml" />
+		<!--#endregion-->
+
+		<!--#region ThemedIcon2 Data-->
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Common.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.New.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Open.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.TabPane.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Panel.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Favorite.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Status.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Action.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Git.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.SizeLayout.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Misc16.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Properties.Dialog.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Settings.Sidebar.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.Settings.xaml" />
+		<ResourceDictionary Source="ms-appx:///Files.App.Controls/ThemedIcon2/Styles/Icons.SizeLayout28.xaml" />
 		<!--#endregion-->
 
 		<!--#region BladeView-->

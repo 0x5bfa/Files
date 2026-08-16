@@ -46,8 +46,10 @@ namespace Files.App.UITests
 				tag switch
 				{
 					nameof(ThemedIconPage) => typeof(ThemedIconPage),
+					nameof(ThemedIcon2Page) => typeof(ThemedIcon2Page),
 					nameof(ToolbarPage) => typeof(ToolbarPage),
 					nameof(ThemedIconGalleryPage) => typeof(ThemedIconGalleryPage),
+					nameof(ThemedIcon2GalleryPage) => typeof(ThemedIcon2GalleryPage),
 					nameof(StorageControlsPage) => typeof(StorageControlsPage),
 					nameof(SidebarViewPage) => typeof(SidebarViewPage),
 					nameof(OmnibarPage) => typeof(OmnibarPage),
