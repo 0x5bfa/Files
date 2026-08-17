@@ -16,37 +16,202 @@
 	</Page.Resources>
 
 	<StackPanel Spacing="24">
-		<controls:SamplePanel Header="IconElement properties">
+		<controls:SamplePanel Header="IconElement surface">
 			<controls:SamplePanel.MainContent>
-				<StackPanel Spacing="12">
-					<StackPanel Orientation="Horizontal" Spacing="12">
-						<AppBarButton Label="Direct element">
-							<AppBarButton.Icon>
-								<controls:ThemedIcon2 Data="{StaticResource IconTest}" />
-							</AppBarButton.Icon>
-						</AppBarButton>
-						<AppBarToggleButton Label="Direct toggle element">
-							<AppBarToggleButton.Icon>
-								<controls:ThemedIcon2 Data="{StaticResource IconTest}" />
-							</AppBarToggleButton.Icon>
-						</AppBarToggleButton>
-						<Button Content="MenuFlyoutItem.Icon">
-							<Button.Flyout>
-								<MenuFlyout>
-									<MenuFlyoutItem Text="Themed icon element">
-										<MenuFlyoutItem.Icon>
-											<controls:ThemedIcon2
-												IconColorType="Critical"
-												IconType="Layered"
-												Data="{StaticResource IconTest}" />
-										</MenuFlyoutItem.Icon>
-									</MenuFlyoutItem>
-								</MenuFlyout>
-							</Button.Flyout>
-						</Button>
-					</StackPanel>
+				<StackPanel Spacing="16">
+					<TextBlock Text="Open the flyout to verify that ThemedIcon2 can be assigned directly to MenuFlyoutItem.Icon." TextWrapping="Wrap" />
+					<Button AutomationProperties.AutomationId="ThemedIcon2.Surface.MenuFlyoutItem.Open" Content="Open MenuFlyoutItem">
+						<Button.Flyout>
+							<MenuFlyout>
+								<MenuFlyoutItem AutomationProperties.AutomationId="ThemedIcon2.Surface.MenuFlyoutItem" Text="Themed icon element">
+									<MenuFlyoutItem.Icon>
+										<controls:ThemedIcon2
+											AutomationProperties.AutomationId="ThemedIcon2.Surface.MenuFlyoutItem.Icon"
+											IconSize="{x:Bind SurfaceSizeNumberBox.Value, Mode=OneWay}"
+											IsFilled="{x:Bind SurfaceFilledToggle.IsOn, Mode=OneWay}"
+											IsHighContrast="{x:Bind SurfaceHighContrastToggle.IsOn, Mode=OneWay}"
+											IsToggled="{x:Bind SurfaceToggledToggle.IsOn, Mode=OneWay}"
+											Data="{StaticResource IconTest}" />
+									</MenuFlyoutItem.Icon>
+								</MenuFlyoutItem>
+							</MenuFlyout>
+						</Button.Flyout>
+					</Button>
 				</StackPanel>
 			</controls:SamplePanel.MainContent>
+			<controls:SamplePanel.SideContent>
+				<StackPanel Spacing="12">
+					<ToggleSwitch
+						x:Name="SurfaceToggledToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Surface.IsToggled"
+						Header="IsToggled:"
+						OffContent="False"
+						OnContent="True" />
+					<ToggleSwitch
+						x:Name="SurfaceFilledToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Surface.IsFilled"
+						Header="IsFilled:"
+						OffContent="False"
+						OnContent="True" />
+					<ToggleSwitch
+						x:Name="SurfaceHighContrastToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Surface.IsHighContrast"
+						Header="IsHighContrast:"
+						OffContent="False"
+						OnContent="True" />
+					<NumberBox
+						x:Name="SurfaceSizeNumberBox"
+						AutomationProperties.AutomationId="ThemedIcon2.Surface.IconSize"
+						Header="IconSize:"
+						Maximum="64"
+						Minimum="16"
+						SpinButtonPlacementMode="Inline"
+						Value="24" />
+				</StackPanel>
+			</controls:SamplePanel.SideContent>
+		</controls:SamplePanel>
+
+		<!--  Dynamic state transitions  -->
+		<controls:SamplePanel Header="Dynamic state transitions">
+			<controls:SamplePanel.MainContent>
+				<StackPanel Spacing="16">
+					<TextBlock Text="These icons stay loaded while their state and palette change." TextWrapping="Wrap" />
+					<Grid
+						x:Name="DynamicSampleHost"
+						x:Load="{x:Bind DynamicLoadedToggle.IsOn, Mode=OneWay}"
+						ColumnSpacing="32">
+						<Grid.ColumnDefinitions>
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="Auto" />
+							<ColumnDefinition Width="Auto" />
+						</Grid.ColumnDefinitions>
+
+						<StackPanel Grid.Column="0" Spacing="8">
+							<Border
+								Padding="16"
+								Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+								CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2
+									x:Name="DynamicLayeredIcon"
+									AutomationProperties.AutomationId="ThemedIcon2.Dynamic.Layered"
+									IconSize="{x:Bind DynamicSizeNumberBox.Value, Mode=OneWay}"
+									IconType="Layered"
+									IsEnabled="{x:Bind DynamicEnabledToggle.IsOn, Mode=OneWay}"
+									IsHighContrast="{x:Bind DynamicHighContrastToggle.IsOn, Mode=OneWay}"
+									IsToggled="{x:Bind DynamicToggledToggle.IsOn, Mode=OneWay}"
+									Data="{StaticResource IconTest}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="Layered" />
+						</StackPanel>
+
+						<StackPanel Grid.Column="1" Spacing="8">
+							<Border
+								Padding="16"
+								Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+								CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2
+									x:Name="DynamicFilledIcon"
+									AutomationProperties.AutomationId="ThemedIcon2.Dynamic.Filled"
+									IconSize="{x:Bind DynamicSizeNumberBox.Value, Mode=OneWay}"
+									IsEnabled="{x:Bind DynamicEnabledToggle.IsOn, Mode=OneWay}"
+									IsFilled="True"
+									IsHighContrast="{x:Bind DynamicHighContrastToggle.IsOn, Mode=OneWay}"
+									IsToggled="{x:Bind DynamicToggledToggle.IsOn, Mode=OneWay}"
+									Data="{StaticResource IconTest}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="Filled" />
+						</StackPanel>
+
+						<StackPanel Grid.Column="2" Spacing="8">
+							<Border
+								Padding="16"
+								Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+								CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2
+									x:Name="DynamicOutlineIcon"
+									AutomationProperties.AutomationId="ThemedIcon2.Dynamic.Outline"
+									IconSize="{x:Bind DynamicSizeNumberBox.Value, Mode=OneWay}"
+									IconType="Outline"
+									IsEnabled="{x:Bind DynamicEnabledToggle.IsOn, Mode=OneWay}"
+									IsHighContrast="{x:Bind DynamicHighContrastToggle.IsOn, Mode=OneWay}"
+									IsToggled="{x:Bind DynamicToggledToggle.IsOn, Mode=OneWay}"
+									Data="{StaticResource IconTest}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="Outline" />
+						</StackPanel>
+					</Grid>
+
+					<TextBlock
+						Style="{StaticResource TextExampleCaptionStyle}"
+						Text="Regression focus: Filled false → true toggle, and disabled → enabled while toggled."
+						TextWrapping="Wrap" />
+				</StackPanel>
+			</controls:SamplePanel.MainContent>
+			<controls:SamplePanel.SideContent>
+				<StackPanel Spacing="12">
+					<ToggleSwitch
+						x:Name="DynamicToggledToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.IsToggled"
+						Header="IsToggled:"
+						OffContent="False"
+						OnContent="True" />
+					<ToggleSwitch
+						x:Name="DynamicEnabledToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.IsEnabled"
+						Header="IsEnabled:"
+						IsOn="True"
+						OffContent="Disabled"
+						OnContent="Enabled" />
+					<ToggleSwitch
+						x:Name="DynamicHighContrastToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.IsHighContrast"
+						Header="IsHighContrast:"
+						OffContent="False"
+						OnContent="True" />
+					<ToggleSwitch
+						x:Name="DynamicDataToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.AlternateData"
+						Header="Data:"
+						OffContent="SetSlideshow"
+						OnContent="Alternate diamond"
+						Toggled="DynamicDataToggle_Toggled" />
+					<ToggleSwitch
+						x:Name="DynamicLoadedToggle"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.IsLoaded"
+						Header="Lifecycle:"
+						IsOn="True"
+						OffContent="Unloaded"
+						OnContent="Loaded"
+						Toggled="DynamicLoadedToggle_Toggled" />
+					<ComboBox
+						x:Name="DynamicSemanticColorComboBox"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.IconColorType"
+						Header="IconColorType:"
+						SelectedIndex="0"
+						SelectionChanged="DynamicSemanticColorComboBox_SelectionChanged">
+						<ComboBoxItem Content="None" />
+						<ComboBoxItem Content="Normal" />
+						<ComboBoxItem Content="Critical" />
+						<ComboBoxItem Content="Caution" />
+						<ComboBoxItem Content="Success" />
+						<ComboBoxItem Content="Neutral" />
+						<ComboBoxItem Content="Accent" />
+						<ComboBoxItem Content="Custom" />
+					</ComboBox>
+					<NumberBox
+						x:Name="DynamicSizeNumberBox"
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.IconSize"
+						Header="IconSize:"
+						Maximum="64"
+						Minimum="16"
+						SpinButtonPlacementMode="Inline"
+						Value="32" />
+					<Button
+						AutomationProperties.AutomationId="ThemedIcon2.Dynamic.Reset"
+						Click="ResetDynamicSampleButton_Click"
+						Content="Reset" />
+				</StackPanel>
+			</controls:SamplePanel.SideContent>
 		</controls:SamplePanel>
 
 		<!--  Icon Types and Colors  -->
@@ -330,6 +495,100 @@
 			</controls:SamplePanel.MainContent>
 		</controls:SamplePanel>
 
+		<!--  Theme resource resolution  -->
+		<controls:SamplePanel Header="Light and dark theme resources">
+			<controls:SamplePanel.MainContent>
+				<Grid ColumnSpacing="16">
+					<Grid.ColumnDefinitions>
+						<ColumnDefinition Width="*" />
+						<ColumnDefinition Width="*" />
+					</Grid.ColumnDefinitions>
+
+					<Border
+						Grid.Column="0"
+						Padding="16"
+						Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+						CornerRadius="{ThemeResource ControlCornerRadius}"
+						RequestedTheme="Light">
+						<StackPanel Spacing="12">
+							<TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Light" />
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Normal" />
+							<StackPanel Orientation="Horizontal" Spacing="16">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.Normal.Layered" IconType="Layered" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.Normal.Filled" IsFilled="True" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.Normal.Outline" IconType="Outline" Data="{StaticResource IconTest}" />
+							</StackPanel>
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Toggled" />
+							<StackPanel
+								Padding="8"
+								HorizontalAlignment="Left"
+								Background="{ThemeResource ToggleBackground}"
+								CornerRadius="{ThemeResource OverlayCornerRadius}"
+								Orientation="Horizontal"
+								Spacing="16">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.Toggled.Layered" IconType="Layered" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.Toggled.Filled" IsFilled="True" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.Toggled.Outline" IconType="Outline" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+							</StackPanel>
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Disabled toggled" />
+							<StackPanel
+								Padding="8"
+								HorizontalAlignment="Left"
+								Background="{ThemeResource ToggleDisabledBackground}"
+								CornerRadius="{ThemeResource OverlayCornerRadius}"
+								Orientation="Horizontal"
+								Spacing="16">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.DisabledToggled.Layered" IconType="Layered" IsEnabled="False" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.DisabledToggled.Filled" IsEnabled="False" IsFilled="True" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Light.DisabledToggled.Outline" IconType="Outline" IsEnabled="False" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+							</StackPanel>
+						</StackPanel>
+					</Border>
+
+					<Border
+						Grid.Column="1"
+						Padding="16"
+						Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+						CornerRadius="{ThemeResource ControlCornerRadius}"
+						RequestedTheme="Dark">
+						<StackPanel Spacing="12">
+							<TextBlock Style="{StaticResource SubtitleTextBlockStyle}" Text="Dark" />
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Normal" />
+							<StackPanel Orientation="Horizontal" Spacing="16">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.Normal.Layered" IconType="Layered" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.Normal.Filled" IsFilled="True" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.Normal.Outline" IconType="Outline" Data="{StaticResource IconTest}" />
+							</StackPanel>
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Toggled" />
+							<StackPanel
+								Padding="8"
+								HorizontalAlignment="Left"
+								Background="{ThemeResource ToggleBackground}"
+								CornerRadius="{ThemeResource OverlayCornerRadius}"
+								Orientation="Horizontal"
+								Spacing="16">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.Toggled.Layered" IconType="Layered" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.Toggled.Filled" IsFilled="True" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.Toggled.Outline" IconType="Outline" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+							</StackPanel>
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Disabled toggled" />
+							<StackPanel
+								Padding="8"
+								HorizontalAlignment="Left"
+								Background="{ThemeResource ToggleDisabledBackground}"
+								CornerRadius="{ThemeResource OverlayCornerRadius}"
+								Orientation="Horizontal"
+								Spacing="16">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.DisabledToggled.Layered" IconType="Layered" IsEnabled="False" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.DisabledToggled.Filled" IsEnabled="False" IsFilled="True" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Theme.Dark.DisabledToggled.Outline" IconType="Outline" IsEnabled="False" ToggleBehavior="On" Data="{StaticResource IconTest}" />
+							</StackPanel>
+						</StackPanel>
+					</Border>
+				</Grid>
+			</controls:SamplePanel.MainContent>
+		</controls:SamplePanel>
+
 		<!--  Toggled usages  -->
 		<controls:SamplePanel Header="Toggled usages">
 			<controls:SamplePanel.MainContent>
@@ -378,7 +637,7 @@
 							ToggleBehavior="On" />
 					</StackPanel>
 
-					<TextBlock Text="ToggleBahvior On + Disabled:" />
+					<TextBlock Text="ToggleBehavior On + Disabled:" />
 
 					<StackPanel
 						Padding="8"
@@ -441,8 +700,8 @@
 			</controls:SamplePanel.SideContent>
 		</controls:SamplePanel>
 
-		<!--  ToggleBehaviour Auto  -->
-		<controls:SamplePanel Header="ToggleBehaviour Auto">
+		<!--  ToggleBehavior Auto  -->
+		<controls:SamplePanel Header="ToggleBehavior Auto">
 			<controls:SamplePanel.MainContent>
 				<StackPanel Spacing="12">
 
@@ -606,8 +865,8 @@
 			</controls:SamplePanel.SideContent>
 		</controls:SamplePanel>
 
-		<!--  ToggleBehaviour Off  -->
-		<controls:SamplePanel Header="ToggleBehaviour Off">
+		<!--  ToggleBehavior Off  -->
+		<controls:SamplePanel Header="ToggleBehavior Off">
 			<controls:SamplePanel.MainContent>
 				<StackPanel Spacing="12">
 
@@ -796,10 +1055,144 @@
 			</controls:SamplePanel.SideContent>
 		</controls:SamplePanel>
 
-		<!--  Resizing  -->
-		<controls:SamplePanel Header="">
+		<!--  Data and brush fallbacks  -->
+		<controls:SamplePanel Header="Data and brush fallbacks">
 			<controls:SamplePanel.MainContent>
-				<Grid ColumnSpacing="24" RowSpacing="24">
+				<StackPanel Spacing="20">
+					<TextBlock Text="Data availability" />
+					<StackPanel Orientation="Horizontal" Spacing="16">
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.Complete" IconSize="32" Data="{StaticResource IconTest}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Complete" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.NullDefault" IconSize="32" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Default" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.OutlineOnly" IconSize="32" IconType="Layered" Data="{x:Bind OutlineOnlyIconData}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Outline" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.FilledOnly" IconSize="32" IconType="Outline" Data="{x:Bind FilledOnlyIconData}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Filled" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.LayeredOnly" IconSize="32" IconType="Outline" Data="{x:Bind LayeredOnlyIconData}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Layers" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.Empty" IconSize="32" Data="{x:Bind EmptyIconData}" />
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Empty" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+						<StackPanel Width="72" Spacing="8">
+							<Border Padding="12" Background="{ThemeResource CardBackgroundFillColorDefaultBrush}" CornerRadius="{ThemeResource ControlCornerRadius}">
+								<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Data.Malformed" IconSize="32" Data="{x:Bind MalformedIconData}">
+									<AnimatedIcon.FallbackIconSource>
+										<SymbolIconSource Symbol="Help" />
+									</AnimatedIcon.FallbackIconSource>
+								</controls:ThemedIcon2>
+							</Border>
+							<TextBlock HorizontalAlignment="Center" FontSize="12" Text="Malformed" TextAlignment="Center" TextWrapping="Wrap" />
+						</StackPanel>
+					</StackPanel>
+
+					<Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+					<TextBlock Text="Custom brush conversion" />
+					<StackPanel Orientation="Horizontal" Spacing="24">
+						<StackPanel Spacing="8">
+							<controls:ThemedIcon2
+								AutomationProperties.AutomationId="ThemedIcon2.Brush.Solid"
+								Color="DeepPink"
+								Foreground="Black"
+								IconColorType="Custom"
+								IconSize="32"
+								Data="{StaticResource IconTest}" />
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Solid" />
+						</StackPanel>
+						<StackPanel Spacing="8">
+							<controls:ThemedIcon2
+								AutomationProperties.AutomationId="ThemedIcon2.Brush.Opacity"
+								Foreground="Black"
+								IconColorType="Custom"
+								IconSize="32"
+								Data="{StaticResource IconTest}">
+								<controls:ThemedIcon2.Color>
+									<SolidColorBrush Color="DeepPink" Opacity="0.35" />
+								</controls:ThemedIcon2.Color>
+							</controls:ThemedIcon2>
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="35% opacity" />
+						</StackPanel>
+						<StackPanel Spacing="8">
+							<controls:ThemedIcon2
+								AutomationProperties.AutomationId="ThemedIcon2.Brush.GradientFallback"
+								Foreground="Black"
+								IconColorType="Custom"
+								IconSize="32"
+								Data="{StaticResource IconTest}">
+								<controls:ThemedIcon2.Color>
+									<LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+										<GradientStop Offset="0" Color="Cyan" />
+										<GradientStop Offset="1" Color="DeepPink" />
+									</LinearGradientBrush>
+								</controls:ThemedIcon2.Color>
+							</controls:ThemedIcon2>
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Gradient fallback" />
+						</StackPanel>
+						<StackPanel Spacing="8">
+							<controls:ThemedIcon2
+								AutomationProperties.AutomationId="ThemedIcon2.Brush.Transparent"
+								Color="Transparent"
+								Foreground="Black"
+								IconColorType="Custom"
+								IconSize="32"
+								Data="{StaticResource IconTest}" />
+							<TextBlock Style="{StaticResource TextExampleCaptionStyle}" Text="Transparent" />
+						</StackPanel>
+					</StackPanel>
+				</StackPanel>
+			</controls:SamplePanel.MainContent>
+		</controls:SamplePanel>
+
+		<!--  Sizing  -->
+		<controls:SamplePanel Header="Sizing">
+			<controls:SamplePanel.MainContent>
+				<StackPanel Spacing="24">
+					<StackPanel Orientation="Horizontal" Spacing="24">
+						<StackPanel Spacing="6">
+							<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Size.16" IconSize="16" Data="{StaticResource IconTest}" />
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="16 px" />
+						</StackPanel>
+						<StackPanel Spacing="6">
+							<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Size.24" IconSize="24" Data="{StaticResource IconTest}" />
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="24 px" />
+						</StackPanel>
+						<StackPanel Spacing="6">
+							<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Size.32" IconSize="32" Data="{StaticResource IconTest}" />
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="32 px" />
+						</StackPanel>
+						<StackPanel Spacing="6">
+							<controls:ThemedIcon2 AutomationProperties.AutomationId="ThemedIcon2.Size.48" IconSize="48" Data="{StaticResource IconTest}" />
+							<TextBlock HorizontalAlignment="Center" Style="{StaticResource TextExampleCaptionStyle}" Text="48 px" />
+						</StackPanel>
+					</StackPanel>
+
+					<Rectangle Height="1" Fill="{ThemeResource DividerStrokeColorDefaultBrush}" />
+
+					<Grid ColumnSpacing="24" RowSpacing="24">
 
 					<Grid.RowDefinitions>
 						<RowDefinition />
@@ -814,43 +1207,43 @@
 
 					<!--  Row 0  -->
 					<controls:ThemedIcon2
+						AutomationProperties.AutomationId="ThemedIcon2.Size.Layered"
 						Grid.Row="0"
 						Grid.Column="0"
-						Width="{x:Bind TestSize.Value, Mode=TwoWay}"
-						Height="{x:Bind TestSize.Value, Mode=TwoWay}"
+						IconSize="{x:Bind TestSize.Value, Mode=OneWay}"
 						IconType="Layered"
 						Data="{StaticResource IconTest}" />
 
 					<controls:ThemedIcon2
+						AutomationProperties.AutomationId="ThemedIcon2.Size.Filled"
 						Grid.Row="0"
 						Grid.Column="1"
-						Width="{x:Bind TestSize.Value, Mode=TwoWay}"
-						Height="{x:Bind TestSize.Value, Mode=TwoWay}"
+						IconSize="{x:Bind TestSize.Value, Mode=OneWay}"
 						IsFilled="True"
 						Data="{StaticResource IconTest}" />
 
 					<controls:ThemedIcon2
+						AutomationProperties.AutomationId="ThemedIcon2.Size.Outline"
 						Grid.Row="0"
 						Grid.Column="2"
-						Width="{x:Bind TestSize.Value, Mode=TwoWay}"
-						Height="{x:Bind TestSize.Value, Mode=TwoWay}"
+						IconSize="{x:Bind TestSize.Value, Mode=OneWay}"
 						IconType="Outline"
 						Data="{StaticResource IconTest}" />
 
 					<!--  Row 1  -->
 					<controls:ThemedIcon2
+						AutomationProperties.AutomationId="ThemedIcon2.Size.Disabled"
 						Grid.Row="1"
 						Grid.Column="0"
-						Width="{x:Bind TestSize.Value, Mode=TwoWay}"
-						Height="{x:Bind TestSize.Value, Mode=TwoWay}"
+						IconSize="{x:Bind TestSize.Value, Mode=OneWay}"
 						IsEnabled="False"
 						Data="{StaticResource IconTest}" />
 
 					<controls:ThemedIcon2
+						AutomationProperties.AutomationId="ThemedIcon2.Size.Custom"
 						Grid.Row="1"
 						Grid.Column="1"
-						Width="{x:Bind TestSize.Value, Mode=TwoWay}"
-						Height="{x:Bind TestSize.Value, Mode=TwoWay}"
+						IconSize="{x:Bind TestSize.Value, Mode=OneWay}"
 						Foreground="Yellow"
 						IconColorType="Custom"
 						IconType="Layered"
@@ -863,7 +1256,8 @@
 						</controls:ThemedIcon2.Color>
 					</controls:ThemedIcon2>
 
-				</Grid>
+					</Grid>
+				</StackPanel>
 			</controls:SamplePanel.MainContent>
 			<controls:SamplePanel.SideContent>
 				<StackPanel>

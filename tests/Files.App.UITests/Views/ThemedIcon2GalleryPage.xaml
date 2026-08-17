@@ -13,15 +13,102 @@
 		<Grid.RowDefinitions>
 			<RowDefinition Height="Auto" />
 			<RowDefinition Height="Auto" />
+			<RowDefinition Height="Auto" />
 			<RowDefinition Height="*" />
 		</Grid.RowDefinitions>
 
-		<!--  Search  -->
-		<TextBox
-			x:Name="SearchBox"
-			Grid.Row="0"
-			PlaceholderText="Search icons..."
-			TextChanged="SearchBox_TextChanged" />
+		<!--  Gallery controls  -->
+		<Grid Grid.Row="0" ColumnSpacing="12" RowSpacing="8">
+			<Grid.RowDefinitions>
+				<RowDefinition Height="Auto" />
+				<RowDefinition Height="Auto" />
+			</Grid.RowDefinitions>
+			<Grid.ColumnDefinitions>
+				<ColumnDefinition Width="*" />
+				<ColumnDefinition Width="140" />
+				<ColumnDefinition Width="140" />
+				<ColumnDefinition Width="120" />
+				<ColumnDefinition Width="110" />
+			</Grid.ColumnDefinitions>
+
+			<TextBox
+				x:Name="SearchBox"
+				AutomationProperties.AutomationId="ThemedIcon2Gallery.Search"
+				Grid.Column="0"
+				Header="Search:"
+				PlaceholderText="Name or resource key"
+				TextChanged="SearchBox_TextChanged" />
+
+			<ComboBox
+				x:Name="VariantComboBox"
+				AutomationProperties.AutomationId="ThemedIcon2Gallery.Variant"
+				Grid.Column="1"
+				Header="Variant:"
+				SelectedIndex="0"
+				SelectionChanged="GallerySettings_Changed">
+				<ComboBoxItem Content="Layered" />
+				<ComboBoxItem Content="Filled" />
+				<ComboBoxItem Content="Outline" />
+			</ComboBox>
+
+			<ComboBox
+				x:Name="ColorTypeComboBox"
+				AutomationProperties.AutomationId="ThemedIcon2Gallery.IconColorType"
+				Grid.Column="2"
+				Header="Color:"
+				SelectedIndex="0"
+				SelectionChanged="GallerySettings_Changed">
+				<ComboBoxItem Content="None" />
+				<ComboBoxItem Content="Normal" />
+				<ComboBoxItem Content="Critical" />
+				<ComboBoxItem Content="Caution" />
+				<ComboBoxItem Content="Success" />
+				<ComboBoxItem Content="Neutral" />
+				<ComboBoxItem Content="Accent" />
+				<ComboBoxItem Content="Custom" />
+			</ComboBox>
+
+			<ComboBox
+				x:Name="ThemeComboBox"
+				AutomationProperties.AutomationId="ThemedIcon2Gallery.Theme"
+				Grid.Column="3"
+				Header="Theme:"
+				SelectedIndex="0"
+				SelectionChanged="GallerySettings_Changed">
+				<ComboBoxItem Content="Default" />
+				<ComboBoxItem Content="Light" />
+				<ComboBoxItem Content="Dark" />
+			</ComboBox>
+
+			<NumberBox
+				x:Name="IconSizeNumberBox"
+				AutomationProperties.AutomationId="ThemedIcon2Gallery.IconSize"
+				Grid.Column="4"
+				Header="IconSize:"
+				Maximum="64"
+				Minimum="16"
+				SpinButtonPlacementMode="Inline"
+				Value="24"
+				ValueChanged="GallerySizeNumberBox_ValueChanged" />
+
+			<StackPanel
+				Grid.Row="1"
+				Grid.ColumnSpan="5"
+				Orientation="Horizontal"
+				Spacing="16">
+				<ToggleSwitch
+					x:Name="HighContrastToggle"
+					AutomationProperties.AutomationId="ThemedIcon2Gallery.IsHighContrast"
+					Header="IsHighContrast:"
+					OffContent="False"
+					OnContent="True"
+					Toggled="GalleryHighContrastToggle_Toggled" />
+				<Button
+					AutomationProperties.AutomationId="ThemedIcon2Gallery.Reset"
+					Click="ResetButton_Click"
+					Content="Reset" />
+			</StackPanel>
+		</Grid>
 
 		<!--  Copied notification  -->
 		<InfoBar
@@ -32,40 +119,64 @@
 			Message="Icon key copied to clipboard"
 			Severity="Success" />
 
+		<TextBlock
+			x:Name="ResultCountTextBlock"
+			Grid.Row="2"
+			Style="{StaticResource TextExampleCaptionStyle}" />
+
 		<!--  Gallery  -->
-		<ScrollViewer Grid.Row="2">
+		<ScrollViewer Grid.Row="3">
 			<ItemsRepeater x:Name="IconRepeater" ItemsSource="{x:Bind FilteredIcons, Mode=OneWay}">
 				<ItemsRepeater.Layout>
 					<UniformGridLayout
 						ItemsStretch="None"
 						MinColumnSpacing="8"
-						MinItemHeight="96"
-						MinItemWidth="140"
+						MinItemHeight="152"
+						MinItemWidth="160"
 						MinRowSpacing="8" />
 				</ItemsRepeater.Layout>
 				<ItemsRepeater.ItemTemplate>
 					<DataTemplate x:DataType="local:ThemedIcon2GalleryEntry">
 						<Button
+							AutomationProperties.AutomationId="{x:Bind AutomationId}"
 							HorizontalAlignment="Stretch"
 							HorizontalContentAlignment="Stretch"
 							Click="IconButton_Click"
+							RequestedTheme="{x:Bind Theme, Mode=OneWay}"
 							Tag="{x:Bind Key}"
 							ToolTipService.ToolTip="{x:Bind Key}">
 							<StackPanel
 								Padding="8"
 								HorizontalAlignment="Center"
 								Spacing="6">
-								<controls:ThemedIcon2
-									Width="24"
-									Height="24"
+								<Border
+									Padding="8"
 									HorizontalAlignment="Center"
-									Data="{x:Bind IconData}" />
+									Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+									CornerRadius="{ThemeResource ControlCornerRadius}">
+									<controls:ThemedIcon2
+										Color="DeepPink"
+										Foreground="Black"
+										HorizontalAlignment="Center"
+										IconColorType="{x:Bind IconColorType, Mode=OneWay}"
+										IconSize="{x:Bind IconSize, Mode=OneWay}"
+										IconType="{x:Bind IconType, Mode=OneWay}"
+										IsFilled="{x:Bind IsFilled, Mode=OneWay}"
+										IsHighContrast="{x:Bind IsHighContrast, Mode=OneWay}"
+										Data="{x:Bind IconData}" />
+								</Border>
 								<TextBlock
 									MaxLines="2"
 									Text="{x:Bind ShortName}"
 									TextAlignment="Center"
 									TextTrimming="CharacterEllipsis"
 									TextWrapping="WrapWholeWords" />
+								<TextBlock
+									AutomationProperties.Name="{x:Bind Availability}"
+									HorizontalAlignment="Center"
+									Style="{StaticResource TextExampleCaptionStyle}"
+									Text="{x:Bind AvailabilitySummary}"
+									ToolTipService.ToolTip="{x:Bind Availability}" />
 							</StackPanel>
 						</Button>
 					</DataTemplate>
