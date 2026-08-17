@@ -13,7 +13,7 @@ public sealed partial class ThemedIcon2Source : AnimatedIconSource
 	/// <summary>Initializes a themed icon source.</summary>
 	public ThemedIcon2Source()
 	{
-		_visualSource = new ThemedIcon2VisualSource(ThemedIcon2Data.Default, ThemedIconTypes.Layered, ThemedIconColorType.None, false, false, true, false, null, null, false);
+		_visualSource = new ThemedIcon2VisualSource(ThemedIcon2Data.Default, ThemedIconTypes.Layered, ThemedIconColorType.None, false, false, true, false, null, null, ElementTheme.Default, false);
 		Source = _visualSource;
 		_ = RegisterPropertyChangedCallback(ForegroundProperty, OnForegroundPropertyChanged);
 	}
@@ -94,9 +94,9 @@ public sealed partial class ThemedIcon2Source : AnimatedIconSource
 	private void UpdateAppearance()
 	{
 		var isToggled = ToggleBehavior is ToggleBehaviors.On || (ToggleBehavior is ToggleBehaviors.Auto && IsToggled);
-		if (!_visualSource.UpdateAppearance(IconType, IconColorType, IsFilled, isToggled, true, IsHighContrast, Foreground, Color, false))
+		if (!_visualSource.UpdateAppearance(IconType, IconColorType, IsFilled, isToggled, true, IsHighContrast, Foreground, Color, ElementTheme.Default, false))
 		{
-			_visualSource = new ThemedIcon2VisualSource(Data ?? ThemedIcon2Data.Default, IconType, IconColorType, IsFilled, isToggled, true, IsHighContrast, Foreground, Color, false);
+			_visualSource = new ThemedIcon2VisualSource(Data ?? ThemedIcon2Data.Default, IconType, IconColorType, IsFilled, isToggled, true, IsHighContrast, Foreground, Color, ElementTheme.Default, false);
 			Source = _visualSource;
 		}
 	}
@@ -104,7 +104,7 @@ public sealed partial class ThemedIcon2Source : AnimatedIconSource
 	private void UpdateDataSource()
 	{
 		var isToggled = ToggleBehavior is ToggleBehaviors.On || (ToggleBehavior is ToggleBehaviors.Auto && IsToggled);
-		_visualSource = new ThemedIcon2VisualSource(Data ?? ThemedIcon2Data.Default, IconType, IconColorType, IsFilled, isToggled, true, IsHighContrast, Foreground, Color, false);
+		_visualSource = new ThemedIcon2VisualSource(Data ?? ThemedIcon2Data.Default, IconType, IconColorType, IsFilled, isToggled, true, IsHighContrast, Foreground, Color, ElementTheme.Default, false);
 		Source = _visualSource;
 	}
 }
