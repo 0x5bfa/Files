@@ -13,6 +13,7 @@ using Windows.ApplicationModel.Activation;
 using Windows.Storage;
 using Windows.Win32.Foundation;
 using WinRT;
+using Windows.Win32;
 using IO = System.IO;
 
 namespace Files.App
@@ -403,7 +404,7 @@ namespace Files.App
 			}
 			else if (message == Windows.Win32.PInvoke.WM_MENUCHAR && (wParam.Value & 0xFFFF) == '\r')
 			{
-				result = new(Win32PInvoke.MNC_CLOSE << 16);
+				result = new((nint)(PInvoke.MNC_CLOSE << 16));
 				return true;
 			}
 

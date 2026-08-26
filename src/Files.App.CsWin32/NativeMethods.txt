@@ -30,6 +30,7 @@ LRESULT
 WPARAM
 LPARAM
 WM_*
+MNC_CLOSE
 SetForegroundWindow
 GetForegroundWindow
 GetCurrentThreadId
@@ -44,7 +45,7 @@ MoveFileFromApp
 DeleteFileFromApp
 RemoveDirectoryFromApp
 GetKeyState
-CreateDirectoryFromApp
+CreateDirectoryW
 WNetCancelConnection2
 NETRESOURCEW
 WNetAddConnection3
@@ -74,6 +75,8 @@ GetFileTime
 SetFileTime
 GetFileInformationByHandleEx
 FILE_ID_BOTH_DIR_INFO
+IOCTL_STORAGE_EJECT_MEDIA
+IOCTL_STORAGE_MEDIA_REMOVAL
 FindFirstStreamW
 FindNextStreamW
 WIN32_FIND_STREAM_DATA
@@ -239,6 +242,7 @@ DeleteObject
 OleInitialize
 OleUninitialize
 IShellIconOverlayManager
+IShellWindows
 SHGetFileInfo
 GetFileAttributes
 SetFileAttributes
