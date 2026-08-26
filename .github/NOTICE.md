@@ -583,16 +583,16 @@ Library.
    limitations under the License.
 ```
 
-## libgit2sharp
+## GitPorcelain
 
-**Source**: [https://github.com/libgit2/libgit2sharp](https://github.com/libgit2/libgit2sharp)
+**Source**: [https://github.com/0x5bfa/GitPorcelain](https://github.com/0x5bfa/GitPorcelain)
 
 ### License
 
 ```
 MIT License
 
-Copyright (c) LibGit2Sharp contributors
+Copyright (c) 2026 GitPorcelain contributors
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

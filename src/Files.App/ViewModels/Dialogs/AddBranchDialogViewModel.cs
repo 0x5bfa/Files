@@ -12,7 +12,8 @@
 			{
 				if (!SetProperty(ref _NewBranchName, value))
 					return;
-				IsBranchValid = !string.IsNullOrWhiteSpace(value) && GitHelpers.ValidateBranchNameForRepository(value, _repositoryPath);
+				IsBranchValid = false;
+				_ = ValidateBranchNameAsync(value);
 
 				OnPropertyChanged(nameof(ShowWarningTip));
 			}
@@ -58,6 +59,16 @@
 		{
 			Branches = (await GitHelpers.GetBranchNames(_repositoryPath)).Select(b => b.Name).ToArray();
 			OnPropertyChanged(nameof(Branches));
+		}
+
+		private async Task ValidateBranchNameAsync(string branchName)
+		{
+			if (string.IsNullOrWhiteSpace(branchName))
+				return;
+
+			var isValid = await GitHelpers.ValidateBranchNameForRepositoryAsync(branchName, _repositoryPath);
+			if (_NewBranchName == branchName)
+				IsBranchValid = isValid;
 		}
 	}
 }

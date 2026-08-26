@@ -56,14 +56,15 @@ namespace Files.App.ViewModels.Previews
 				GetFileProperty("PropertyParsingPath", folder.Path),
 			];
 
-			if (GitHelpers.IsRepositoryEx(Item.ItemPath, out var repoPath) &&
-				!string.IsNullOrEmpty(repoPath))
+			var gitDirectory = await GitHelpers.GetGitRepositoryPathAsync(
+				folder.Path,
+				Path.GetPathRoot(folder.Path));
+			if (!string.IsNullOrEmpty(gitDirectory))
 			{
-				var gitDirectory = GitHelpers.GetGitRepositoryPath(folder.Path, Path.GetPathRoot(folder.Path));
 				var headName = (await GitHelpers.GetRepositoryHead(gitDirectory))?.Name ?? string.Empty;
-				var repositoryName = GitHelpers.GetOriginRepositoryName(gitDirectory);
+				var repositoryName = await GitHelpers.GetOriginRepositoryNameAsync(gitDirectory);
 
-				if (!string.IsNullOrEmpty(gitDirectory))
+				if (!string.IsNullOrEmpty(repositoryName))
 					Item.FileDetails.Add(GetFileProperty("GitOriginRepositoryName", repositoryName));
 
 				if (!string.IsNullOrWhiteSpace(headName))

@@ -43,7 +43,8 @@ namespace Files.App.Utils.Storage
 			bool showDotFiles = userSettingsService.FoldersSettingsService.ShowDotFiles;
 			bool areAlternateStreamsVisible = userSettingsService.FoldersSettingsService.AreAlternateStreamsVisible;
 
-			var isGitRepo = GitHelpers.IsRepositoryEx(path, out var repoPath) && !string.IsNullOrEmpty(await GitHelpers.GetRepositoryHeadName(repoPath));
+			var repoPath = await GitHelpers.GetGitRepositoryPathAsync(path, Path.GetPathRoot(path), cancellationToken);
+			var isGitRepo = !string.IsNullOrEmpty(repoPath) && !string.IsNullOrEmpty(await GitHelpers.GetRepositoryHeadName(repoPath));
 			var rawHandle = hFile.DangerousGetHandle();
 
 			try

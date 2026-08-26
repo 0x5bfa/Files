@@ -3,7 +3,6 @@
 
 using Files.App.Services.SizeProvider;
 using Files.Shared.Helpers;
-using LibGit2Sharp;
 using Microsoft.Extensions.Logging;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Data;
@@ -249,7 +248,7 @@ namespace Files.App.ViewModels
 				pathRoot = Path.GetPathRoot(WorkingDirectory);
 			}
 
-			var gitDirectory = await Task.Run(() => GitHelpers.GetGitRepositoryPath(value, pathRoot));
+			var gitDirectory = await GitHelpers.GetGitRepositoryPathAsync(value, pathRoot);
 			if (WorkingDirectory != value)
 				return;
 
@@ -1902,70 +1901,97 @@ namespace Files.App.ViewModels
 		[WinRT.DynamicWindowsRuntimeCast(typeof(Style))]
 		public async Task LoadGitPropertiesAsync(IGitItem gitItem)
 		{
-			var getStatus = EnabledGitProperties is (GitProperties.All or GitProperties.Status) &&
-				!gitItem.StatusPropertiesInitialized;
-			var getCommit = EnabledGitProperties is (GitProperties.All or GitProperties.Commit) &&
-				!gitItem.CommitPropertiesInitialized;
-
-			if (!getStatus && !getCommit)
-				return;
-
 			if (isDisposed)
 				return;
+			if ((EnabledGitProperties is not (GitProperties.All or GitProperties.Status) || gitItem.StatusPropertiesInitialized) &&
+				(EnabledGitProperties is not (GitProperties.All or GitProperties.Commit) || gitItem.CommitPropertiesInitialized))
+			{
+				return;
+			}
 
 			var token = loadPropsCTS.Token;
 			var semaphoreEntered = false;
 			var propertiesLoaded = false;
-			if (getStatus)
-				gitItem.StatusPropertiesInitialized = true;
-			if (getCommit)
-				gitItem.CommitPropertiesInitialized = true;
+			var pendingItems = new List<(IGitItem Item, bool Status, bool Commit)>();
 
 			try
 			{
 				await gitPropertiesSemaphore.WaitAsync(token);
 				semaphoreEntered = true;
 
-				var gitItemModel = await Task.Run(() =>
+				var candidates = filesAndFolders.OfType<IGitItem>().ToList();
+				if (!candidates.Contains(gitItem))
+					candidates.Add(gitItem);
+
+				foreach (var candidate in candidates)
 				{
-					token.ThrowIfCancellationRequested();
-					if (!GitHelpers.IsRepositoryEx(gitItem.ItemPath, out var repositoryPath))
-						return null;
+					var getStatus = EnabledGitProperties is (GitProperties.All or GitProperties.Status) &&
+						!candidate.StatusPropertiesInitialized;
+					var getCommit = EnabledGitProperties is (GitProperties.All or GitProperties.Commit) &&
+						!candidate.CommitPropertiesInitialized;
+					if (!getStatus && !getCommit)
+						continue;
 
-					using var repository = new Repository(repositoryPath);
-					return GitHelpers.GetGitInformationForItem(repository, gitItem.ItemPath, getStatus, getCommit);
-				}, token);
+					candidate.StatusPropertiesInitialized |= getStatus;
+					candidate.CommitPropertiesInitialized |= getCommit;
+					pendingItems.Add((candidate, getStatus, getCommit));
+				}
 
-				if (gitItemModel is null)
+				if (pendingItems.Count == 0)
+				{
+					propertiesLoaded = true;
 					return;
+				}
+
+				var repositoryPath = GitDirectory ?? await GitHelpers.GetGitRepositoryPathAsync(
+					pendingItems[0].Item.ItemPath,
+					Path.GetPathRoot(pendingItems[0].Item.ItemPath),
+					token);
+				if (string.IsNullOrWhiteSpace(repositoryPath))
+					return;
+
+				var gitItemModels = await GitHelpers.GetGitInformationForItemsAsync(
+					repositoryPath,
+					pendingItems.Select(item => item.Item.ItemPath!).ToArray(),
+					pendingItems.Any(item => item.Status),
+					pendingItems.Any(item => item.Commit),
+					token);
+				var modelsByPath = gitItemModels
+					.Where(model => !string.IsNullOrWhiteSpace(model.Path))
+					.ToDictionary(model => model.Path!, StringComparer.OrdinalIgnoreCase);
 
 				token.ThrowIfCancellationRequested();
 				await dispatcherQueue.EnqueueOrInvokeAsync(() =>
 				{
 					token.ThrowIfCancellationRequested();
-
-					if (getStatus)
+					foreach (var pendingItem in pendingItems)
 					{
-						gitItem.UnmergedGitStatusIcon = gitItemModel.Status switch
+						if (!modelsByPath.TryGetValue(pendingItem.Item.ItemPath!, out var gitItemModel))
+							continue;
+
+						if (pendingItem.Status)
 						{
-							ChangeKind.Added => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Added"],
-							ChangeKind.Deleted => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Removed"],
-							ChangeKind.Modified => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Modified"],
-							ChangeKind.Untracked => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Removed"],
-							_ => null,
-						};
-						gitItem.UnmergedGitStatusName = gitItemModel.StatusHumanized;
-					}
+							pendingItem.Item.UnmergedGitStatusIcon = gitItemModel.Status switch
+							{
+								GitItemStatus.Added => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Added"],
+								GitItemStatus.Deleted => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Removed"],
+								GitItemStatus.Modified => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Modified"],
+								GitItemStatus.Untracked => (Microsoft.UI.Xaml.Style)Microsoft.UI.Xaml.Application.Current.Resources["App.ThemedIcons.Status.Removed"],
+								_ => null,
+							};
+							pendingItem.Item.UnmergedGitStatusName = gitItemModel.StatusHumanized;
+						}
 
-					if (getCommit)
-					{
-						gitItem.GitLastCommitDate = gitItemModel.LastCommitDate;
-						gitItem.GitLastCommitMessage = gitItemModel.LastCommitMessage;
-						gitItem.GitLastCommitAuthor = gitItemModel.LastCommitAuthor;
-						gitItem.GitLastCommitSha = gitItemModel.LastCommitSha is { Length: >= 7 } sha
-							? sha[..7]
-							: gitItemModel.LastCommitSha;
-						gitItem.GitLastCommitFullSha = gitItemModel.LastCommitSha;
+						if (pendingItem.Commit)
+						{
+							pendingItem.Item.GitLastCommitDate = gitItemModel.LastCommitDate;
+							pendingItem.Item.GitLastCommitMessage = gitItemModel.LastCommitMessage;
+							pendingItem.Item.GitLastCommitAuthor = gitItemModel.LastCommitAuthor;
+							pendingItem.Item.GitLastCommitSha = gitItemModel.LastCommitSha is { Length: >= 7 } sha
+								? sha[..7]
+								: gitItemModel.LastCommitSha;
+							pendingItem.Item.GitLastCommitFullSha = gitItemModel.LastCommitSha;
+						}
 					}
 				}, Microsoft.UI.Dispatching.DispatcherQueuePriority.Low);
 
@@ -1982,10 +2008,13 @@ namespace Files.App.ViewModels
 			{
 				if (!propertiesLoaded)
 				{
-					if (getStatus)
-						gitItem.StatusPropertiesInitialized = false;
-					if (getCommit)
-						gitItem.CommitPropertiesInitialized = false;
+					foreach (var pendingItem in pendingItems)
+					{
+						if (pendingItem.Status)
+							pendingItem.Item.StatusPropertiesInitialized = false;
+						if (pendingItem.Commit)
+							pendingItem.Item.CommitPropertiesInitialized = false;
+					}
 				}
 
 				if (semaphoreEntered)

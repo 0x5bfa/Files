@@ -112,7 +112,7 @@
         <PackageReference Include="CommunityToolkit.WinUI.Triggers" />
         <PackageReference Include="DiscUtils.Udf" />
         <PackageReference Include="FluentFTP" />
-        <PackageReference Include="LibGit2Sharp" />
+        <PackageReference Include="GitPorcelain" />
         <PackageReference Include="MessageFormat" />
         <PackageReference Include="Microsoft.Data.Sqlite.Core" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection" />
