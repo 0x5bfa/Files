@@ -3,6 +3,7 @@
 
 using CommunityToolkit.WinUI;
 using Files.App.Helpers.ContextFlyouts;
+using Files.App.Utils.Shell.ContextMenus;
 using Files.Shared.Helpers;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
@@ -13,6 +14,7 @@ using System.Text;
 using Windows.System;
 using Windows.UI.Core;
 using Windows.Win32;
+using Windows.Win32.Foundation;
 using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Files.App.Helpers
@@ -20,6 +22,9 @@ namespace Files.App.Helpers
 	public static class ShellContextFlyoutFactory
 	{
 		public static IUserSettingsService UserSettingsService { get; } = Ioc.Default.GetRequiredService<IUserSettingsService>();
+
+		public static bool ShowClassicContextMenu(IReadOnlyList<string> paths, bool isLocationBackground, System.Drawing.Point invocationPoint)
+			=> FilesShellClassicContextMenuSession.Show(paths, isLocationBackground, (HWND)MainWindow.Instance.WindowHandle, invocationPoint);
 
 		private static (string Label, string AccessKey) ExtractLabelAndAccessKey(string rawLabel)
 		{
@@ -120,38 +125,12 @@ namespace Files.App.Helpers
 			ContextMenu contextMenu,
 			IEnumerable<Win32ContextMenuItem> menuFlyoutItems,
 			CancellationToken cancellationToken,
-			bool showIcons = true,
-			int itemsBeforeOverflow = int.MaxValue)
+			bool showIcons = true)
 		{
 			if (cancellationToken.IsCancellationRequested)
 				return;
 
-			var itemsCount = 0; // Separators do not count for reaching the overflow threshold
-			var menuItems = menuFlyoutItems.TakeWhile(x => x.Type == MENU_ITEM_TYPE.MFT_SEPARATOR || ++itemsCount <= itemsBeforeOverflow).ToList();
-			var overflowItems = menuFlyoutItems.Except(menuItems).ToList();
-
-			if (overflowItems.Any(x => x.Type != MENU_ITEM_TYPE.MFT_SEPARATOR))
-			{
-				var moreItem = menuItemsListLocal.FirstOrDefault(x => x.ID == "ItemOverflow");
-				if (moreItem is null)
-				{
-					var menuLayoutSubItem = new ContextMenuFlyoutItemViewModel()
-					{
-						Text = Strings.ShowMoreOptions.GetLocalizedResource(),
-						Glyph = "\xE712",
-					};
-					await LoadMenuFlyoutItemAsync(menuLayoutSubItem.Items
-						?? throw new InvalidOperationException("The shell overflow menu has not been initialized."), contextMenu, overflowItems, cancellationToken, showIcons);
-					menuItemsListLocal.Insert(0, menuLayoutSubItem);
-				}
-				else
-				{
-					await LoadMenuFlyoutItemAsync(moreItem.Items
-						?? throw new InvalidOperationException("The shell overflow menu has not been initialized."), contextMenu, overflowItems, cancellationToken, showIcons);
-				}
-			}
-
-			foreach (var menuFlyoutItem in menuItems
+			foreach (var menuFlyoutItem in menuFlyoutItems
 				.SkipWhile(x => x.Type == MENU_ITEM_TYPE.MFT_SEPARATOR) // Remove leading separators
 				.Reverse()
 				.SkipWhile(x => x.Type == MENU_ITEM_TYPE.MFT_SEPARATOR)) // Remove trailing separators
@@ -275,51 +254,65 @@ namespace Files.App.Helpers
 		}
 
 		/// <summary>
-		/// Loads the shell menu items into a FastContextFlyout-based menu (sidebar, widgets): fills the
-		/// pre-added "Show more options" submenu (or appends inline per the setting) and swaps the
-		/// Open with / Send to / BitLocker placeholders.
+		/// Loads Explorer app-extension and Cloud Files commands, plus the Shell commands retained by
+		/// Files-owned Open with / Send to / BitLocker menu entries.
 		/// </summary>
 		public static async Task LoadShellMenuItemsAsync(
-			string path,
+			IReadOnlyList<string> paths,
 			FastContextFlyout flyout,
 			ContextMenuOptions? options = null,
-			MenuFlyoutSubItem? overflowSubMenu = null,
-			MenuFlyoutSeparator? overflowSeparator = null,
+			MenuFlyoutItem? showMoreOptions = null,
 			bool showOpenWithMenu = false,
-			bool showSendToMenu = false)
+			bool showSendToMenu = false,
+			(MenuFlyoutItemBase Leaf, MenuFlyoutSubItem SubMenu)? openWithSwap = null,
+			(MenuFlyoutItemBase Leaf, MenuFlyoutSubItem SubMenu)? sendToSwap = null,
+			CancellationToken cancellationToken = default)
 		{
+			using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, flyout.MenuLifetimeToken);
+			var loadToken = linkedCancellationTokenSource.Token;
 			try
 			{
-				if (options is not null && !options.IsLocationItem)
+				if (paths.Count is 0 || options is not null && !options.IsLocationItem)
+					return;
+
+				var shiftPressed = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
+				loadToken.ThrowIfCancellationRequested();
+				var session = await FilesShellContextMenuSession.CreateAsync(paths, shiftPressed, loadToken);
+				if (loadToken.IsCancellationRequested)
 				{
-					if (overflowSubMenu is not null)
-						flyout.RemoveIfEmpty(overflowSubMenu, overflowSeparator);
+					if (session is not null)
+						await session.DisposeAsync();
 					return;
 				}
 
-				var shiftPressed = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
-				var shellMenuItems = await ContentPageContextFlyoutFactory.GetItemContextShellCommandsAsync(
-					workingDir: null,
-					[new ListedItem(null) { ItemPath = path }],
-					shiftPressed: shiftPressed,
-					showOpenMenu: false,
-					default);
+				if (session is not null)
+				{
+					flyout.AttachShellContextMenuSession(session);
+					flyout.AddShellModels(session.CreateMenuItems(), showMoreOptions);
+				}
 
-				// Open with / Send to / BitLocker get their own main-menu entries; everything else is overflow.
+				var sendToEnabled = showSendToMenu && UserSettingsService.GeneralSettingsService.ShowSendToMenu;
+				var showBitLocker = paths.Count is 1 && IsDriveRoot(paths[0]);
+				if (!showOpenWithMenu && !sendToEnabled && !showBitLocker)
+				{
+					flyout.FinalizePrimaryRowPosition();
+					return;
+				}
+
+				var shellMenuItems = await ContentPageContextFlyoutFactory.GetPreservedShellMenuItemsAsync(
+					paths, showOpenWithMenu, sendToEnabled, showBitLocker, shiftPressed, loadToken);
+				if (loadToken.IsCancellationRequested)
+					return;
+
 				var openWithItem = showOpenWithMenu ? shellMenuItems.FirstOrDefault(x => x.Tag is Win32ContextMenuItem { CommandString: "openas" }) : null;
 				if (openWithItem is not null)
 					shellMenuItems.Remove(openWithItem);
 
-				var sendToItem = shellMenuItems.FirstOrDefault(x => x.Tag is Win32ContextMenuItem { CommandString: "sendto" });
-				if (sendToItem is not null && (showSendToMenu || !UserSettingsService.GeneralSettingsService.ShowSendToMenu))
+				var sendToItem = sendToEnabled ? shellMenuItems.FirstOrDefault(x => x.Tag is Win32ContextMenuItem { CommandString: "sendto" }) : null;
+				if (sendToItem is not null)
 					shellMenuItems.Remove(sendToItem);
-				sendToItem = showSendToMenu && UserSettingsService.GeneralSettingsService.ShowSendToMenu ? sendToItem : null;
 
-				// BitLocker: replace the placeholders with whichever entries the shell offers (drives)
-				flyout.ApplyBitLockerModels(shellMenuItems, overflowSubMenu, overflowSeparator);
-
-				// The rest fill the pre-added "Show more options", or render inline per the setting
-				flyout.AddShellModels(shellMenuItems, shiftPressed: false, overflowSubMenu, overflowSeparator, aboveExisting: false);
+				flyout.ApplyBitLockerModels(shellMenuItems, showMoreOptions);
 
 				// Open with / Send to: the placeholders were converted to their submenu form before the menu was
 				// shown (stable heights); fill their contents now, or drop them if the shell has no such entries.
@@ -334,15 +327,30 @@ namespace Files.App.Helpers
 						flyout.Items.Remove(subMenu);
 				}
 
-				FillOrRemove(flyout.ConvertPlaceholderToSubMenu("OpenWithPlaceholder", Strings.OpenWith.GetLocalizedResource(), "App.ThemedIcons.OpenWith"), openWithItem, GetOpenWithItems);
-				FillOrRemove(flyout.ConvertPlaceholderToSubMenu("SendToPlaceholder", Strings.SendTo.GetLocalizedResource(), null), sendToItem, GetSendToItems);
+				if (openWithSwap is { } openWithTarget)
+					FastContextFlyout.FillOrRevert(openWithTarget, openWithItem, GetOpenWithItems);
+				else if (showOpenWithMenu)
+					FillOrRemove(flyout.ConvertPlaceholderToSubMenu("OpenWithPlaceholder", Strings.OpenWith.GetLocalizedResource(), "App.ThemedIcons.OpenWith"), openWithItem, GetOpenWithItems);
+				if (sendToSwap is { } sendToTarget)
+					FastContextFlyout.FillOrRevert(sendToTarget, sendToItem, GetSendToItems);
+				else if (showSendToMenu)
+					FillOrRemove(flyout.ConvertPlaceholderToSubMenu("SendToPlaceholder", Strings.SendTo.GetLocalizedResource(), null), sendToItem, GetSendToItems);
 
 				flyout.FinalizePrimaryRowPosition();
+			}
+			catch (OperationCanceledException) when (loadToken.IsCancellationRequested)
+			{
 			}
 			catch (Exception ex)
 			{
 				Debug.WriteLine(ex);
 			}
+		}
+
+		private static bool IsDriveRoot(string path)
+		{
+			var root = Path.GetPathRoot(path);
+			return !string.IsNullOrEmpty(root) && string.Equals(path.TrimEnd('\\'), root.TrimEnd('\\'), StringComparison.OrdinalIgnoreCase);
 		}
 	}
 }

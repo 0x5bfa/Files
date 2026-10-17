@@ -193,20 +193,6 @@ namespace Files.App.ViewModels.UserControls.Widgets
 				}.Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(CommandManager.OpenStorageSenseFromHome).Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(CommandManager.FormatDriveFromHome).Build(),
-				new()
-				{
-					ItemType = ContextMenuFlyoutItemType.Separator,
-					Tag = "OverflowSeparator",
-				},
-				new()
-				{
-					Text = Strings.Loading.GetLocalizedResource(),
-					Glyph = "\xE712",
-					Items = [],
-					ID = "ItemOverflow",
-					Tag = "ItemOverflow",
-					IsEnabled = false,
-				}
 			}.Where(x => x.ShowItem).ToList();
 		}
 

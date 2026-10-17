@@ -24,45 +24,39 @@ namespace Files.App.Data.Factories
 		private static readonly ICommandManager Commands = Ioc.Default.GetRequiredService<ICommandManager>();
 		private static IStorageArchiveService StorageArchiveService { get; } = Ioc.Default.GetRequiredService<IStorageArchiveService>();
 
-		public static List<ContextMenuFlyoutItemViewModel> GetItemContextCommandsWithoutShellItems(CurrentInstanceViewModel currentInstanceViewModel, List<ListedItem> selectedItems, BaseLayoutViewModel commandsViewModel, bool shiftPressed, SelectedItemsPropertiesViewModel? selectedItemsPropertiesViewModel, ShellViewModel? itemViewModel = null)
+		public static List<ContextMenuFlyoutItemViewModel> GetItemContextCommandsWithoutShellItems(CurrentInstanceViewModel currentInstanceViewModel, List<ListedItem> selectedItems, BaseLayoutViewModel commandsViewModel, SelectedItemsPropertiesViewModel? selectedItemsPropertiesViewModel, ShellViewModel? itemViewModel = null)
 		{
 			var menuItemsList = GetBaseItemMenuItems(commandsViewModel: commandsViewModel, selectedItems: selectedItems, selectedItemsPropertiesViewModel: selectedItemsPropertiesViewModel, currentInstanceViewModel: currentInstanceViewModel, itemViewModel: itemViewModel);
-			menuItemsList = Filter(items: menuItemsList, shiftPressed: shiftPressed, currentInstanceViewModel: currentInstanceViewModel, selectedItems: selectedItems, removeOverflowMenu: false);
+			menuItemsList = Filter(items: menuItemsList, currentInstanceViewModel: currentInstanceViewModel, selectedItems: selectedItems);
 			return menuItemsList;
 		}
 
-		public static Task<List<ContextMenuFlyoutItemViewModel>> GetItemContextShellCommandsAsync(string? workingDir, List<ListedItem> selectedItems, bool shiftPressed, bool showOpenMenu, CancellationToken cancellationToken)
+		public static async Task<List<ContextMenuFlyoutItemViewModel>> GetPreservedShellMenuItemsAsync(IReadOnlyList<string> paths, bool showOpenWith, bool showSendTo, bool showBitLocker, bool shiftPressed, CancellationToken cancellationToken)
 		{
-			return ShellContextFlyoutFactory.GetShellContextmenuAsync(shiftPressed: shiftPressed, showOpenMenu: showOpenMenu, workingDirectory: workingDir, selectedItems: selectedItems, cancellationToken: cancellationToken);
+			if (paths.Count is 0)
+				return [];
+
+			var selectedItems = paths.Select(path => new ListedItem(null) { ItemPath = path }).ToList();
+			var items = await ShellContextFlyoutFactory.GetShellContextmenuAsync(
+				showOpenMenu: false,
+				shiftPressed: shiftPressed,
+				workingDirectory: null,
+				selectedItems: selectedItems,
+				cancellationToken: cancellationToken);
+
+			items = items.Where(item => item.Tag is Win32ContextMenuItem menuItem &&
+				((showOpenWith && menuItem.CommandString is "openas") ||
+				 (showSendTo && menuItem.CommandString is "sendto") ||
+				 (showBitLocker && (menuItem.CommandString?.StartsWith("encrypt-bde", StringComparison.OrdinalIgnoreCase) is true || menuItem.CommandString is "manage-bde"))))
+				.ToList();
+			FastContextFlyout.TrimSeparators(items);
+			return items;
 		}
 
-		public static List<ContextMenuFlyoutItemViewModel> Filter(List<ContextMenuFlyoutItemViewModel> items, List<ListedItem> selectedItems, bool shiftPressed, CurrentInstanceViewModel currentInstanceViewModel, bool removeOverflowMenu = true)
+		public static List<ContextMenuFlyoutItemViewModel> Filter(List<ContextMenuFlyoutItemViewModel> items, List<ListedItem> selectedItems, CurrentInstanceViewModel currentInstanceViewModel)
 		{
 			items = items.Where(x => Check(item: x, currentInstanceViewModel: currentInstanceViewModel, selectedItems: selectedItems)).ToList();
 			items.ForEach(x => x.Items = x.Items?.Where(y => Check(item: y, currentInstanceViewModel: currentInstanceViewModel, selectedItems: selectedItems)).ToList());
-
-			var overflow = items.FirstOrDefault(x => x.ID == "ItemOverflow");
-			if (overflow is not null)
-			{
-				var overflowMenuItems = overflow.Items
-					?? throw new InvalidOperationException("The overflow menu has not been initialized.");
-
-				if (!shiftPressed && UserSettingsService.GeneralSettingsService.MoveShellExtensionsToSubMenu) // items with ShowOnShift to overflow menu
-				{
-					var overflowItems = items.Where(x => x.ShowOnShift).ToList();
-
-					// Adds a separator between items already there and the new ones
-					if (overflowMenuItems.Count != 0 && overflowItems.Count > 0 && overflowMenuItems.Last().ItemType != ContextMenuFlyoutItemType.Separator)
-						overflowMenuItems.Add(new ContextMenuFlyoutItemViewModel { ItemType = ContextMenuFlyoutItemType.Separator });
-
-					items = items.Except(overflowItems).ToList();
-					overflowMenuItems.AddRange(overflowItems);
-				}
-
-				// remove the overflow if it has no child items
-				if (overflowMenuItems.Count == 0 && removeOverflowMenu)
-					items.Remove(overflow);
-			}
 
 			return items;
 		}
@@ -556,12 +550,10 @@ namespace Files.App.Data.Factories
 				new ContextMenuFlyoutItemViewModelBuilder(Commands.PinToStart)
 				{
 					IsVisible = selectedItems.All(x => (x.PrimaryItemAttribute == StorageItemTypes.Folder || x.IsExecutable || (x is IShortcutItem shortcutItem && FileExtensionHelpers.IsExecutableFile(shortcutItem.TargetPath))) && !x.IsItemPinnedToStart) && UserSettingsService.GeneralSettingsService.ShowPinToStart,
-					ShowOnShift = true,
 				}.Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(Commands.UnpinFromStart)
 				{
 					IsVisible = selectedItems.All(x => (x.PrimaryItemAttribute == StorageItemTypes.Folder || x.IsExecutable|| (x is IShortcutItem shortcutItem && FileExtensionHelpers.IsExecutableFile(shortcutItem.TargetPath))) && x.IsItemPinnedToStart) && UserSettingsService.GeneralSettingsService.ShowPinToStart,
-					ShowOnShift = true,
 				}.Build(),
 				new ContextMenuFlyoutItemViewModel
 				{
@@ -654,31 +646,6 @@ namespace Files.App.Data.Factories
 				}.Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(Commands.OpenStorageSense).Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(Commands.FormatDrive).Build(),
-				// Shell extensions are not available on the FTP server or in the archive,
-				// but following items are intentionally added because icons in the context menu will not appear
-				// unless there is at least one menu item with an icon that is not an ThemedIconModel. (#12943)
-				new ContextMenuFlyoutItemViewModel()
-				{
-					ItemType = ContextMenuFlyoutItemType.Separator,
-					Tag = "OverflowSeparator",
-					ShowInFtpPage = true,
-					ShowInZipPage = true,
-					ShowInRecycleBin = true,
-					ShowInSearchPage = true,
-				},
-				new ContextMenuFlyoutItemViewModel()
-				{
-					Text = Strings.Loading.GetLocalizedResource(),
-					Glyph = "\xE712",
-					Items = [],
-					ID = "ItemOverflow",
-					Tag = "ItemOverflow",
-					ShowInFtpPage = true,
-					ShowInZipPage = true,
-					ShowInRecycleBin = true,
-					ShowInSearchPage = true,
-					IsEnabled = false
-				},
 			}.Where(x => x.ShowItem).ToList();
 		}
 

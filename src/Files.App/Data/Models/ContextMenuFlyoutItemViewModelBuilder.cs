@@ -30,8 +30,6 @@ namespace Files.App.Data.Models
 
 		public object? Tag { get; init; }
 
-		public bool ShowOnShift { get; init; } = false;
-
 		public List<ContextMenuFlyoutItemViewModel>? Items { get; init; } = null;
 
 		public ContextMenuFlyoutItemViewModelBuilder(IRichCommand command)
@@ -62,7 +60,6 @@ namespace Files.App.Data.Models
 				Items = Items,
 				ItemType = type,
 				ShowItem = true,
-				ShowOnShift = ShowOnShift,
 				ShowInRecycleBin = true,
 				ShowInSearchPage = true,
 				ShowInFtpPage = true,

@@ -59,13 +59,14 @@ namespace Files.App.ViewModels.UserControls.Widgets
 				widgetCardItem.DataContext is not WidgetCardItem item ||
 				item.Path is null)
 				return;
+			var itemPath = item.Path;
 
 			// TODO: Add IsFolder to all WidgetCardItems
 			// NOTE: This is a workaround for file tags isFolder
 			var fileTagsCardItem = widgetCardItem.DataContext as WidgetFileTagCardItem;
 
 			var flyout = new FastContextFlyout();
-			_flyoutItemPath = item.Path;
+			_flyoutItemPath = itemPath;
 
 			// Notify of the change on right clicked item
 			OnRightClickedItemChanged(item, flyout.Flyout);
@@ -79,8 +80,8 @@ namespace Files.App.ViewModels.UserControls.Widgets
 			flyout.ConvertPlaceholderToSubMenu("OpenWithPlaceholder", Strings.OpenWith.GetLocalizedResource(), "App.ThemedIcons.OpenWith");
 			flyout.ConvertPlaceholderToSubMenu("SendToPlaceholder", Strings.SendTo.GetLocalizedResource(), null);
 
-			// Pre-add "Show more options" before showing so filling it with shell items never resizes the menu
-			var (moreOptions, moreSeparator) = flyout.AddShowMoreOptionsIfEnabled();
+			var moreOptions = flyout.AddShowMoreOptions(point =>
+				ShellContextFlyoutFactory.ShowClassicContextMenu([itemPath], isLocationBackground: false, point));
 
 			// Show the flyout
 			var invocationPosition = e.GetPosition(widgetCardItem);
@@ -88,7 +89,7 @@ namespace Files.App.ViewModels.UserControls.Widgets
 			flyout.Flyout.ShowAt(widgetCardItem, new FlyoutShowOptions() { Position = invocationPosition });
 
 			// Load the shell menu items
-			_ = ShellContextFlyoutFactory.LoadShellMenuItemsAsync(_flyoutItemPath, flyout, null, moreOptions, moreSeparator, showOpenWithMenu: true, showSendToMenu: true);
+			_ = ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, showMoreOptions: moreOptions, showOpenWithMenu: true, showSendToMenu: true, cancellationToken: flyout.MenuLifetimeToken);
 
 			e.Handled = true;
 		}

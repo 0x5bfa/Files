@@ -59,6 +59,7 @@
         <DirectPInvoke Include="api-ms-win-core-winrt-l1-1-0" />
         <DirectPInvoke Include="api-ms-win-core-winrt-robuffer-l1-1-0" />
         <DirectPInvoke Include="api-ms-win-core-winrt-string-l1-1-0" />
+        <DirectPInvoke Include="comctl32.dll" />
         <DirectPInvoke Include="CRYPT32" />
         <DirectPInvoke Include="GDI32" />
         <DirectPInvoke Include="KERNEL32.dll" />

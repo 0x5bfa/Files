@@ -33,8 +33,6 @@ namespace Files.App.Data.Models
 
 		public BitmapImage? BitmapIcon { get; set; }
 
-		public bool ShowOnShift { get; set; }
-
 		public bool SingleItemOnly { get; set; }
 
 		public bool ShowInRecycleBin { get; set; }

@@ -3,6 +3,7 @@
 
 using CommunityToolkit.WinUI;
 using Files.App.UserControls.Menus;
+using Files.App.Utils.Shell.ContextMenus;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -20,11 +21,12 @@ namespace Files.App.Helpers.ContextFlyouts
 	public sealed class FastContextFlyout
 	{
 		private static ControlTemplate? primaryRowTemplate;
-		private static IUserSettingsService? userSettingsService;
 
 		private MenuFlyoutItem? primaryRow;
 		private MenuFlyoutSeparator? primarySeparator;
 		private List<ContextMenuFlyoutItemViewModel>? primaryModels;
+		private FilesShellContextMenuSession? shellContextMenuSession;
+		private CancellationTokenSource menuLifetime = new();
 		private bool openedUp;
 		private bool placementResolved;
 		private double estimatedWidth;
@@ -44,6 +46,9 @@ namespace Files.App.Helpers.ContextFlyouts
 		public IList<MenuFlyoutItemBase> Items
 			=> Flyout.Items;
 
+		public CancellationToken MenuLifetimeToken
+			=> menuLifetime.Token;
+
 		public FastContextFlyout()
 		{
 			Flyout.Opening += (sender, e) => App.LastOpenedFlyout = Flyout;
@@ -56,6 +61,10 @@ namespace Files.App.Helpers.ContextFlyouts
 		/// </summary>
 		public void Reset()
 		{
+			menuLifetime.Cancel();
+			menuLifetime.Dispose();
+			menuLifetime = new();
+			DisposeShellContextMenuSession();
 			Flyout.Items.Clear();
 			primaryRow = null;
 			primarySeparator = null;
@@ -68,17 +77,14 @@ namespace Files.App.Helpers.ContextFlyouts
 
 		/// <summary>
 		/// Builds the given models into the menu: the primary commands as an icon-button row on top, the rest as
-		/// regular menu items. The overflow placeholder models ("ItemOverflow"/"OverflowSeparator") are markers
-		/// only and are skipped; shell loaders append a real "Show more options" submenu instead.
+		/// regular menu items.
 		/// </summary>
 		public void Build(List<ContextMenuFlyoutItemViewModel> models)
 		{
 			Reset();
 
 			var primary = models.Where(x => x.IsPrimary && !x.IsHidden && x.ShowItem).ToList();
-			var secondary = models
-				.Where(x => !x.IsPrimary && x.ID != "ItemOverflow" && (x.Tag as string) is not ("ItemOverflow" or "OverflowSeparator"))
-				.ToList();
+			var secondary = models.Where(x => !x.IsPrimary).ToList();
 
 			if (primary.Count > 0)
 				SetPrimaryModels(primary);
@@ -115,51 +121,34 @@ namespace Files.App.Helpers.ContextFlyouts
 		}
 
 		/// <summary>
-		/// Appends a styled "Show more options" submenu (with a leading separator when needed). Add it before the
-		/// async shell fetch so filling it later never resizes the main menu; drop it via
-		/// <see cref="RemoveIfEmpty"/> when the shell turns out to have nothing to offer.
+		/// Appends a native "Show more options" command. The caller supplies the target-specific Shell action.
 		/// </summary>
-		[DynamicWindowsRuntimeCast(typeof(Style))]
-		private (MenuFlyoutSubItem SubMenu, MenuFlyoutSeparator? Separator) AddShowMoreOptionsSubMenu()
+		public MenuFlyoutItem AddShowMoreOptions(Action<System.Drawing.Point> showClassicMenu)
 		{
-			var separator = AddSeparatorIfNeeded();
-			var subMenu = new MenuFlyoutSubItem
+			ArgumentNullException.ThrowIfNull(showClassicMenu);
+			AddSeparatorIfNeeded();
+			var menuItem = new MenuFlyoutItem
 			{
 				Text = Strings.ShowMoreOptions.GetLocalizedResource(),
 				Icon = new FontIcon { Glyph = ((char)0xE712).ToString() },
-				Style = App.Current.Resources["MenuFlyoutSubItemWithThemedIconStyle"] as Style,
 			};
-			Flyout.Items.Add(subMenu);
-
-			return (subMenu, separator);
-		}
-
-		public void RemoveIfEmpty(MenuFlyoutSubItem subMenu, MenuFlyoutSeparator? separator)
-		{
-			if (subMenu.Items.Count != 0)
-				return;
-
-			Flyout.Items.Remove(subMenu);
-			if (separator is not null)
-				Flyout.Items.Remove(separator);
+			menuItem.Click += (_, _) =>
+			{
+				var invocationPoint = GetClassicMenuInvocationPoint();
+				Flyout.Hide();
+				MainWindow.Instance.DispatcherQueue.TryEnqueue(() => showClassicMenu(invocationPoint));
+			};
+			Flyout.Items.Add(menuItem);
+			return menuItem;
 		}
 
 		/// <summary>
-		/// Pre-adds "Show more options" filled with the built-in overflow commands from the model list, when the
-		/// user setting routes shell extensions to a submenu. Returns nulls when extensions render inline instead.
+		/// Associates the Shell session with this flyout so its COM state is released when the menu closes.
 		/// </summary>
-		public (MenuFlyoutSubItem? SubMenu, MenuFlyoutSeparator? Separator) AddShowMoreOptionsIfEnabled(List<ContextMenuFlyoutItemViewModel>? items = null)
+		internal void AttachShellContextMenuSession(FilesShellContextMenuSession session)
 		{
-			userSettingsService ??= Ioc.Default.GetRequiredService<IUserSettingsService>();
-			if (!userSettingsService.GeneralSettingsService.MoveShellExtensionsToSubMenu)
-				return (null, null);
-
-			var (subMenu, separator) = AddShowMoreOptionsSubMenu();
-			var overflowModel = items?.FirstOrDefault(x => x.ID == "ItemOverflow");
-			if (overflowModel?.Items is { Count: > 0 } overflowItems)
-				ContextFlyoutModelToElementHelper.GetMenuFlyoutItemsFromModel(overflowItems)?.ForEach(subMenu.Items.Add);
-
-			return (subMenu, separator);
+			DisposeShellContextMenuSession();
+			shellContextMenuSession = session;
 		}
 
 		/// <summary>
@@ -179,26 +168,23 @@ namespace Files.App.Helpers.ContextFlyouts
 		}
 
 		/// <summary>
-		/// Inserts an element into the main menu just above the overflow area ("Show more options" and its
-		/// separator), or at the end when there is none.
+		/// Inserts an element just above the native "Show more options" command.
 		/// </summary>
-		public void InsertBeforeOverflow(MenuFlyoutItemBase element, MenuFlyoutSubItem? overflowSubMenu, MenuFlyoutSeparator? overflowSeparator)
-			=> Items.Insert(GetOverflowInsertIndex(overflowSubMenu, overflowSeparator), element);
+		public void InsertBeforeShowMore(MenuFlyoutItemBase element, MenuFlyoutItem? showMoreOptions)
+			=> Items.Insert(GetShowMoreInsertIndex(showMoreOptions), element);
 
-		private int GetOverflowInsertIndex(MenuFlyoutSubItem? overflowSubMenu, MenuFlyoutSeparator? overflowSeparator)
+		private int GetShowMoreInsertIndex(MenuFlyoutItem? showMoreOptions)
 		{
-			var index = overflowSeparator is not null ? Items.IndexOf(overflowSeparator) : -1;
-			if (index < 0 && overflowSubMenu is not null)
-				index = Items.IndexOf(overflowSubMenu);
+			var index = showMoreOptions is not null ? Items.IndexOf(showMoreOptions) : -1;
 			return index < 0 ? Items.Count : index;
 		}
 
 		/// <summary>
 		/// BitLocker: the Turn on / Manage placeholders are only markers - collapses them both and inserts
-		/// whichever entries the shell actually offers (only one applies to a drive) above the overflow area.
+		/// whichever entries the Shell offers (only one applies to a drive) above "Show more options".
 		/// The used models are removed from the given list.
 		/// </summary>
-		public void ApplyBitLockerModels(List<ContextMenuFlyoutItemViewModel> shellMenuItems, MenuFlyoutSubItem? overflowSubMenu, MenuFlyoutSeparator? overflowSeparator)
+		public void ApplyBitLockerModels(List<ContextMenuFlyoutItemViewModel> shellMenuItems, MenuFlyoutItem? showMoreOptions)
 		{
 			if (FindByTag("TurnOnBitLockerPlaceholder") is { } turnOnPlaceholder)
 				turnOnPlaceholder.Visibility = Visibility.Collapsed;
@@ -217,56 +203,26 @@ namespace Files.App.Helpers.ContextFlyouts
 					continue;
 
 				shellMenuItems.Remove(model);
-				InsertBeforeOverflow(ContextFlyoutModelToElementHelper.GetMenuItem(model), overflowSubMenu, overflowSeparator);
+				InsertBeforeShowMore(ContextFlyoutModelToElementHelper.GetMenuItem(model), showMoreOptions);
 			}
 		}
 
 		/// <summary>
-		/// Adds the (already filtered) shell models: everything inline when there is no overflow submenu, the
-		/// first 6 inline while shift is held, the rest inside "Show more options" - above its built-in commands
-		/// when <paramref name="aboveExisting"/> is set, appended otherwise.
+		/// Adds app-extension and Cloud Files commands to the main menu before "Show more options".
 		/// </summary>
 		[DynamicWindowsRuntimeCast(typeof(MenuFlyoutSeparator))]
-		public void AddShellModels(List<ContextMenuFlyoutItemViewModel> models, bool shiftPressed, MenuFlyoutSubItem? overflowSubMenu, MenuFlyoutSeparator? overflowSeparator, bool aboveExisting = true)
+		public void AddShellModels(List<ContextMenuFlyoutItemViewModel> models, MenuFlyoutItem? showMoreOptions)
 		{
-			List<ContextMenuFlyoutItemViewModel> mainModels = overflowSubMenu is null
-				? models
-				: shiftPressed ? models.Take(6).ToList() : [];
-			var overflowModels = models.Skip(mainModels.Count).ToList();
-			TrimSeparators(mainModels);
-			TrimSeparators(overflowModels);
-
-			if (mainModels.Count > 0)
-			{
-				var mainElements = ContextFlyoutModelToElementHelper.GetMenuFlyoutItemsFromModel(mainModels);
-				if (mainElements is { Count: > 0 })
-				{
-					var insertAt = GetOverflowInsertIndex(overflowSubMenu, overflowSeparator);
-					if (insertAt > 0 && Items[insertAt - 1] is not MenuFlyoutSeparator)
-						Items.Insert(insertAt++, new MenuFlyoutSeparator());
-					foreach (var element in mainElements)
-						Items.Insert(insertAt++, element);
-				}
-			}
-
-			if (overflowSubMenu is null)
+			TrimSeparators(models);
+			var elements = ContextFlyoutModelToElementHelper.GetMenuFlyoutItemsFromModel(models);
+			if (elements is not { Count: > 0 })
 				return;
 
-			var overflowElements = ContextFlyoutModelToElementHelper.GetMenuFlyoutItemsFromModel(overflowModels);
-			if (overflowElements is { Count: > 0 })
-			{
-				if (aboveExisting && overflowSubMenu.Items.Count > 0)
-				{
-					overflowSubMenu.Items.Insert(0, new MenuFlyoutSeparator());
-					for (var i = overflowElements.Count - 1; i >= 0; i--)
-						overflowSubMenu.Items.Insert(0, overflowElements[i]);
-				}
-				else
-				{
-					overflowElements.ForEach(overflowSubMenu.Items.Add);
-				}
-			}
-			RemoveIfEmpty(overflowSubMenu, overflowSeparator);
+			var insertAt = GetShowMoreInsertIndex(showMoreOptions);
+			if (insertAt > 0 && Items[insertAt - 1] is not MenuFlyoutSeparator)
+				Items.Insert(insertAt++, new MenuFlyoutSeparator());
+			foreach (var element in elements)
+				Items.Insert(insertAt++, element);
 		}
 
 		public MenuFlyoutItemBase? FindByTag(string tag)
@@ -578,11 +534,61 @@ namespace Files.App.Helpers.ContextFlyouts
 		[DynamicWindowsRuntimeCast(typeof(Panel))]
 		private void Flyout_Closed(object? sender, object e)
 		{
+			menuLifetime.Cancel();
+			DisposeShellContextMenuSession();
 			if (primaryRow?.Tag is not Panel row)
 				return;
 
 			foreach (var button in row.Children.OfType<Button>())
 				button.KeyboardAccelerators.Clear();
+		}
+
+		private void DisposeShellContextMenuSession()
+		{
+			var session = shellContextMenuSession;
+			shellContextMenuSession = null;
+			if (session is not null)
+				_ = DisposeSessionAsync(session);
+		}
+
+		private System.Drawing.Point GetClassicMenuInvocationPoint()
+		{
+			if (InvocationPointProvider?.Invoke() is { } currentInvocation)
+			{
+				invocationAnchor = currentInvocation.Anchor;
+				invocationPosition = currentInvocation.Position;
+			}
+
+			if (invocationAnchor is { } anchor && invocationPosition is { } position)
+			{
+				try
+				{
+					var rootPoint = anchor.TransformToVisual(null).TransformPoint(position);
+					var scale = anchor.XamlRoot?.RasterizationScale ?? 1.0;
+					var screenPoint = new System.Drawing.Point((int)Math.Round(rootPoint.X * scale), (int)Math.Round(rootPoint.Y * scale));
+					if (Windows.Win32.PInvoke.ClientToScreen(new(MainWindow.Instance.WindowHandle), ref screenPoint).Value is not 0)
+						return screenPoint;
+				}
+				catch (Exception exception)
+				{
+					Debug.WriteLine(exception);
+				}
+			}
+
+			Windows.Win32.PInvoke.GetCursorPos(out var cursor);
+			return new(cursor.X, cursor.Y);
+		}
+
+		private static async Task DisposeSessionAsync(FilesShellContextMenuSession session)
+		{
+			try
+			{
+				await session.DisposeAsync();
+			}
+			catch (Exception exception)
+			{
+				Debug.WriteLine(exception);
+			}
 		}
 
 		/// <summary>

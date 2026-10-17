@@ -206,20 +206,6 @@ namespace Files.App.ViewModels.UserControls.Widgets
 				{
 					IsVisible = UserSettingsService.GeneralSettingsService.ShowOpenTerminal && CommandManager.OpenTerminalFromHome.IsExecutable
 				}.Build(),
-				new()
-				{
-					ItemType = ContextMenuFlyoutItemType.Separator,
-					Tag = "OverflowSeparator",
-				},
-				new()
-				{
-					Text = Strings.Loading.GetLocalizedResource(),
-					Glyph = "\xE712",
-					Items = [],
-					ID = "ItemOverflow",
-					Tag = "ItemOverflow",
-					IsEnabled = false,
-				}
 			}.Where(x => x.ShowItem).ToList();
 		}
 

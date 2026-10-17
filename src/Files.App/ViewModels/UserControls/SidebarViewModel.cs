@@ -810,17 +810,17 @@ namespace Files.App.ViewModels.UserControls
 			var menuItems = GetLocationItemMenuItems(item, flyout.Flyout);
 			flyout.Build(menuItems);
 
-			// Pre-add "Show more options" before showing so filling it with shell items never resizes the menu
-			MenuFlyoutSubItem? moreOptions = null;
-			MenuFlyoutSeparator? moreSeparator = null;
+			var itemPath = item.GetRequiredPath();
+			MenuFlyoutItem? moreOptions = null;
 			if (menuOptions.ShowShellItems)
-				(moreOptions, moreSeparator) = flyout.AddShowMoreOptionsIfEnabled();
+				moreOptions = flyout.AddShowMoreOptions(point =>
+					ShellContextFlyoutFactory.ShowClassicContextMenu([itemPath], isLocationBackground: false, point));
 
 			flyout.ResolvePlacement(sidebarItem, args.Position);
 			flyout.Flyout.ShowAt(sidebarItem, new FlyoutShowOptions() { Position = args.Position });
 
 			if (menuOptions.ShowShellItems)
-				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync(item.GetRequiredPath(), flyout, menuOptions, moreOptions, moreSeparator);
+				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, menuOptions, moreOptions, cancellationToken: flyout.MenuLifetimeToken);
 		}
 
 		public async void HandleItemInvokedAsync(object item, PointerUpdateKind pointerUpdateKind)
@@ -1183,22 +1183,6 @@ namespace Files.App.ViewModels.UserControls
 				}.Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(Commands.OpenStorageSenseFromSidebar).Build(),
 				new ContextMenuFlyoutItemViewModelBuilder(Commands.FormatDriveFromSidebar).Build(),
-				new ContextMenuFlyoutItemViewModel()
-				{
-					ItemType = ContextMenuFlyoutItemType.Separator,
-					Tag = "OverflowSeparator",
-					IsHidden = !options.ShowShellItems,
-				},
-				new ContextMenuFlyoutItemViewModel()
-				{
-					Text = Strings.Loading.GetLocalizedResource(),
-					Glyph = "\xE712",
-					Items = [],
-					ID = "ItemOverflow",
-					Tag = "ItemOverflow",
-					IsEnabled = false,
-					IsHidden = !options.ShowShellItems,
-				},
 				new ContextMenuFlyoutItemViewModel()
 				{
 					Text = Strings.ManageTags.GetLocalizedResource(),
