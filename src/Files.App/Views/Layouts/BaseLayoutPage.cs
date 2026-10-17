@@ -78,10 +78,6 @@ namespace Files.App.Views.Layouts
 
 		protected bool guardRenameFromDoubleClick;
 
-		// Page-relative point of the pending context-menu invocation, from ContextRequested (fires for every input,
-		// unlike RightTapped which a touch long-press can skip). Invalid for keyboard, which has no pointer point.
-		private Point contextInvocationPosition;
-		private bool contextInvocationValid;
 		private TypedEventHandler<UIElement, ContextRequestedEventArgs>? contextRequestedHandler;
 
 		// Properties
@@ -623,20 +619,56 @@ namespace Files.App.Views.Layouts
 
 			SetSelectedItemsOnNavigation();
 
-			ItemContextMenuFlyout.Opening += ItemContextFlyout_Opening;
-			BaseContextMenuFlyout.Opening += BaseContextFlyout_Opening;
-
-			// On the page so it covers item rows and the empty background; handledEventsToo so it still runs after
-			// the built-in flyout handling. The hosts pull the captured point when the menu opens.
-			contextRequestedHandler = OnContextRequestedForPlacement;
-			AddHandler(UIElement.ContextRequestedEvent, contextRequestedHandler, true);
-			ItemContextFlyoutHost.InvocationPointProvider = () => contextInvocationValid ? (this, contextInvocationPosition) : null;
-			BaseContextFlyoutHost.InvocationPointProvider = () => contextInvocationValid ? (this, contextInvocationPosition) : null;
+			// Handle context requests at the page so item rows and the empty background share the same async load path.
+			contextRequestedHandler = OnContextRequested;
+			AddHandler(UIElement.ContextRequestedEvent, contextRequestedHandler, false);
 		}
 
-		private void OnContextRequestedForPlacement(UIElement sender, ContextRequestedEventArgs e)
+		[DynamicWindowsRuntimeCast(typeof(DependencyObject))]
+		[DynamicWindowsRuntimeCast(typeof(SelectorItem))]
+		private async void OnContextRequested(UIElement sender, ContextRequestedEventArgs e)
 		{
-			contextInvocationValid = e.TryGetPosition(this, out contextInvocationPosition);
+			e.Handled = true;
+
+			try
+			{
+				var cancellationToken = RenewShellMenuToken();
+				var itemContainer = FindItemContainer(e.OriginalSource as DependencyObject);
+				if (itemContainer is not null)
+				{
+					var item = GetItemFromElement(itemContainer);
+					if (item is null)
+						return;
+
+					if (itemContainer is SelectorItem { IsSelected: false })
+						ItemManipulationModel.SetSelectedItem(item);
+
+					Point? position = e.TryGetPosition(itemContainer, out var itemPosition) ? itemPosition : null;
+					await ShowItemContextFlyoutAsync(itemContainer, position, cancellationToken);
+					return;
+				}
+
+				Point? backgroundPosition = e.TryGetPosition(this, out var point) ? point : null;
+				await ShowBaseContextFlyoutAsync(this, backgroundPosition, cancellationToken);
+			}
+			catch (Exception error)
+			{
+				Debug.WriteLine(error);
+			}
+		}
+
+		[DynamicWindowsRuntimeCast(typeof(ContentControl))]
+		private ContentControl? FindItemContainer(DependencyObject? element)
+		{
+			while (element is not null)
+			{
+				if (CanGetItemFromElement(element))
+					return element as ContentControl;
+
+				element = VisualTreeHelper.GetParent(element);
+			}
+
+			return null;
 		}
 
 		private async Task<IShellPage> EnsurePageIsCurrentAsync()
@@ -660,83 +692,73 @@ namespace Files.App.Views.Layouts
 			return shellContextMenuItemCancellationToken.Token;
 		}
 
-		[DynamicWindowsRuntimeCast(typeof(MenuFlyout))]
-		private async void ItemContextFlyout_Opening(object? sender, object e)
+		private async Task ShowItemContextFlyoutAsync(FrameworkElement anchor, Point? position, CancellationToken cancellationToken)
 		{
-			try
+			var parentShellPage = await EnsurePageIsCurrentAsync();
+			if (cancellationToken.IsCancellationRequested)
+				return;
+
+			var commandsViewModel = CommandsViewModel
+				?? throw new InvalidOperationException("The layout commands are not initialized.");
+			var instanceViewModel = parentShellPage.InstanceViewModel;
+
+			if (!IsItemSelected)
+				return;
+
+			var selectedItems = SelectedItems;
+			if (selectedItems is null or { Count: 0 })
+				return;
+
+			SelectedItemsPropertiesViewModel.CheckAllFileExtensions(selectedItems.Select(x => x.FileExtension).ToList());
+
+			var items = ContentPageContextFlyoutFactory.GetItemContextCommandsWithoutShellItems(currentInstanceViewModel: instanceViewModel, selectedItems: selectedItems, selectedItemsPropertiesViewModel: SelectedItemsPropertiesViewModel, commandsViewModel: commandsViewModel, itemViewModel: null);
+			var host = ItemContextFlyoutHost;
+			host.Build(items);
+
+			// Edit tags: a submenu of the available tags (FileTagsContextMenu is a standalone MenuFlyout that
+			// can't be nested, so build the tag toggles directly).
+			if (instanceViewModel.CanTagFilesInPage && UserSettingsService.GeneralSettingsService.ShowEditTagsMenu)
 			{
-				var parentShellPage = await EnsurePageIsCurrentAsync();
-				var shellViewModel = parentShellPage.GetRequiredShellViewModel();
-				var commandsViewModel = CommandsViewModel
-					?? throw new InvalidOperationException("The layout commands are not initialized.");
-				var instanceViewModel = parentShellPage.InstanceViewModel;
-
-				// Workaround for item sometimes not getting selected
-				if (!IsItemSelected && (sender as MenuFlyout)?.Target is SelectorItem { Content: ListedItem li })
-					ItemManipulationModel.SetSelectedItem(li);
-
-				if (!IsItemSelected)
-					return;
-
-				var selectedItems = SelectedItems;
-				if (selectedItems is null or { Count: 0 })
-					return;
-
-				SelectedItemsPropertiesViewModel.CheckAllFileExtensions(selectedItems.Select(x => x.FileExtension).ToList());
-
-				var items = ContentPageContextFlyoutFactory.GetItemContextCommandsWithoutShellItems(currentInstanceViewModel: instanceViewModel, selectedItems: selectedItems, selectedItemsPropertiesViewModel: SelectedItemsPropertiesViewModel, commandsViewModel: commandsViewModel, itemViewModel: null);
-				var host = ItemContextFlyoutHost;
-				host.Build(items);
-
-				// Edit tags: a submenu of the available tags (FileTagsContextMenu is a standalone MenuFlyout that
-				// can't be nested, so build the tag toggles directly).
-				if (instanceViewModel.CanTagFilesInPage && UserSettingsService.GeneralSettingsService.ShowEditTagsMenu)
-				{
-					host.AddSeparatorIfNeeded();
-					host.Items.Add(BuildEditTagsSubItem(selectedItems));
-				}
-
-				// Keep Files-owned commands in this menu and load Explorer app-extension commands alongside them.
-				if (!instanceViewModel.IsPageTypeZipFolder && !instanceViewModel.IsPageTypeFtp)
-				{
-					var token = RenewShellMenuToken();
-					var selectedPaths = selectedItems.Select(x => x.ItemPath!).ToArray();
-
-					var moreOptions = host.AddShowMoreOptions(point =>
-						ShellContextFlyoutFactory.ShowClassicContextMenu(selectedPaths, isLocationBackground: false, point));
-
-					// Open with / Send to: swap the leaf placeholders for their submenus synchronously (before the
-					// menu renders) so the main menu does not reflow when the shell sub-items load - only the submenu
-					// contents fill in. Reverted after the fetch if the shell has no such items.
-					var openWithSwap = host.SwapLeafForSubMenu("OpenWith", "OpenWithOverflow", Strings.OpenWith.GetLocalizedResource(), "App.ThemedIcons.OpenWith");
-					var sendToSwap = UserSettingsService.GeneralSettingsService.ShowSendToMenu
-						? host.SwapLeafForSubMenu("SendTo", "SendToOverflow", null, null)
-						: null;
-
-					// Place the primary row BEFORE the menu renders so it does not jump on an upward open.
-					host.ResolvePlacement();
-
-					await ShellContextFlyoutFactory.LoadShellMenuItemsAsync(
-						selectedPaths,
-						host,
-						showMoreOptions: moreOptions,
-						showOpenWithMenu: true,
-						showSendToMenu: UserSettingsService.GeneralSettingsService.ShowSendToMenu,
-						openWithSwap: openWithSwap,
-						sendToSwap: sendToSwap,
-						cancellationToken: token);
-				}
-				else
-				{
-					host.ResolvePlacement();
-				}
-
-				host.FinalizePrimaryRowPosition();
+				host.AddSeparatorIfNeeded();
+				host.Items.Add(BuildEditTagsSubItem(selectedItems));
 			}
-			catch (Exception error)
+
+			if (!instanceViewModel.IsPageTypeZipFolder && !instanceViewModel.IsPageTypeFtp)
 			{
-				Debug.WriteLine(error);
+				var selectedPaths = selectedItems.Select(x => x.ItemPath!).ToArray();
+				var moreOptions = host.AddShowMoreOptions(point =>
+					ShellContextFlyoutFactory.ShowClassicContextMenu(selectedPaths, isLocationBackground: false, point));
+
+				var openWithSwap = host.SwapLeafForSubMenu("OpenWith", "OpenWithOverflow", Strings.OpenWith.GetLocalizedResource(), "App.ThemedIcons.OpenWith");
+				var sendToSwap = UserSettingsService.GeneralSettingsService.ShowSendToMenu
+					? host.SwapLeafForSubMenu("SendTo", "SendToOverflow", null, null)
+					: null;
+
+				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync(
+					selectedPaths,
+					host,
+					showMoreOptions: moreOptions,
+					showOpenWithMenu: true,
+					showSendToMenu: UserSettingsService.GeneralSettingsService.ShowSendToMenu,
+					openWithSwap: openWithSwap,
+					sendToSwap: sendToSwap,
+					cancellationToken: cancellationToken);
 			}
+
+			if (cancellationToken.IsCancellationRequested)
+				return;
+
+			host.ResolvePlacement(anchor, position);
+			host.FinalizePrimaryRowPosition();
+			ShowContextFlyout(host, anchor, position);
+		}
+
+		private static void ShowContextFlyout(FastContextFlyout host, FrameworkElement anchor, Point? position)
+		{
+			if (position is { } point)
+				host.Flyout.ShowAt(anchor, new FlyoutShowOptions { Position = point });
+			else
+				host.Flyout.ShowAt(anchor);
 		}
 
 		[DynamicWindowsRuntimeCast(typeof(Style))]
@@ -902,15 +924,12 @@ namespace Files.App.Views.Layouts
 			folderSettings.GroupOptionPreferenceUpdated -= FolderSettings_GroupOptionPreferenceUpdated;
 			folderSettings.GroupDirectionPreferenceUpdated -= FolderSettings_GroupDirectionPreferenceUpdated;
 			folderSettings.GroupByDateUnitPreferenceUpdated -= FolderSettings_GroupByDateUnitPreferenceUpdated;
-			ItemContextMenuFlyout.Opening -= ItemContextFlyout_Opening;
-			BaseContextMenuFlyout.Opening -= BaseContextFlyout_Opening;
+			shellContextMenuItemCancellationToken?.Cancel();
 			if (contextRequestedHandler is not null)
 			{
 				RemoveHandler(UIElement.ContextRequestedEvent, contextRequestedHandler);
 				contextRequestedHandler = null;
 			}
-			ItemContextFlyoutHost.InvocationPointProvider = null;
-			BaseContextFlyoutHost.InvocationPointProvider = null;
 
 			var parameter = e.Parameter as NavigationArguments;
 			if (parameter is not null && !parameter.IsLayoutSwitch)
@@ -920,52 +939,46 @@ namespace Files.App.Views.Layouts
 			}
 		}
 
-		private async void BaseContextFlyout_Opening(object? sender, object e)
+		private async Task ShowBaseContextFlyoutAsync(FrameworkElement anchor, Point? position, CancellationToken cancellationToken)
 		{
-			try
+			var parentShellPage = await EnsurePageIsCurrentAsync();
+			if (cancellationToken.IsCancellationRequested)
+				return;
+
+			var shellViewModel = parentShellPage.GetRequiredShellViewModel();
+			var commandsViewModel = CommandsViewModel
+				?? throw new InvalidOperationException("The layout commands are not initialized.");
+			var instanceViewModel = parentShellPage.InstanceViewModel;
+
+			ItemManipulationModel.ClearSelection();
+			var currentFolder = shellViewModel.CurrentFolder
+				?? throw new InvalidOperationException("The current folder is not available.");
+			List<ListedItem> contextItems = [currentFolder];
+			var items = ContentPageContextFlyoutFactory.GetItemContextCommandsWithoutShellItems(currentInstanceViewModel: instanceViewModel, selectedItems: contextItems, commandsViewModel: commandsViewModel, itemViewModel: shellViewModel, selectedItemsPropertiesViewModel: null);
+			var host = BaseContextFlyoutHost;
+			host.Build(items);
+
+			if (!instanceViewModel.IsPageTypeSearchResults && !instanceViewModel.IsPageTypeZipFolder && !instanceViewModel.IsPageTypeFtp)
 			{
-				var parentShellPage = await EnsurePageIsCurrentAsync();
-				var shellViewModel = parentShellPage.GetRequiredShellViewModel();
-				var commandsViewModel = CommandsViewModel
-					?? throw new InvalidOperationException("The layout commands are not initialized.");
-				var instanceViewModel = parentShellPage.InstanceViewModel;
+				var backgroundPath = shellViewModel.WorkingDirectory
+					?? throw new InvalidOperationException("The working directory is not available.");
 
-				ItemManipulationModel.ClearSelection();
-				var currentFolder = shellViewModel.CurrentFolder
-					?? throw new InvalidOperationException("The current folder is not available.");
-				List<ListedItem> contextItems = [currentFolder];
-				var items = ContentPageContextFlyoutFactory.GetItemContextCommandsWithoutShellItems(currentInstanceViewModel: instanceViewModel, selectedItems: contextItems, commandsViewModel: commandsViewModel, itemViewModel: shellViewModel, selectedItemsPropertiesViewModel: null);
-				var host = BaseContextFlyoutHost;
-				host.Build(items);
+				var moreOptions = host.AddShowMoreOptions(point =>
+					ShellContextFlyoutFactory.ShowClassicContextMenu([backgroundPath], isLocationBackground: true, point));
 
-				if (!instanceViewModel.IsPageTypeSearchResults && !instanceViewModel.IsPageTypeZipFolder && !instanceViewModel.IsPageTypeFtp)
-				{
-					var token = RenewShellMenuToken();
-					var backgroundPath = shellViewModel.WorkingDirectory
-						?? throw new InvalidOperationException("The working directory is not available.");
-
-					var moreOptions = host.AddShowMoreOptions(point =>
-						ShellContextFlyoutFactory.ShowClassicContextMenu([backgroundPath], isLocationBackground: true, point));
-
-					host.ResolvePlacement();
-
-					await ShellContextFlyoutFactory.LoadShellMenuItemsAsync(
-						[backgroundPath],
-						host,
-						showMoreOptions: moreOptions,
-						cancellationToken: token);
-				}
-				else
-				{
-					host.ResolvePlacement();
-				}
-
-				host.FinalizePrimaryRowPosition();
+				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync(
+					[backgroundPath],
+					host,
+					showMoreOptions: moreOptions,
+					cancellationToken: cancellationToken);
 			}
-			catch (Exception error)
-			{
-				Debug.WriteLine(error);
-			}
+
+			if (cancellationToken.IsCancellationRequested)
+				return;
+
+			host.ResolvePlacement(anchor, position);
+			host.FinalizePrimaryRowPosition();
+			ShowContextFlyout(host, anchor, position);
 		}
 
 		public void UpdateSelectionSize()

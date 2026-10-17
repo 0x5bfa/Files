@@ -769,19 +769,6 @@ namespace Files.App.Views.Layouts
 			ResetRenameDoubleClick();
 		}
 
-		[DynamicWindowsRuntimeCast(typeof(StackPanel))]
-		[DynamicWindowsRuntimeCast(typeof(ListViewItem))]
-		private void StackPanel_Loaded(object sender, RoutedEventArgs e)
-		{
-			// This is the best way I could find to set the context flyout, as doing it in the styles isn't possible
-			// because you can't use bindings in the setters
-			DependencyObject item = VisualTreeHelper.GetParent(sender as StackPanel);
-			while (item is not ListViewItem)
-				item = VisualTreeHelper.GetParent(item);
-			if (item is ListViewItem itemContainer)
-				itemContainer.ContextFlyout = ItemContextMenuFlyout;
-		}
-
 		private void Grid_PointerPressed(object sender, PointerRoutedEventArgs e)
 		{
 			// This prevents the drag selection rectangle from appearing when resizing the columns

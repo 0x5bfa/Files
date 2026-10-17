@@ -816,11 +816,11 @@ namespace Files.App.ViewModels.UserControls
 				moreOptions = flyout.AddShowMoreOptions(point =>
 					ShellContextFlyoutFactory.ShowClassicContextMenu([itemPath], isLocationBackground: false, point));
 
-			flyout.ResolvePlacement(sidebarItem, args.Position);
-			flyout.Flyout.ShowAt(sidebarItem, new FlyoutShowOptions() { Position = args.Position });
-
 			if (menuOptions.ShowShellItems)
 				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, menuOptions, moreOptions, cancellationToken: flyout.MenuLifetimeToken);
+
+			flyout.ResolvePlacement(sidebarItem, args.Position);
+			flyout.Flyout.ShowAt(sidebarItem, new FlyoutShowOptions() { Position = args.Position });
 		}
 
 		public async void HandleItemInvokedAsync(object item, PointerUpdateKind pointerUpdateKind)

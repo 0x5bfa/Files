@@ -143,11 +143,10 @@ namespace Files.App.Helpers
 					continue;
 
 				BitmapImage? image = null;
-				if (showIcons && menuFlyoutItem.Icon is { Length: > 0 })
+				if (showIcons && menuFlyoutItem.Icon is { Length: > 0 } iconData)
 				{
 					image = new BitmapImage();
-					using var ms = new MemoryStream(menuFlyoutItem.Icon);
-					await image.SetSourceAsync(ms.AsRandomAccessStream());
+					_ = LoadIconAsync(image, iconData);
 				}
 
 				if (menuFlyoutItem.Type is MENU_ITEM_TYPE.MFT_SEPARATOR)
@@ -232,6 +231,19 @@ namespace Files.App.Helpers
 				}
 
 				//contextMenu.Dispose(); // Prevents some menu items from working (TBC)
+			}
+		}
+
+		private static async Task LoadIconAsync(BitmapImage image, byte[] iconData)
+		{
+			try
+			{
+				using var ms = new MemoryStream(iconData, writable: false);
+				await image.SetSourceAsync(ms.AsRandomAccessStream());
+			}
+			catch (Exception exception)
+			{
+				Debug.WriteLine(exception);
 			}
 		}
 

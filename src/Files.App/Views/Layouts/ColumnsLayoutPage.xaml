@@ -23,7 +23,7 @@
 		</Style>
 	</local:BaseLayoutPage.Resources>
 
-	<controls:BladeView x:Name="ColumnHost" ContextFlyout="{x:Bind BaseContextMenuFlyout}">
+	<controls:BladeView x:Name="ColumnHost">
 		<controls:BladeView.ItemContainerTransitions>
 			<TransitionCollection />
 		</controls:BladeView.ItemContainerTransitions>

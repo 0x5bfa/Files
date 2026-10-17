@@ -891,20 +891,8 @@ namespace Files.App.Views.Layouts
 			}
 		}
 
-		[DynamicWindowsRuntimeCast(typeof(Grid))]
-		[DynamicWindowsRuntimeCast(typeof(GridViewItem))]
 		private void Grid_Loaded(object sender, RoutedEventArgs e)
 		{
-			// This is the best way I could find to set the context flyout, as doing it in the styles isn't possible
-			// because you can't use bindings in the setters
-			DependencyObject item = VisualTreeHelper.GetParent(sender as Grid);
-
-			while (item is not GridViewItem)
-				item = VisualTreeHelper.GetParent(item);
-
-			if (item is GridViewItem itemContainer)
-				itemContainer.ContextFlyout = ItemContextMenuFlyout;
-
 			// Set VerticalScrollMode after an item has been loaded (#14785)
 			if (shouldSetVerticalScrollMode)
 			{

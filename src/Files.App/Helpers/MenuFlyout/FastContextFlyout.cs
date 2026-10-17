@@ -176,7 +176,10 @@ namespace Files.App.Helpers.ContextFlyouts
 		private int GetShowMoreInsertIndex(MenuFlyoutItem? showMoreOptions)
 		{
 			var index = showMoreOptions is not null ? Items.IndexOf(showMoreOptions) : -1;
-			return index < 0 ? Items.Count : index;
+			if (index < 0)
+				return Items.Count;
+
+			return index > 0 && Items[index - 1] is MenuFlyoutSeparator ? index - 1 : index;
 		}
 
 		/// <summary>

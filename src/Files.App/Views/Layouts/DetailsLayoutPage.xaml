@@ -182,7 +182,6 @@
 
 	<Grid
 		x:Name="RootGrid"
-		ContextFlyout="{x:Bind BaseContextMenuFlyout}"
 		SizeChanged="RootGrid_SizeChanged">
 
 		<!--  Empty Indicator  -->
@@ -924,7 +923,6 @@
 									HorizontalAlignment="Stretch"
 									AutomationProperties.Name="{x:Bind Name, Mode=OneWay}"
 									IsRightTapEnabled="True"
-									Loaded="StackPanel_Loaded"
 									Orientation="Horizontal">
 									<!--  Item Thumbnail  -->
 									<Grid

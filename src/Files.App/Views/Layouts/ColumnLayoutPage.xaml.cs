@@ -679,17 +679,6 @@ namespace Files.App.Views.Layouts
 			TimeSpan.FromMilliseconds(200));
 		}
 
-		[DynamicWindowsRuntimeCast(typeof(Grid))]
-		private void Grid_Loaded(object sender, RoutedEventArgs e)
-		{
-			var itemContainer = (sender as Grid)?.FindAscendant<ListViewItem>();
-
-			if (itemContainer is null)
-				return;
-
-			itemContainer.ContextFlyout = ItemContextMenuFlyout;
-		}
-
 		protected override void BaseFolderSettings_LayoutModeChangeRequested(object? sender, LayoutModeEventArgs e)
 		{
 			var parent = this.FindAscendant<ModernShellPage>();

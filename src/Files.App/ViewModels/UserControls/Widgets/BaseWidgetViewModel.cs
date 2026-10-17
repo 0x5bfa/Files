@@ -52,7 +52,7 @@ namespace Files.App.ViewModels.UserControls.Widgets
 		public abstract List<ContextMenuFlyoutItemViewModel> GetItemMenuItems(WidgetCardItem item, bool isPinned, bool isFolder = false);
 
 		[DynamicWindowsRuntimeCast(typeof(FrameworkElement))]
-		public void BuildItemContextMenu(object sender, RightTappedRoutedEventArgs e)
+		public async void BuildItemContextMenu(object sender, RightTappedRoutedEventArgs e)
 		{
 			// Ensure values are not null
 			if (sender is not FrameworkElement widgetCardItem ||
@@ -85,13 +85,13 @@ namespace Files.App.ViewModels.UserControls.Widgets
 
 			// Show the flyout
 			var invocationPosition = e.GetPosition(widgetCardItem);
+			e.Handled = true;
+
+			// Load the shell menu items
+			await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, showMoreOptions: moreOptions, showOpenWithMenu: true, showSendToMenu: true, cancellationToken: flyout.MenuLifetimeToken);
 			flyout.ResolvePlacement(widgetCardItem, invocationPosition);
 			flyout.Flyout.ShowAt(widgetCardItem, new FlyoutShowOptions() { Position = invocationPosition });
 
-			// Load the shell menu items
-			_ = ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, showMoreOptions: moreOptions, showOpenWithMenu: true, showSendToMenu: true, cancellationToken: flyout.MenuLifetimeToken);
-
-			e.Handled = true;
 		}
 
 		// Command methods
