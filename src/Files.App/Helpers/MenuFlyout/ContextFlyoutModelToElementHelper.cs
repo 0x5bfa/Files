@@ -75,6 +75,11 @@ namespace Files.App.Helpers.ContextFlyouts
 						Debug.WriteLine(e);
 					}
 				}
+				else if (item.IconElement is not null)
+				{
+					flyoutSubItem.Style = App.Current.Resources["MenuFlyoutSubItemWithThemedIconStyle"] as Style;
+					flyoutSubItem.Icon = item.IconElement;
+				}
 				else if (item.ThemedIconModel is { IsValid: true } themedIcon
 					&& App.Current.Resources[themedIcon.ThemedIconStyle] is Style themedIconStyle)
 				{
@@ -186,6 +191,9 @@ namespace Files.App.Helpers.ContextFlyouts
 					AccessKey = i.AccessKey,
 				};
 			}
+
+			if (i.IconElement is not null)
+				flyoutItem.Icon = i.IconElement;
 
 			if (i.KeyboardAccelerator is not null)
 			{

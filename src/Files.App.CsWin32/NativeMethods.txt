@@ -251,6 +251,8 @@ SHDefExtractIconW
 GdipCreateBitmapFromHICON
 SHGetLocalizedName
 SHLoadIndirectString
+GetPackagePathByFullName
+GetPackagesByPackageFamily
 SHGetSetFolderCustomSettings
 FCSM_ICONFILE
 FCS_FORCEWRITE

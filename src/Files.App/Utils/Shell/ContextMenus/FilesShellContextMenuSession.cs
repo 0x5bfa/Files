@@ -4,6 +4,9 @@
 using CommunityToolkit.Mvvm.Input;
 using Files.App.Data.Models;
 using Files.App.Utils.Shell;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
@@ -17,6 +20,7 @@ using Windows.Win32.System.Ole;
 using Windows.Win32.UI.Shell;
 using Windows.Win32.UI.Shell.Common;
 using Windows.Win32.UI.WindowsAndMessaging;
+using Windows.UI.ViewManagement;
 
 namespace Files.App.Utils.Shell.ContextMenus;
 
@@ -37,6 +41,7 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 	private readonly string[] _paths;
 	private readonly Dictionary<FilesShellMenuEntry, uint> _nativeCommands = [];
 	private readonly Dictionary<FilesShellMenuEntry, IExplorerCommand> _explorerCommands = [];
+	private readonly Dictionary<FilesShellMenuEntry, Task<byte[]?>> _iconLoads = [];
 	private readonly Dictionary<WindowsShellExplorerCommand, IExplorerCommand> _describedCommands = [];
 	private readonly HashSet<FilesShellMenuEntry> _entries = [];
 	private IContextMenu? _contextMenu;
@@ -90,10 +95,10 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 	public List<ContextMenuFlyoutItemViewModel> CreateMenuItems()
 	{
-		return CreateMenuItems(Entries);
+		return CreateMenuItems(Entries, GetIconTheme());
 	}
 
-	private List<ContextMenuFlyoutItemViewModel> CreateMenuItems(IReadOnlyList<FilesShellMenuEntry> entries)
+	private List<ContextMenuFlyoutItemViewModel> CreateMenuItems(IReadOnlyList<FilesShellMenuEntry> entries, FilesShellContextMenuIconTheme iconTheme)
 	{
 		var models = new List<ContextMenuFlyoutItemViewModel>(entries.Count);
 		foreach (var entry in entries)
@@ -118,10 +123,16 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 				ShowInFtpPage = true,
 				ShowInZipPage = true,
 			};
+			if (entry.Icon is not null || !entry.NativeIcon.IsNull || _nativeCommands.ContainsKey(entry))
+			{
+				var icon = new ImageIcon { Width = 16, Height = 16 };
+				model.IconElement = icon;
+				_ = LoadIconAsync(entry, icon, iconTheme);
+			}
 
 			if (entry.Children.Count is not 0)
 			{
-				model.Items = CreateMenuItems(entry.Children);
+				model.Items = CreateMenuItems(entry.Children, iconTheme);
 				model.IsEnabled = entry.Children.Any(static child => !child.IsSeparator && child.IsEnabled);
 			}
 			else if (entry.IsEnabled && (_nativeCommands.ContainsKey(entry) || _explorerCommands.ContainsKey(entry)))
@@ -133,6 +144,71 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		}
 
 		return models;
+	}
+
+	private async Task LoadIconAsync(FilesShellMenuEntry entry, ImageIcon icon, FilesShellContextMenuIconTheme iconTheme)
+	{
+		try
+		{
+			var iconData = await GetIconAsync(entry, iconTheme).ConfigureAwait(false);
+			if (iconData is not { Length: > 0 })
+				return;
+
+			await MainWindow.Instance.DispatcherQueue.EnqueueOrInvokeAsync(async () =>
+			{
+				lock (_lifetimeLock)
+				{
+					if (_isDisposed)
+						return;
+				}
+
+				using var stream = new MemoryStream(iconData, writable: false);
+				if (iconData.AsSpan(0, Math.Min(iconData.Length, 256)).IndexOf("<svg"u8) >= 0)
+				{
+					var svg = new SvgImageSource();
+					await svg.SetSourceAsync(stream.AsRandomAccessStream());
+					icon.Source = svg;
+				}
+				else
+				{
+					icon.Source = await iconData.ToBitmapAsync(16);
+				}
+			});
+		}
+		catch (Exception exception)
+		{
+			Debug.WriteLine(exception);
+		}
+	}
+
+	private Task<byte[]?> GetIconAsync(FilesShellMenuEntry entry, FilesShellContextMenuIconTheme iconTheme)
+	{
+		lock (_lifetimeLock)
+		{
+			if (_isDisposed || !_entries.Contains(entry))
+				return Task.FromResult<byte[]?>(null);
+
+			if (!_iconLoads.TryGetValue(entry, out var iconLoad))
+			{
+				iconLoad = _worker.Thread.PostMethod(() => FilesShellContextMenuIconSource.Read(entry.Id, entry.Icon, entry.NativeIcon, 16, iconTheme));
+				_iconLoads.Add(entry, iconLoad);
+			}
+
+			return iconLoad;
+		}
+	}
+
+	private static FilesShellContextMenuIconTheme GetIconTheme()
+	{
+		if (new AccessibilitySettings().HighContrast)
+		{
+			var background = new UISettings().GetColorValue(UIColorType.Background);
+			return 299 * background.R + 587 * background.G + 114 * background.B >= 128000
+				? FilesShellContextMenuIconTheme.HighContrastWhite : FilesShellContextMenuIconTheme.HighContrastBlack;
+		}
+
+		return MainWindow.Instance.Content is FrameworkElement content && content.ActualTheme is ElementTheme.Dark
+			? FilesShellContextMenuIconTheme.Dark : FilesShellContextMenuIconTheme.Light;
 	}
 
 	public Task<bool> InvokeAsync(FilesShellMenuEntry entry, CancellationToken cancellationToken = default)
@@ -215,7 +291,9 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 			var entries = ReadExplorerCommands(registrations, cancellationToken);
 			if (entries.Count is not 0)
-				groups.Add(new(isProvider ? provider!.DisplayName ?? extension.DisplayName : extension.DisplayName, isProvider, entries));
+				groups.Add(new(isProvider ? provider!.DisplayName ?? extension.DisplayName : extension.DisplayName, isProvider, entries,
+					CreateIcon(isProvider ? provider!.LogoPath ?? extension.LogoPath : extension.LogoPath, extension.PackageFullName,
+						isProvider ? provider!.IconPath : null, isProvider ? provider!.IconIndex : 0)));
 		}
 
 		if (provider is not null && !providerAdded && !string.IsNullOrWhiteSpace(provider.PackageFullName))
@@ -224,7 +302,8 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 			AppendProviderRegistrations(registrations, provider);
 			var entries = ReadExplorerCommands(registrations, cancellationToken);
 			if (entries.Count is not 0)
-				groups.Add(new(provider.DisplayName ?? string.Empty, true, entries));
+				groups.Add(new(provider.DisplayName ?? string.Empty, true, entries,
+					CreateIcon(provider.LogoPath, provider.PackageFullName, provider.IconPath, provider.IconIndex)));
 		}
 
 		return groups;
@@ -250,6 +329,7 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 					cancellationToken,
 					registration.StaticDisplayName,
 					registration.StaticIconPath,
+					iconPackageFullName: registration.PackageFullName,
 					retain: (entry, backend) => _describedCommands.Add(entry, backend));
 				if (description is not null)
 					entries.Add(ConvertExplorerCommand(description));
@@ -265,8 +345,11 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 	private FilesShellMenuEntry ConvertExplorerCommand(WindowsShellExplorerCommand command)
 	{
+		var children = command.Children.Select(ConvertExplorerCommand).ToArray();
+		var icon = CreateIcon(command.IconPath, command.IconPackageFullName, command.FallbackIconPath, command.FallbackIconIndex, command.FallbackIconPackageFullName, command.IconIndex);
+		icon = WithFallbackIcon(icon, FindFirstIcon(children));
 		var entry = new FilesShellMenuEntry(command.Id, command.Title, command.IsEnabled, command.IsChecked, command.IsRadio,
-			command.IsSeparator, command.Children.Select(ConvertExplorerCommand).ToArray());
+			command.IsSeparator, children, icon);
 		if (_describedCommands.TryGetValue(command, out var backend))
 			_explorerCommands.Add(entry, backend);
 
@@ -276,15 +359,16 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 	private IReadOnlyList<FilesShellMenuEntry> BuildEntries(IReadOnlyList<WindowsShellNativeMenuEntry> cloudVerbs, IReadOnlyList<FilesShellMenuGroup> groups)
 	{
 		var entries = new List<FilesShellMenuEntry>();
+		var cloudEntries = new List<FilesShellMenuEntry>();
 		foreach (var verb in cloudVerbs)
 		{
-			var entry = new FilesShellMenuEntry(verb.Verb, verb.Title, verb.IsEnabled, verb.IsChecked, verb.IsRadio);
-			entries.Add(entry);
+			var entry = new FilesShellMenuEntry(verb.Verb, verb.Title, verb.IsEnabled, verb.IsChecked, verb.IsRadio, nativeIcon: verb.Bitmap);
+			cloudEntries.Add(entry);
 			_nativeCommands[entry] = verb.Ordinal;
 		}
 
-		AppendSection(entries, groups.Where(static group => group.IsCloudProvider)
-			.OrderBy(static group => group.Title, StringComparer.OrdinalIgnoreCase).SelectMany(CreateGroupEntries));
+		AppendSection(entries, cloudEntries.Concat(groups.Where(static group => group.IsCloudProvider)
+			.OrderBy(static group => group.Title, StringComparer.OrdinalIgnoreCase).SelectMany(CreateGroupEntries)));
 		AppendSection(entries, groups.Where(static group => !group.IsCloudProvider)
 			.OrderBy(static group => group.Title, StringComparer.OrdinalIgnoreCase).SelectMany(CreateGroupEntries));
 		RemoveTrailingSeparator(entries);
@@ -300,7 +384,51 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		if (string.IsNullOrWhiteSpace(group.Title))
 			return group.Entries;
 
-		return [new FilesShellMenuEntry(group.Title, group.Title, group.Entries.Any(static entry => !entry.IsSeparator && entry.IsEnabled), children: group.Entries)];
+		return [new FilesShellMenuEntry(group.Title, group.Title, group.Entries.Any(static entry => !entry.IsSeparator && entry.IsEnabled),
+			children: group.Entries, icon: WithFallbackIcon(group.Icon, FindFirstIcon(group.Entries)))];
+	}
+
+	private static FilesShellMenuIcon? FindFirstIcon(IReadOnlyList<FilesShellMenuEntry> entries)
+	{
+		foreach (var entry in entries)
+		{
+			if (entry.IsSeparator)
+				continue;
+
+			if (entry.Icon is { } icon)
+				return icon;
+
+			if (FindFirstIcon(entry.Children) is { } childIcon)
+				return childIcon;
+		}
+
+		return null;
+	}
+
+	private static FilesShellMenuIcon? WithFallbackIcon(FilesShellMenuIcon? icon, FilesShellMenuIcon? fallbackIcon)
+	{
+		if (icon is null || fallbackIcon is null)
+			return icon ?? fallbackIcon;
+
+		if (!string.IsNullOrWhiteSpace(icon.FallbackPath) || icon == fallbackIcon)
+			return icon;
+
+		return icon with
+		{
+			FallbackPath = fallbackIcon.Path,
+			FallbackIndex = fallbackIcon.Index,
+			FallbackPackageFullName = fallbackIcon.PackageFullName,
+		};
+	}
+
+	private static FilesShellMenuIcon? CreateIcon(string? path, string? packageFullName, string? fallbackPath = null, int fallbackIndex = 0,
+		string? fallbackPackageFullName = null, int? resourceIndex = null)
+	{
+		var (parsedPath, parsedIndex) = FilesShellExplorerCommandSource.ParseCommandIcon(path);
+		if (parsedPath is null)
+			return string.IsNullOrWhiteSpace(fallbackPath) ? null : new(fallbackPath, fallbackIndex, fallbackPackageFullName ?? packageFullName);
+
+		return new(parsedPath, resourceIndex ?? parsedIndex, packageFullName, fallbackPath, fallbackIndex, fallbackPackageFullName ?? packageFullName);
 	}
 
 	private static void AppendSection(List<FilesShellMenuEntry> destination, IEnumerable<FilesShellMenuEntry> source)
@@ -470,7 +598,8 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		{
 			var info = default(MENUITEMINFOW);
 			info.cbSize = (uint)sizeof(MENUITEMINFOW);
-			info.fMask = MENU_ITEM_MASK.MIIM_ID | MENU_ITEM_MASK.MIIM_STATE | MENU_ITEM_MASK.MIIM_FTYPE | MENU_ITEM_MASK.MIIM_STRING;
+			info.fMask = MENU_ITEM_MASK.MIIM_ID | MENU_ITEM_MASK.MIIM_STATE | MENU_ITEM_MASK.MIIM_FTYPE | MENU_ITEM_MASK.MIIM_STRING
+				| MENU_ITEM_MASK.MIIM_BITMAP | MENU_ITEM_MASK.MIIM_CHECKMARKS;
 			buffer.Clear();
 			fixed (char* title = buffer)
 			{
@@ -484,8 +613,13 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 				if (verb is null || !IsCloudVerb(verb) || !found.Add(verb))
 					continue;
 
+				var bitmap = info.hbmpItem;
+				if (bitmap.IsNull || (nint)bitmap.Value <= 12)
+					bitmap = info.fState.HasFlag(MENU_ITEM_STATE.MFS_CHECKED) ? info.hbmpChecked : info.hbmpUnchecked;
+
 				entries.Insert(0, new(verb, new string(buffer[..Math.Min((int)info.cch, buffer.Length)]), ordinal,
-					!info.fState.HasFlag(MENU_ITEM_STATE.MFS_DISABLED), info.fState.HasFlag(MENU_ITEM_STATE.MFS_CHECKED), info.fType.HasFlag(MENU_ITEM_TYPE.MFT_RADIOCHECK), default));
+					!info.fState.HasFlag(MENU_ITEM_STATE.MFS_DISABLED), info.fState.HasFlag(MENU_ITEM_STATE.MFS_CHECKED), info.fType.HasFlag(MENU_ITEM_TYPE.MFT_RADIOCHECK),
+					(nint)bitmap.Value > 12 ? bitmap : default));
 			}
 		}
 
@@ -529,7 +663,7 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 internal sealed class FilesShellMenuEntry
 {
 	internal FilesShellMenuEntry(string id, string title, bool enabled, bool isChecked = false, bool isRadio = false, bool isSeparator = false,
-		IReadOnlyList<FilesShellMenuEntry>? children = null)
+		IReadOnlyList<FilesShellMenuEntry>? children = null, FilesShellMenuIcon? icon = null, HBITMAP nativeIcon = default)
 	{
 		Id = id;
 		var (cleanTitle, accessKey) = ParseLabel(title);
@@ -540,6 +674,8 @@ internal sealed class FilesShellMenuEntry
 		IsRadio = isRadio;
 		IsSeparator = isSeparator;
 		Children = children ?? [];
+		Icon = icon;
+		NativeIcon = nativeIcon;
 	}
 
 	internal string Id { get; }
@@ -550,6 +686,8 @@ internal sealed class FilesShellMenuEntry
 	internal bool IsRadio { get; }
 	internal bool IsSeparator { get; }
 	internal IReadOnlyList<FilesShellMenuEntry> Children { get; }
+	internal FilesShellMenuIcon? Icon { get; }
+	internal HBITMAP NativeIcon { get; }
 	internal static FilesShellMenuEntry Separator => new(string.Empty, string.Empty, false, isSeparator: true);
 
 	private static (string Title, string? AccessKey) ParseLabel(string title)
@@ -581,5 +719,6 @@ internal sealed class FilesShellMenuEntry
 	}
 }
 
-internal sealed record FilesShellMenuGroup(string Title, bool IsCloudProvider, IReadOnlyList<FilesShellMenuEntry> Entries);
+internal sealed record FilesShellMenuGroup(string Title, bool IsCloudProvider, IReadOnlyList<FilesShellMenuEntry> Entries, FilesShellMenuIcon? Icon = null);
+internal sealed record FilesShellMenuIcon(string Path, int Index, string? PackageFullName, string? FallbackPath = null, int FallbackIndex = 0, string? FallbackPackageFullName = null);
 internal sealed record WindowsShellNativeMenuEntry(string Verb, string Title, uint Ordinal, bool IsEnabled, bool IsChecked, bool IsRadio, HBITMAP Bitmap);

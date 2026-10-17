@@ -1,6 +1,7 @@
 // Copyright (c) Files Community
 // Licensed under the MIT License.
 
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using System.Windows.Input;
@@ -32,6 +33,8 @@ namespace Files.App.Data.Models
 		public List<ContextMenuFlyoutItemViewModel>? Items { get; set; }
 
 		public BitmapImage? BitmapIcon { get; set; }
+
+		public IconElement? IconElement { get; set; }
 
 		public bool SingleItemOnly { get; set; }
 
