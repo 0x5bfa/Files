@@ -39,6 +39,9 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 	private readonly object _lifetimeLock = new();
 	private readonly ContextMenuWorkerPool.Worker _worker;
 	private readonly string[] _paths;
+	private readonly HWND _owner;
+	private readonly System.Drawing.Point _invocationPoint;
+	private readonly bool _locationBackground;
 	private readonly Dictionary<FilesShellMenuEntry, uint> _nativeCommands = [];
 	private readonly Dictionary<FilesShellMenuEntry, IExplorerCommand> _explorerCommands = [];
 	private readonly Dictionary<FilesShellMenuEntry, Task<byte[]?>> _iconLoads = [];
@@ -54,13 +57,16 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 	public IReadOnlyList<FilesShellMenuEntry> Entries { get; private set; } = [];
 
-	private FilesShellContextMenuSession(ContextMenuWorkerPool.Worker worker, string[] paths)
+	private FilesShellContextMenuSession(ContextMenuWorkerPool.Worker worker, string[] paths, HWND owner, System.Drawing.Point invocationPoint, bool locationBackground)
 	{
 		_worker = worker;
 		_paths = paths;
+		_owner = owner;
+		_invocationPoint = invocationPoint;
+		_locationBackground = locationBackground;
 	}
 
-	public static async Task<FilesShellContextMenuSession?> CreateAsync(IReadOnlyList<string> paths, bool extendedVerbs, CancellationToken cancellationToken = default)
+	public static async Task<FilesShellContextMenuSession?> CreateAsync(IReadOnlyList<string> paths, bool extendedVerbs, bool locationBackground = false, CancellationToken cancellationToken = default)
 	{
 		ArgumentNullException.ThrowIfNull(paths);
 		cancellationToken.ThrowIfCancellationRequested();
@@ -68,7 +74,8 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 			return null;
 
 		var worker = ContextMenuWorkerPool.Rent();
-		var session = new FilesShellContextMenuSession(worker, paths.ToArray());
+		PInvoke.GetCursorPos(out var point);
+		var session = new FilesShellContextMenuSession(worker, paths.ToArray(), (HWND)MainWindow.Instance.WindowHandle, new(point.X, point.Y), locationBackground);
 		var initialized = await worker.Thread.PostMethod(() =>
 		{
 			try
@@ -95,10 +102,12 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 	public List<ContextMenuFlyoutItemViewModel> CreateMenuItems()
 	{
-		return CreateMenuItems(Entries, GetIconTheme());
+		var scale = MainWindow.Instance.Content.XamlRoot?.RasterizationScale ?? 1;
+		var pixelSize = Math.Clamp((int)Math.Ceiling(16 * scale), 16, 256);
+		return CreateMenuItems(Entries, GetIconTheme(), pixelSize);
 	}
 
-	private List<ContextMenuFlyoutItemViewModel> CreateMenuItems(IReadOnlyList<FilesShellMenuEntry> entries, FilesShellContextMenuIconTheme iconTheme)
+	private List<ContextMenuFlyoutItemViewModel> CreateMenuItems(IReadOnlyList<FilesShellMenuEntry> entries, FilesShellContextMenuIconTheme iconTheme, int pixelSize)
 	{
 		var models = new List<ContextMenuFlyoutItemViewModel>(entries.Count);
 		foreach (var entry in entries)
@@ -127,12 +136,12 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 			{
 				var icon = new ImageIcon { Width = 16, Height = 16 };
 				model.IconElement = icon;
-				_ = LoadIconAsync(entry, icon, iconTheme);
+				_ = LoadIconAsync(entry, icon, iconTheme, pixelSize);
 			}
 
 			if (entry.Children.Count is not 0)
 			{
-				model.Items = CreateMenuItems(entry.Children, iconTheme);
+				model.Items = CreateMenuItems(entry.Children, iconTheme, pixelSize);
 				model.IsEnabled = entry.Children.Any(static child => !child.IsSeparator && child.IsEnabled);
 			}
 			else if (entry.IsEnabled && (_nativeCommands.ContainsKey(entry) || _explorerCommands.ContainsKey(entry)))
@@ -146,11 +155,11 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		return models;
 	}
 
-	private async Task LoadIconAsync(FilesShellMenuEntry entry, ImageIcon icon, FilesShellContextMenuIconTheme iconTheme)
+	private async Task LoadIconAsync(FilesShellMenuEntry entry, ImageIcon icon, FilesShellContextMenuIconTheme iconTheme, int pixelSize)
 	{
 		try
 		{
-			var iconData = await GetIconAsync(entry, iconTheme).ConfigureAwait(false);
+			var iconData = await GetIconAsync(entry, iconTheme, pixelSize).ConfigureAwait(false);
 			if (iconData is not { Length: > 0 })
 				return;
 
@@ -167,11 +176,20 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 				{
 					var svg = new SvgImageSource();
 					await svg.SetSourceAsync(stream.AsRandomAccessStream());
-					icon.Source = svg;
+					lock (_lifetimeLock)
+					{
+						if (!_isDisposed)
+							icon.Source = svg;
+					}
 				}
 				else
 				{
-					icon.Source = await iconData.ToBitmapAsync(16);
+					var bitmap = await iconData.ToBitmapAsync(pixelSize);
+					lock (_lifetimeLock)
+					{
+						if (!_isDisposed)
+							icon.Source = bitmap;
+					}
 				}
 			});
 		}
@@ -181,7 +199,7 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		}
 	}
 
-	private Task<byte[]?> GetIconAsync(FilesShellMenuEntry entry, FilesShellContextMenuIconTheme iconTheme)
+	private Task<byte[]?> GetIconAsync(FilesShellMenuEntry entry, FilesShellContextMenuIconTheme iconTheme, int pixelSize)
 	{
 		lock (_lifetimeLock)
 		{
@@ -190,7 +208,7 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 			if (!_iconLoads.TryGetValue(entry, out var iconLoad))
 			{
-				iconLoad = _worker.Thread.PostMethod(() => FilesShellContextMenuIconSource.Read(entry.Id, entry.Icon, entry.NativeIcon, 16, iconTheme));
+				iconLoad = _worker.Thread.PostMethod(() => FilesShellContextMenuIconSource.Read(entry.Id, entry.Icon, entry.NativeIcon, pixelSize, iconTheme));
 				_iconLoads.Add(entry, iconLoad);
 			}
 
@@ -252,21 +270,43 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 	{
 		cancellationToken.ThrowIfCancellationRequested();
 		_selection = CreateShellItemArray(_paths);
-		_selection.BindToHandler<IContextMenu>(null, PInvoke.BHID_SFUIObject, out var contextMenu).ThrowOnFailure();
-		_contextMenu = contextMenu;
-		_site = new((HWND)MainWindow.Instance.WindowHandle);
-		if (_contextMenu is IObjectWithSite objectWithSite)
-			objectWithSite.SetSite(_site).ThrowOnFailure();
-		_menu = PInvoke.CreatePopupMenu();
-		if (_menu.IsNull)
-			throw new Win32Exception(Marshal.GetLastPInvokeError());
+		_site = new(_owner);
+		IReadOnlyList<WindowsShellNativeMenuEntry> cloudVerbs = [];
+		try
+		{
+			if (_locationBackground)
+			{
+				_selection.GetItemAt(0, out var folderItem).ThrowOnFailure();
+				folderItem.BindToHandler<IShellFolder>(null, PInvoke.BHID_SFObject, out var folder).ThrowOnFailure();
+				folder.CreateViewObject(_owner, out IContextMenu contextMenu).ThrowOnFailure();
+				_contextMenu = contextMenu;
+			}
+			else
+			{
+				_selection.BindToHandler<IContextMenu>(null, PInvoke.BHID_SFUIObject, out var contextMenu).ThrowOnFailure();
+				_contextMenu = contextMenu;
+			}
 
-		var flags = ItemMenuFlag | (extendedVerbs ? ExtendedVerbsFlag : 0u);
-		_contextMenu.QueryContextMenu(_menu, 0, FirstCommandId, LastCommandId, flags).ThrowOnFailure();
+			if (_contextMenu is IObjectWithSite objectWithSite)
+				objectWithSite.SetSite(_site).ThrowOnFailure();
+			_menu = PInvoke.CreatePopupMenu();
+			if (_menu.IsNull)
+				throw new Win32Exception(Marshal.GetLastPInvokeError());
 
-		var cloudVerbs = ReadCloudVerbs(_menu, _contextMenu);
-		var provider = WindowsShellCloudProviderSource.GetProviderForSelection(_paths);
-		var groups = ReadExtensionGroups(WindowsFileExplorerAppExtensionCatalog.GetExtensions(GetCommonItemTypes(_paths)), provider, cancellationToken);
+			var flags = ItemMenuFlag | (extendedVerbs ? ExtendedVerbsFlag : 0u);
+			_contextMenu.QueryContextMenu(_menu, 0, FirstCommandId, LastCommandId, flags).ThrowOnFailure();
+			cloudVerbs = ReadCloudVerbs(_menu, _contextMenu);
+		}
+		catch (Exception exception) when (exception is COMException or Win32Exception)
+		{
+			Debug.WriteLine(exception);
+		}
+
+		var provider = _locationBackground ? null : WindowsShellCloudProviderSource.GetProviderForSelection(_paths);
+		var extensions = _locationBackground
+			? WindowsFileExplorerAppExtensionCatalog.GetExtensions(["Directory\\Background"])
+			: GetCommonExtensions(_paths);
+		var groups = ReadExtensionGroups(extensions, provider, cancellationToken);
 		Entries = BuildEntries(cloudVerbs, groups);
 		RegisterEntries(Entries);
 		cancellationToken.ThrowIfCancellationRequested();
@@ -378,14 +418,20 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 
 	private static IEnumerable<FilesShellMenuEntry> CreateGroupEntries(FilesShellMenuGroup group)
 	{
-		if (!group.IsCloudProvider && group.Entries.Count is 1)
-			return group.Entries;
+		var entries = new List<FilesShellMenuEntry>();
+		Append(entries, group.Entries);
+		RemoveTrailingSeparator(entries);
+		if (entries.Count is 0)
+			return [];
+
+		if (!group.IsCloudProvider && entries.Count(static entry => !entry.IsSeparator) is 1)
+			return entries;
 
 		if (string.IsNullOrWhiteSpace(group.Title))
-			return group.Entries;
+			return entries;
 
 		return [new FilesShellMenuEntry(group.Title, group.Title, group.Entries.Any(static entry => !entry.IsSeparator && entry.IsEnabled),
-			children: group.Entries, icon: WithFallbackIcon(group.Icon, FindFirstIcon(group.Entries)))];
+			children: entries, icon: WithFallbackIcon(group.Icon, FindFirstIcon(entries)))];
 	}
 
 	private static FilesShellMenuIcon? FindFirstIcon(IReadOnlyList<FilesShellMenuEntry> entries)
@@ -480,8 +526,9 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 				return true;
 			}
 
+			var workingDirectory = _locationBackground ? _paths[0] : Path.GetDirectoryName(_paths[0]);
 			return _explorerCommands.TryGetValue(entry, out var command) && _selection is not null
-				&& FilesShellExplorerCommandSource.Invoke(command, _selection);
+				&& FilesShellExplorerCommandSource.Invoke(command, _selection, workingDirectory, _invocationPoint);
 		}
 		catch (Exception exception) when (exception is COMException or Win32Exception)
 		{
@@ -490,17 +537,16 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		}
 	}
 
-	private static unsafe void InvokeNativeCommand(IContextMenu contextMenu, uint ordinal)
+	private unsafe void InvokeNativeCommand(IContextMenu contextMenu, uint ordinal)
 	{
-		PInvoke.GetCursorPos(out var point);
 		var invoke = default(CMINVOKECOMMANDINFOEX);
 		invoke.cbSize = (uint)sizeof(CMINVOKECOMMANDINFOEX);
 		invoke.fMask = UnicodeInvokeFlag | InvokePointFlag;
-		invoke.hwnd = (HWND)MainWindow.Instance.WindowHandle;
+		invoke.hwnd = _owner;
 		invoke.lpVerb = (PCSTR)(byte*)(nuint)ordinal;
 		invoke.lpVerbW = (PCWSTR)(char*)(nuint)ordinal;
 		invoke.nShow = (int)SHOW_WINDOW_CMD.SW_SHOWNORMAL;
-		invoke.ptInvoke = point;
+		invoke.ptInvoke = _invocationPoint;
 		ref var baseInvoke = ref Unsafe.As<CMINVOKECOMMANDINFOEX, CMINVOKECOMMANDINFO>(ref invoke);
 		contextMenu.InvokeCommand(baseInvoke).ThrowOnFailure();
 	}
@@ -518,6 +564,8 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		_explorerCommands.Clear();
 		_describedCommands.Clear();
 		_entries.Clear();
+		lock (_lifetimeLock)
+			_iconLoads.Clear();
 		_contextMenu = null;
 		_selection = null;
 		_site = null;
@@ -568,9 +616,11 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 		}
 	}
 
-	private static IReadOnlyList<string> GetCommonItemTypes(IReadOnlyList<string> paths)
+	private static IReadOnlyList<WindowsFileExplorerAppExtensionGroup> GetCommonExtensions(IReadOnlyList<string> paths)
 	{
-		HashSet<string>? types = null;
+		var allTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		var queriedTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+		HashSet<(Guid ClassId, string VerbId)>? commonRegistrations = null;
 		foreach (var path in paths)
 		{
 			var itemTypes = Directory.Exists(path)
@@ -579,13 +629,24 @@ internal sealed class FilesShellContextMenuSession : IAsyncDisposable
 			if (string.IsNullOrEmpty(itemTypes[0]))
 				itemTypes = ["*"];
 
-			if (types is null)
-				types = new(itemTypes, StringComparer.OrdinalIgnoreCase);
+			allTypes.UnionWith(itemTypes);
+			if (!queriedTypes.Add(itemTypes[0]))
+				continue;
+
+			var registrations = WindowsFileExplorerAppExtensionCatalog.GetExtensions(itemTypes)
+				.SelectMany(static extension => extension.Registrations).Select(static registration => (registration.ClassId, registration.VerbId));
+			if (commonRegistrations is null)
+				commonRegistrations = registrations.ToHashSet();
 			else
-				types.IntersectWith(itemTypes);
+				commonRegistrations.IntersectWith(registrations);
 		}
 
-		return types?.ToArray() ?? [];
+		if (commonRegistrations is not { Count: > 0 })
+			return [];
+
+		return WindowsFileExplorerAppExtensionCatalog.GetExtensions(allTypes)
+			.Select(extension => extension with { Registrations = extension.Registrations.Where(registration => commonRegistrations.Contains((registration.ClassId, registration.VerbId))).ToArray() })
+			.Where(static extension => extension.Registrations.Count is not 0).ToArray();
 	}
 
 	private static unsafe IReadOnlyList<WindowsShellNativeMenuEntry> ReadCloudVerbs(HMENU menu, IContextMenu contextMenu)
@@ -711,6 +772,19 @@ internal sealed class FilesShellMenuEntry
 			else
 			{
 				accessKey ??= character.ToString();
+				if (index >= 2 && label[index - 2] is '(' && index + 1 < label.Length && label[index + 1] is ')')
+				{
+					if (result.Length > 0 && result[^1] is '(')
+					{
+						result.Length--;
+						while (result.Length > 0 && char.IsWhiteSpace(result[^1]))
+							result.Length--;
+					}
+
+					index++;
+					continue;
+				}
+
 				result.Append(character);
 			}
 		}

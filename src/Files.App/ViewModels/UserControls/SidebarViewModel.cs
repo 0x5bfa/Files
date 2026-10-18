@@ -44,6 +44,8 @@ namespace Files.App.ViewModels.UserControls
 
 		private Microsoft.UI.Dispatching.DispatcherQueue? dispatcherQueue;
 		private INavigationControlItem? rightClickedItem;
+		private FastContextFlyout? contextFlyout;
+		private CancellationTokenSource? contextMenuRequest;
 		private readonly UISettings uiSettings = new();
 
 		public object SidebarItems => sidebarItems;
@@ -757,6 +759,11 @@ namespace Files.App.ViewModels.UserControls
 			uiSettings.ColorValuesChanged -= UiSettings_ColorValuesChanged;
 
 			TeardownTabExpansionTracking();
+			contextMenuRequest?.Cancel();
+			contextMenuRequest?.Dispose();
+			contextMenuRequest = null;
+			if (contextFlyout is not null)
+				_ = contextFlyout.DismissAsync();
 			dispatcherQueue = null;
 		}
 
@@ -776,6 +783,15 @@ namespace Files.App.ViewModels.UserControls
 			if (sender is not FrameworkElement sidebarItem)
 				return;
 
+			contextMenuRequest?.Cancel();
+			contextMenuRequest?.Dispose();
+			contextMenuRequest = new();
+			var requestToken = contextMenuRequest.Token;
+			if (contextFlyout is not null)
+				await contextFlyout.DismissAsync();
+			if (requestToken.IsCancellationRequested || !sidebarItem.IsLoaded)
+				return;
+
 			if (args.Item is not INavigationControlItem item)
 			{
 				// We are in the pane context requested path
@@ -788,18 +804,31 @@ namespace Files.App.ViewModels.UserControls
 			{
 				var fileTag = tagItem.FileTag
 					?? throw new InvalidOperationException("The sidebar tag item does not have a tag.");
-				var cts = new CancellationTokenSource();
+				using var cts = CancellationTokenSource.CreateLinkedTokenSource(requestToken);
 				var items = new List<(string path, bool isFolder)>();
 
-				await foreach (var taggedItem in fileTagsService.GetItemsForTagAsync(fileTag.Uid, cts.Token))
+				try
 				{
-					items.Add((
-						taggedItem.Storable.Id,
-						taggedItem.Storable is IFolder));
+					await foreach (var taggedItem in fileTagsService.GetItemsForTagAsync(fileTag.Uid, cts.Token))
+					{
+						items.Add((
+							taggedItem.Storable.Id,
+							taggedItem.Storable is IFolder));
+					}
 				}
+				catch (OperationCanceledException) when (requestToken.IsCancellationRequested)
+				{
+					return;
+				}
+
+				if (requestToken.IsCancellationRequested)
+					return;
 
 				SelectedTagChanged?.Invoke(this, new SelectedTagChangedEventArgs(items));
 			}
+
+			if (requestToken.IsCancellationRequested || !sidebarItem.IsLoaded)
+				return;
 
 			rightClickedItem = item;
 			RightClickedItemChanged?.Invoke(this, item);
@@ -807,6 +836,7 @@ namespace Files.App.ViewModels.UserControls
 			var menuOptions = item.MenuOptions
 				?? throw new InvalidOperationException("The sidebar item does not have context-menu options.");
 			var flyout = new FastContextFlyout();
+			contextFlyout = flyout;
 			var menuItems = GetLocationItemMenuItems(item, flyout.Flyout);
 			flyout.Build(menuItems);
 
@@ -817,7 +847,13 @@ namespace Files.App.ViewModels.UserControls
 					ShellContextFlyoutFactory.ShowClassicContextMenu([itemPath], isLocationBackground: false, point));
 
 			if (menuOptions.ShowShellItems)
-				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, menuOptions, moreOptions, cancellationToken: flyout.MenuLifetimeToken);
+				await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, menuOptions, moreOptions, cancellationToken: requestToken);
+
+			if (requestToken.IsCancellationRequested || !sidebarItem.IsLoaded)
+			{
+				await flyout.DismissAsync();
+				return;
+			}
 
 			flyout.ResolvePlacement(sidebarItem, args.Position);
 			flyout.Flyout.ShowAt(sidebarItem, new FlyoutShowOptions() { Position = args.Position });

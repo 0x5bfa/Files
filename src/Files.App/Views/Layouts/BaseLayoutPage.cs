@@ -384,6 +384,8 @@ namespace Files.App.Views.Layouts
 			shellContextMenuItemCancellationToken?.Cancel();
 			shellContextMenuItemCancellationToken?.Dispose();
 			shellContextMenuItemCancellationToken = null;
+			_ = ItemContextFlyoutHost.DismissAsync();
+			_ = BaseContextFlyoutHost.DismissAsync();
 
 			groupingCancellationToken?.Cancel();
 			groupingCancellationToken?.Dispose();
@@ -626,14 +628,24 @@ namespace Files.App.Views.Layouts
 
 		[DynamicWindowsRuntimeCast(typeof(DependencyObject))]
 		[DynamicWindowsRuntimeCast(typeof(SelectorItem))]
+		[DynamicWindowsRuntimeCast(typeof(ContentControl))]
 		private async void OnContextRequested(UIElement sender, ContextRequestedEventArgs e)
 		{
+			if (IsTextInputContext(e.OriginalSource as DependencyObject))
+				return;
+
 			e.Handled = true;
 
 			try
 			{
 				var cancellationToken = RenewShellMenuToken();
+				await Task.WhenAll(ItemContextFlyoutHost.DismissAsync(), BaseContextFlyoutHost.DismissAsync());
+				if (cancellationToken.IsCancellationRequested)
+					return;
 				var itemContainer = FindItemContainer(e.OriginalSource as DependencyObject);
+				if (itemContainer is null && !e.TryGetPosition(this, out _) && SelectedItems?.FirstOrDefault() is { } selectedItem)
+					itemContainer = ItemsControl.ContainerFromItem(selectedItem) as ContentControl;
+
 				if (itemContainer is not null)
 				{
 					var item = GetItemFromElement(itemContainer);
@@ -655,6 +667,22 @@ namespace Files.App.Views.Layouts
 			{
 				Debug.WriteLine(error);
 			}
+		}
+
+		[DynamicWindowsRuntimeCast(typeof(TextBox))]
+		[DynamicWindowsRuntimeCast(typeof(RichEditBox))]
+		[DynamicWindowsRuntimeCast(typeof(PasswordBox))]
+		private bool IsTextInputContext(DependencyObject? element)
+		{
+			while (element is not null && !ReferenceEquals(element, this))
+			{
+				if (element is TextBox or RichEditBox or PasswordBox)
+					return true;
+
+				element = VisualTreeHelper.GetParent(element);
+			}
+
+			return false;
 		}
 
 		[DynamicWindowsRuntimeCast(typeof(ContentControl))]
@@ -688,6 +716,7 @@ namespace Files.App.Views.Layouts
 		private CancellationToken RenewShellMenuToken()
 		{
 			shellContextMenuItemCancellationToken?.Cancel();
+			shellContextMenuItemCancellationToken?.Dispose();
 			shellContextMenuItemCancellationToken = new CancellationTokenSource();
 			return shellContextMenuItemCancellationToken.Token;
 		}
@@ -705,7 +734,7 @@ namespace Files.App.Views.Layouts
 			if (!IsItemSelected)
 				return;
 
-			var selectedItems = SelectedItems;
+			var selectedItems = SelectedItems?.ToList();
 			if (selectedItems is null or { Count: 0 })
 				return;
 
@@ -747,6 +776,12 @@ namespace Files.App.Views.Layouts
 
 			if (cancellationToken.IsCancellationRequested)
 				return;
+
+			if (!anchor.IsLoaded || !parentShellPage.IsCurrentInstance || !parentShellPage.IsCurrentPane || !selectedItems.SequenceEqual(SelectedItems ?? []))
+			{
+				await host.DismissAsync();
+				return;
+			}
 
 			host.ResolvePlacement(anchor, position);
 			host.FinalizePrimaryRowPosition();
@@ -925,6 +960,8 @@ namespace Files.App.Views.Layouts
 			folderSettings.GroupDirectionPreferenceUpdated -= FolderSettings_GroupDirectionPreferenceUpdated;
 			folderSettings.GroupByDateUnitPreferenceUpdated -= FolderSettings_GroupByDateUnitPreferenceUpdated;
 			shellContextMenuItemCancellationToken?.Cancel();
+			_ = ItemContextFlyoutHost.DismissAsync();
+			_ = BaseContextFlyoutHost.DismissAsync();
 			if (contextRequestedHandler is not null)
 			{
 				RemoveHandler(UIElement.ContextRequestedEvent, contextRequestedHandler);
@@ -970,11 +1007,18 @@ namespace Files.App.Views.Layouts
 					[backgroundPath],
 					host,
 					showMoreOptions: moreOptions,
+					isLocationBackground: true,
 					cancellationToken: cancellationToken);
 			}
 
 			if (cancellationToken.IsCancellationRequested)
 				return;
+
+			if (!anchor.IsLoaded || !parentShellPage.IsCurrentInstance || !parentShellPage.IsCurrentPane)
+			{
+				await host.DismissAsync();
+				return;
+			}
 
 			host.ResolvePlacement(anchor, position);
 			host.FinalizePrimaryRowPosition();

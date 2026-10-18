@@ -31,28 +31,6 @@ namespace Files.App.Data.Factories
 			return menuItemsList;
 		}
 
-		public static async Task<List<ContextMenuFlyoutItemViewModel>> GetPreservedShellMenuItemsAsync(IReadOnlyList<string> paths, bool showOpenWith, bool showSendTo, bool showBitLocker, bool shiftPressed, CancellationToken cancellationToken)
-		{
-			if (paths.Count is 0)
-				return [];
-
-			var selectedItems = paths.Select(path => new ListedItem(null) { ItemPath = path }).ToList();
-			var items = await ShellContextFlyoutFactory.GetShellContextmenuAsync(
-				showOpenMenu: false,
-				shiftPressed: shiftPressed,
-				workingDirectory: null,
-				selectedItems: selectedItems,
-				cancellationToken: cancellationToken);
-
-			items = items.Where(item => item.Tag is Win32ContextMenuItem menuItem &&
-				((showOpenWith && menuItem.CommandString is "openas") ||
-				 (showSendTo && menuItem.CommandString is "sendto") ||
-				 (showBitLocker && (menuItem.CommandString?.StartsWith("encrypt-bde", StringComparison.OrdinalIgnoreCase) is true || menuItem.CommandString is "manage-bde"))))
-				.ToList();
-			FastContextFlyout.TrimSeparators(items);
-			return items;
-		}
-
 		public static List<ContextMenuFlyoutItemViewModel> Filter(List<ContextMenuFlyoutItemViewModel> items, List<ListedItem> selectedItems, CurrentInstanceViewModel currentInstanceViewModel)
 		{
 			items = items.Where(x => Check(item: x, currentInstanceViewModel: currentInstanceViewModel, selectedItems: selectedItems)).ToList();

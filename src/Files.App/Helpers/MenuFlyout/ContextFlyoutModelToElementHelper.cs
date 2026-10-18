@@ -28,12 +28,14 @@ namespace Files.App.Helpers.ContextFlyouts
 				{
 					// Add a placeholder (only for genuinely-empty submenus; lazy shell submenus fill in later).
 					menuItem.Visibility = Visibility.Collapsed;
+					var icon = menuFlyoutSubItem.Icon;
+					menuFlyoutSubItem.Icon = null;
 
 					var placeholder = new MenuFlyoutItem()
 					{
 						Text = menuFlyoutSubItem.Text,
 						Tag = menuFlyoutSubItem.Tag,
-						Icon = menuFlyoutSubItem.Icon,
+						Icon = icon,
 						AccessKey = i.AccessKey,
 					};
 					flyout.Add(placeholder);

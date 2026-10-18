@@ -33,6 +33,8 @@ namespace Files.App.ViewModels.UserControls.Widgets
 		// Fields
 
 		protected string? _flyoutItemPath;
+		private FastContextFlyout? _contextFlyout;
+		private CancellationTokenSource? _contextMenuRequest;
 
 		// Commands
 
@@ -60,12 +62,23 @@ namespace Files.App.ViewModels.UserControls.Widgets
 				item.Path is null)
 				return;
 			var itemPath = item.Path;
+			var invocationPosition = e.GetPosition(widgetCardItem);
+			e.Handled = true;
+			_contextMenuRequest?.Cancel();
+			_contextMenuRequest?.Dispose();
+			_contextMenuRequest = new();
+			var requestToken = _contextMenuRequest.Token;
+			if (_contextFlyout is not null)
+				await _contextFlyout.DismissAsync();
+			if (requestToken.IsCancellationRequested || !widgetCardItem.IsLoaded || !ReferenceEquals(widgetCardItem.DataContext, item))
+				return;
 
 			// TODO: Add IsFolder to all WidgetCardItems
 			// NOTE: This is a workaround for file tags isFolder
 			var fileTagsCardItem = widgetCardItem.DataContext as WidgetFileTagCardItem;
 
 			var flyout = new FastContextFlyout();
+			_contextFlyout = flyout;
 			_flyoutItemPath = itemPath;
 
 			// Notify of the change on right clicked item
@@ -84,11 +97,14 @@ namespace Files.App.ViewModels.UserControls.Widgets
 				ShellContextFlyoutFactory.ShowClassicContextMenu([itemPath], isLocationBackground: false, point));
 
 			// Show the flyout
-			var invocationPosition = e.GetPosition(widgetCardItem);
-			e.Handled = true;
-
 			// Load the shell menu items
-			await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, showMoreOptions: moreOptions, showOpenWithMenu: true, showSendToMenu: true, cancellationToken: flyout.MenuLifetimeToken);
+			await ShellContextFlyoutFactory.LoadShellMenuItemsAsync([itemPath], flyout, showMoreOptions: moreOptions, showOpenWithMenu: true, showSendToMenu: true, cancellationToken: requestToken);
+			if (requestToken.IsCancellationRequested || !widgetCardItem.IsLoaded || !ReferenceEquals(widgetCardItem.DataContext, item))
+			{
+				await flyout.DismissAsync();
+				return;
+			}
+
 			flyout.ResolvePlacement(widgetCardItem, invocationPosition);
 			flyout.Flyout.ShowAt(widgetCardItem, new FlyoutShowOptions() { Position = invocationPosition });
 

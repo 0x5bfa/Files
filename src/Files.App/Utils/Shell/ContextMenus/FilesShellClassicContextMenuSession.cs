@@ -115,10 +115,18 @@ internal sealed class FilesShellClassicContextMenuSession
 	[UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
 	private static LRESULT WindowSubclassProcedure(HWND window, uint message, WPARAM wParam, LPARAM lParam, nuint subclassId, nuint referenceData)
 	{
-		var sessionHandle = GCHandle.FromIntPtr((nint)referenceData);
-		return sessionHandle.Target is FilesShellClassicContextMenuSession session
-			? session.HandleWindowMessage(window, message, wParam, lParam)
-			: PInvoke.DefSubclassProc(window, message, wParam, lParam);
+		try
+		{
+			var sessionHandle = GCHandle.FromIntPtr((nint)referenceData);
+			if (sessionHandle.Target is FilesShellClassicContextMenuSession session)
+				return session.HandleWindowMessage(window, message, wParam, lParam);
+		}
+		catch (Exception exception)
+		{
+			Debug.WriteLine(exception);
+		}
+
+		return PInvoke.DefSubclassProc(window, message, wParam, lParam);
 	}
 
 	private unsafe LRESULT HandleWindowMessage(HWND window, uint message, WPARAM wParam, LPARAM lParam)

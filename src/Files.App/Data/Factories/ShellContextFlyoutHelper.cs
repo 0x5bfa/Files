@@ -77,45 +77,46 @@ namespace Files.App.Helpers
 			};
 		}
 
-		public static async Task<List<ContextMenuFlyoutItemViewModel>> GetShellContextmenuAsync(bool showOpenMenu, bool shiftPressed, string? workingDirectory, List<ListedItem>? selectedItems, CancellationToken cancellationToken)
+		private static async Task<List<ContextMenuFlyoutItemViewModel>> GetPreservedShellMenuItemsAsync(IReadOnlyList<string> paths, FastContextFlyout flyout,
+			bool showOpenWith, bool showSendTo, bool showBitLocker, bool shiftPressed, CancellationToken cancellationToken)
 		{
 			var menuItemsList = new List<ContextMenuFlyoutItemViewModel>();
-			var filePaths = selectedItems is { Count: > 0 }
-				? selectedItems.Select(x => x.ItemPath!).ToArray()
-				: [workingDirectory ?? throw new ArgumentException("A working directory is required when no items are selected.", nameof(workingDirectory))];
+			var contextMenu = await ContextMenu.GetContextMenuForFiles(paths.ToArray(), shiftPressed ? PInvoke.CMF_EXTENDEDVERBS : PInvoke.CMF_NORMAL);
+			if (contextMenu is null)
+				return menuItemsList;
 
-			Func<string?, bool> FilterMenuItems(bool showOpenMenu)
+			var retained = false;
+			try
 			{
-				var knownItems = new HashSet<string>()
+				cancellationToken.ThrowIfCancellationRequested();
+				var sendToLabel = showSendTo ? Win32Helper.ExtractStringFromDLL("shell32.dll", 30312) : null;
+				var preserved = contextMenu.Items!.Where(item =>
+					showOpenWith && string.Equals(item.CommandString, "openas", StringComparison.OrdinalIgnoreCase)
+					|| showSendTo && (string.Equals(item.CommandString, "sendto", StringComparison.OrdinalIgnoreCase) || item.Label == sendToLabel)
+					|| showBitLocker && (item.CommandString?.StartsWith("encrypt-bde", StringComparison.OrdinalIgnoreCase) is true || item.CommandString == "manage-bde"))
+					.ToArray();
+				await LoadMenuFlyoutItemAsync(menuItemsList, contextMenu, preserved, cancellationToken);
+				foreach (var item in menuItemsList)
 				{
-					"opennew", "opencontaining", "opennewprocess",
-					"runas", "runasuser", "pintohome", "PinToStartScreen",
-					"cut", "copy", "paste", "delete", "properties", "link",
-					"Windows.ModernShare", "setdesktopwallpaper",
-					"eject", "rename", "explore", "openinfiles", "extract",
-					"copyaspath", "undelete", "empty", "format", "rotate90", "rotate270",
-					Win32Helper.ExtractStringFromDLL("shell32.dll", 34593), // Add to collection
-					Win32Helper.ExtractStringFromDLL("shell32.dll", 5384), // Pin to Start
-					Win32Helper.ExtractStringFromDLL("shell32.dll", 5385), // Unpin from Start
-					Win32Helper.ExtractStringFromDLL("shell32.dll", 5386), // Pin to taskbar
-					Win32Helper.ExtractStringFromDLL("shell32.dll", 5387), // Unpin from taskbar
-					"{9F156763-7844-4DC4-B2B1-901F640F5155}", // Open in Terminal
-				};
+					if (item.LoadSubMenuAction is { } loadSubMenu)
+					{
+						await loadSubMenu();
+						item.LoadSubMenuAction = null;
+					}
+				}
 
-				bool filterMenuItemsImpl(string? menuItem) => !string.IsNullOrEmpty(menuItem)
-					&& (knownItems.Contains(menuItem) || (!showOpenMenu && menuItem.Equals("open", StringComparison.OrdinalIgnoreCase)));
-
-				return filterMenuItemsImpl;
+				cancellationToken.ThrowIfCancellationRequested();
+				if (menuItemsList.Count is not 0)
+				{
+					flyout.AttachPreservedContextMenu(contextMenu);
+					retained = true;
+				}
 			}
-
-			var contextMenu = await ContextMenu.GetContextMenuForFiles(filePaths,
-				shiftPressed ? PInvoke.CMF_EXTENDEDVERBS : PInvoke.CMF_NORMAL, FilterMenuItems(showOpenMenu));
-
-			if (contextMenu is not null)
-				await LoadMenuFlyoutItemAsync(menuItemsList, contextMenu, contextMenu.Items!, cancellationToken, true);
-
-			if (cancellationToken.IsCancellationRequested)
-				menuItemsList.Clear();
+			finally
+			{
+				if (!retained)
+					contextMenu.Dispose();
+			}
 
 			return menuItemsList;
 		}
@@ -278,6 +279,7 @@ namespace Files.App.Helpers
 			bool showSendToMenu = false,
 			(MenuFlyoutItemBase Leaf, MenuFlyoutSubItem SubMenu)? openWithSwap = null,
 			(MenuFlyoutItemBase Leaf, MenuFlyoutSubItem SubMenu)? sendToSwap = null,
+			bool isLocationBackground = false,
 			CancellationToken cancellationToken = default)
 		{
 			using var linkedCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, flyout.MenuLifetimeToken);
@@ -289,7 +291,7 @@ namespace Files.App.Helpers
 
 				var shiftPressed = InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift).HasFlag(CoreVirtualKeyStates.Down);
 				loadToken.ThrowIfCancellationRequested();
-				var session = await FilesShellContextMenuSession.CreateAsync(paths, shiftPressed, loadToken);
+				var session = await FilesShellContextMenuSession.CreateAsync(paths, shiftPressed, isLocationBackground, loadToken);
 				if (loadToken.IsCancellationRequested)
 				{
 					if (session is not null)
@@ -304,15 +306,15 @@ namespace Files.App.Helpers
 				}
 
 				var sendToEnabled = showSendToMenu && UserSettingsService.GeneralSettingsService.ShowSendToMenu;
-				var showBitLocker = paths.Count is 1 && IsDriveRoot(paths[0]);
+				var showBitLocker = !isLocationBackground && paths.Count is 1 && IsDriveRoot(paths[0]);
 				if (!showOpenWithMenu && !sendToEnabled && !showBitLocker)
 				{
 					flyout.FinalizePrimaryRowPosition();
 					return;
 				}
 
-				var shellMenuItems = await ContentPageContextFlyoutFactory.GetPreservedShellMenuItemsAsync(
-					paths, showOpenWithMenu, sendToEnabled, showBitLocker, shiftPressed, loadToken);
+				var shellMenuItems = await GetPreservedShellMenuItemsAsync(
+					paths, flyout, showOpenWithMenu, sendToEnabled, showBitLocker, shiftPressed, loadToken);
 				if (loadToken.IsCancellationRequested)
 					return;
 
@@ -333,7 +335,7 @@ namespace Files.App.Helpers
 					if (subMenu is null)
 						return;
 
-					if (item?.LoadSubMenuAction is not null)
+					if (item is not null)
 						FastContextFlyout.PopulateShellSubMenu(subMenu, item, getter, () => flyout.Items.Remove(subMenu));
 					else
 						flyout.Items.Remove(subMenu);

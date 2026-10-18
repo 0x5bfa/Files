@@ -26,6 +26,8 @@ namespace Files.App.Helpers.ContextFlyouts
 		private MenuFlyoutSeparator? primarySeparator;
 		private List<ContextMenuFlyoutItemViewModel>? primaryModels;
 		private FilesShellContextMenuSession? shellContextMenuSession;
+		private readonly List<Files.App.Utils.Shell.ContextMenu> preservedContextMenus = [];
+		private Task shellSessionDisposal = Task.CompletedTask;
 		private CancellationTokenSource menuLifetime = new();
 		private bool openedUp;
 		private bool placementResolved;
@@ -73,6 +75,26 @@ namespace Files.App.Helpers.ContextFlyouts
 			placementResolved = false;
 			invocationAnchor = null;
 			invocationPosition = null;
+		}
+
+		/// <summary>Closes the current popup and cancels work before another selection builds a menu.</summary>
+		public Task DismissAsync()
+		{
+			menuLifetime.Cancel();
+			DisposeShellContextMenuSession();
+			if (!Flyout.IsOpen)
+				return Task.CompletedTask;
+
+			var completion = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+			void OnClosed(object? sender, object args)
+			{
+				Flyout.Closed -= OnClosed;
+				completion.TrySetResult();
+			}
+
+			Flyout.Closed += OnClosed;
+			Flyout.Hide();
+			return completion.Task;
 		}
 
 		/// <summary>
@@ -132,11 +154,23 @@ namespace Files.App.Helpers.ContextFlyouts
 				Text = Strings.ShowMoreOptions.GetLocalizedResource(),
 				Icon = new FontIcon { Glyph = ((char)0xE712).ToString() },
 			};
-			menuItem.Click += (_, _) =>
+			menuItem.Click += async (_, _) =>
 			{
-				var invocationPoint = GetClassicMenuInvocationPoint();
-				Flyout.Hide();
-				MainWindow.Instance.DispatcherQueue.TryEnqueue(() => showClassicMenu(invocationPoint));
+				try
+				{
+					var invocationPoint = GetClassicMenuInvocationPoint();
+					var lifetime = menuLifetime;
+					var close = DismissAsync();
+					var disposal = shellSessionDisposal;
+					await close;
+					await disposal;
+					if (ReferenceEquals(lifetime, menuLifetime) && invocationAnchor?.IsLoaded is not false)
+						showClassicMenu(invocationPoint);
+				}
+				catch (Exception exception)
+				{
+					Debug.WriteLine(exception);
+				}
 			};
 			Flyout.Items.Add(menuItem);
 			return menuItem;
@@ -149,6 +183,11 @@ namespace Files.App.Helpers.ContextFlyouts
 		{
 			DisposeShellContextMenuSession();
 			shellContextMenuSession = session;
+		}
+
+		internal void AttachPreservedContextMenu(Files.App.Utils.Shell.ContextMenu contextMenu)
+		{
+			preservedContextMenus.Add(contextMenu);
 		}
 
 		/// <summary>
@@ -296,7 +335,7 @@ namespace Files.App.Helpers.ContextFlyouts
 				target.Leaf.Visibility = Visibility.Visible;
 			}
 
-			if (model?.LoadSubMenuAction is not null)
+			if (model is not null)
 				PopulateShellSubMenu(target.SubMenu, model, getter, Revert);
 			else
 				Revert();
@@ -550,8 +589,10 @@ namespace Files.App.Helpers.ContextFlyouts
 		{
 			var session = shellContextMenuSession;
 			shellContextMenuSession = null;
-			if (session is not null)
-				_ = DisposeSessionAsync(session);
+			var preserved = preservedContextMenus.ToArray();
+			preservedContextMenus.Clear();
+			if (session is not null || preserved.Length is not 0)
+				shellSessionDisposal = DisposeSessionAsync(session, preserved);
 		}
 
 		private System.Drawing.Point GetClassicMenuInvocationPoint()
@@ -582,15 +623,32 @@ namespace Files.App.Helpers.ContextFlyouts
 			return new(cursor.X, cursor.Y);
 		}
 
-		private static async Task DisposeSessionAsync(FilesShellContextMenuSession session)
+		private static async Task DisposeSessionAsync(FilesShellContextMenuSession? session, Files.App.Utils.Shell.ContextMenu[] preserved)
 		{
+			// MenuFlyout may raise Closed before the selected item's command finishes entering its handler.
+			await Task.Yield();
 			try
 			{
-				await session.DisposeAsync();
+				if (session is not null)
+					await session.DisposeAsync();
 			}
 			catch (Exception exception)
 			{
 				Debug.WriteLine(exception);
+			}
+			finally
+			{
+				foreach (var contextMenu in preserved)
+				{
+					try
+					{
+						contextMenu.Dispose();
+					}
+					catch (Exception exception)
+					{
+						Debug.WriteLine(exception);
+					}
+				}
 			}
 		}
 

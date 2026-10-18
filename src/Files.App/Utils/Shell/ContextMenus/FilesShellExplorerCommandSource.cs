@@ -212,7 +212,7 @@ internal static class FilesShellExplorerCommandSource
 
 	private unsafe delegate HRESULT CommandStringGetter(IShellItemArray selection, PWSTR* value);
 
-	internal static bool Invoke(IExplorerCommand command, IShellItemArray selection)
+	internal static bool Invoke(IExplorerCommand command, IShellItemArray selection, string? workingDirectory, System.Drawing.Point invocationPoint)
 	{
 		var invokeResult = command.Invoke(selection, null!);
 		if (invokeResult != HRESULT.E_NOTIMPL)
@@ -220,7 +220,14 @@ internal static class FilesShellExplorerCommandSource
 			return invokeResult.Succeeded;
 		}
 
-		return command is IObjectWithSelection objectWithSelection && command is IExecuteCommand executeCommand
-			&& objectWithSelection.SetSelection(selection).Succeeded && executeCommand.Execute().Succeeded;
+		if (command is not IObjectWithSelection objectWithSelection || command is not IExecuteCommand executeCommand || objectWithSelection.SetSelection(selection).Failed)
+			return false;
+
+		if (!string.IsNullOrWhiteSpace(workingDirectory))
+			executeCommand.SetDirectory(workingDirectory);
+		executeCommand.SetPosition(invocationPoint);
+		executeCommand.SetShowWindow((int)Windows.Win32.UI.WindowsAndMessaging.SHOW_WINDOW_CMD.SW_SHOWNORMAL);
+
+		return executeCommand.Execute().Succeeded;
 	}
 }

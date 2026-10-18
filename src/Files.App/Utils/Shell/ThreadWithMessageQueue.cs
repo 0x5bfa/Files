@@ -2,6 +2,9 @@
 // Licensed under the MIT License.
 
 using System.Collections.Concurrent;
+using Windows.Win32;
+using Windows.Win32.Foundation;
+using Windows.Win32.UI.WindowsAndMessaging;
 
 namespace Files.App.Utils.Shell
 {
@@ -10,21 +13,33 @@ namespace Files.App.Utils.Shell
 		private readonly BlockingCollection<IInternal> messageQueue;
 
 		private readonly Thread thread;
+		private readonly object lifetimeLock = new();
+		private readonly AutoResetEvent workAvailable = new(false);
+		private bool shutdownRequested;
 
 		protected override void Dispose(bool disposing)
 		{
 			if (disposing)
 			{
-				messageQueue.CompleteAdding();
-				thread.Join();
-				messageQueue.Dispose();
+				lock (lifetimeLock)
+				{
+					if (!shutdownRequested)
+					{
+						shutdownRequested = true;
+						messageQueue.CompleteAdding();
+						workAvailable.Set();
+					}
+				}
+
+				if (Thread.CurrentThread != thread)
+					thread.Join();
 			}
 		}
 
 		public Task<V> PostMethod<V>(Func<V> payload)
 		{
 			var message = new Internal<V>(payload);
-			messageQueue.TryAdd(message);
+			Enqueue(message);
 
 			return message.Task;
 		}
@@ -32,7 +47,7 @@ namespace Files.App.Utils.Shell
 		public Task PostMethod(Action payload)
 		{
 			var message = new ActionInternal(payload);
-			messageQueue.TryAdd(message);
+			Enqueue(message);
 
 			return message.Task;
 		}
@@ -41,11 +56,7 @@ namespace Files.App.Utils.Shell
 		{
 			messageQueue = new BlockingCollection<IInternal>(new ConcurrentQueue<IInternal>());
 
-			thread = new Thread(new ThreadStart(() =>
-			{
-				foreach (var message in messageQueue.GetConsumingEnumerable())
-					message.Invoke();
-			}));
+			thread = new Thread(Run);
 
 			thread.SetApartmentState(ApartmentState.STA);
 
@@ -55,9 +66,81 @@ namespace Files.App.Utils.Shell
 			thread.Start();
 		}
 
+		private void Enqueue(IInternal message)
+		{
+			lock (lifetimeLock)
+			{
+				if (shutdownRequested)
+				{
+					message.Fail(new ObjectDisposedException(nameof(ThreadWithMessageQueue)));
+					return;
+				}
+
+				messageQueue.Add(message);
+				workAvailable.Set();
+			}
+		}
+
+		private unsafe void Run()
+		{
+			var hr = PInvoke.OleInitialize(null);
+			try
+			{
+				hr.ThrowOnFailure();
+				HANDLE[] handles = [new(workAvailable.SafeWaitHandle.DangerousGetHandle())];
+				while (!messageQueue.IsCompleted)
+				{
+					while (messageQueue.TryTake(out var message))
+					{
+						message.Invoke();
+						DispatchPendingMessages();
+					}
+
+					if (!messageQueue.IsCompleted)
+					{
+						var result = PInvoke.MsgWaitForMultipleObjectsEx(handles, uint.MaxValue, QUEUE_STATUS_FLAGS.QS_ALLINPUT,
+							MSG_WAIT_FOR_MULTIPLE_OBJECTS_EX_FLAGS.MWMO_INPUTAVAILABLE);
+						if (result == WAIT_EVENT.WAIT_FAILED)
+							throw new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastPInvokeError());
+
+						DispatchPendingMessages();
+					}
+				}
+			}
+			catch (Exception exception)
+			{
+				lock (lifetimeLock)
+				{
+					shutdownRequested = true;
+					messageQueue.CompleteAdding();
+				}
+
+				while (messageQueue.TryTake(out var message))
+					message.Fail(exception);
+			}
+			finally
+			{
+				if (hr.Succeeded)
+					PInvoke.OleUninitialize();
+
+				messageQueue.Dispose();
+				workAvailable.Dispose();
+			}
+		}
+
+		private static void DispatchPendingMessages()
+		{
+			while (PInvoke.PeekMessage(out var message, default, 0, 0, PEEK_MESSAGE_REMOVE_TYPE.PM_REMOVE))
+			{
+				PInvoke.TranslateMessage(message);
+				PInvoke.DispatchMessage(message);
+			}
+		}
+
 		private interface IInternal
 		{
 			void Invoke();
+			void Fail(Exception exception);
 		}
 
 		private sealed class Internal<T> : IInternal
@@ -75,7 +158,22 @@ namespace Files.App.Utils.Shell
 
 			public void Invoke()
 			{
-				taskCompletionSource.SetResult(payload());
+				try
+				{
+					taskCompletionSource.TrySetResult(payload());
+				}
+				catch (Exception exception)
+				{
+					Fail(exception);
+				}
+			}
+
+			public void Fail(Exception exception)
+			{
+				if (exception is OperationCanceledException canceled)
+					taskCompletionSource.TrySetCanceled(canceled.CancellationToken);
+				else
+					taskCompletionSource.TrySetException(exception);
 			}
 		}
 
@@ -94,8 +192,23 @@ namespace Files.App.Utils.Shell
 
 			public void Invoke()
 			{
-				payload();
-				taskCompletionSource.SetResult();
+				try
+				{
+					payload();
+					taskCompletionSource.TrySetResult();
+				}
+				catch (Exception exception)
+				{
+					Fail(exception);
+				}
+			}
+
+			public void Fail(Exception exception)
+			{
+				if (exception is OperationCanceledException canceled)
+					taskCompletionSource.TrySetCanceled(canceled.CancellationToken);
+				else
+					taskCompletionSource.TrySetException(exception);
 			}
 		}
 	}

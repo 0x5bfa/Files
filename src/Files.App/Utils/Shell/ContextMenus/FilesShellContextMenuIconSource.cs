@@ -86,8 +86,19 @@ internal static class FilesShellContextMenuIconSource
 				return File.ReadAllBytes(resolvedPath);
 			}
 
-			IList<int> iconIndexes = index is 0 or int.MinValue ? [index] : [-index, index];
-			return Win32Helper.ExtractSelectedIconsFromDLL(resolvedPath, iconIndexes, pixelSize).FirstOrDefault()?.IconData;
+			var hr = PInvoke.SHDefExtractIcon(resolvedPath, index, 0, out var largeIcon, out var smallIcon, checked((uint)(pixelSize | pixelSize << 16)));
+			using (largeIcon)
+			using (smallIcon)
+			{
+				if (hr.Failed || largeIcon.IsInvalid)
+					return null;
+
+				using var extracted = Icon.FromHandle(largeIcon.DangerousGetHandle());
+				using var bitmap = extracted.ToBitmap();
+				using var stream = new MemoryStream();
+				bitmap.Save(stream, System.Drawing.Imaging.ImageFormat.Png);
+				return stream.ToArray();
+			}
 		}
 		catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or ArgumentException or InvalidOperationException)
 		{
